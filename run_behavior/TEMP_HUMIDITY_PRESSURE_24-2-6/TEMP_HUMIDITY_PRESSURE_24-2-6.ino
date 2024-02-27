@@ -1,3 +1,5 @@
+
+
 #include <Wire.h>
 #include "Adafruit_MPRLS.h"
 #include <Adafruit_AHTX0.h>
@@ -28,9 +30,20 @@ int long startMillis = 0;
 //unsigned long startMillis;  //some global variables available anywhere in the program
 //unsigned long currentMillis;
 
+
+
+
+
+
+
+
+
 void setup() {
   Serial.begin(115200);
- 
+  
+  
+
+
   // Valve Control Pins
   pinMode(2, OUTPUT); //valve 1 Right Water 
   digitalWrite(2,LOW);
@@ -51,6 +64,7 @@ void setup() {
   pinMode(7, OUTPUT);// Valve 7 (Smell Number 2)
   digitalWrite(7,LOW);
 
+  
   pinMode(8, OUTPUT);// Valve 8 (Smell Number 1)
   digitalWrite(8,LOW);
   
@@ -64,11 +78,16 @@ void setup() {
   pinMode(19,OUTPUT);// SYNC Pin for recording arduino, this signal is counted and printed to align frame data on 2p to loop count 
   digitalWrite(19,LOW);
 
+  
+
   //Touch Sensor
   pinMode(12, INPUT);  // Right Lick Sensor
   pinMode(13, INPUT);  // Left Lick Sensor
   
   //arduino count 
+  
+  
+
 
   //Frame Num Reset Pin
   pinMode(11,INPUT);
