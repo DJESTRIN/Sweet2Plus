@@ -16,15 +16,15 @@ class recordport():
         """
         self.output_directory=output_directory 
         self.output_filename=output_filename 
-        self.readrate=9600  
+        self.readrate=readrate  
         self.selected_port=selected_port
         self.sSerial = serial.Serial()
 
     def __call__(self):
         #Actions to take when object is called
-        self.messages_to_user()
+        self.user_interface()
 
-    def messages_to_user(self):
+    def user_interface(self):
         #Set up directory and file for writing data
         if self.output_directory==None:
             self.set_up_output_directory()
