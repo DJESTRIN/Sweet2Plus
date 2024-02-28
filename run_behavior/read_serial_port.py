@@ -85,8 +85,8 @@ class recordport():
         self.output_file=os.path.join(self.output_directory,self.output_file) #Set final output file to its full path
         running=True
         while running:
-            if sSerial.in_waiting:
-                packet=sSerial.readline()
+            if self.sSerial.in_waiting:
+                packet=self.sSerial.readline()
                 decoded_packet=packet.decode('utf').rstrip('\n')
                 print(decoded_packet) #Print so user can see whats being saved
 
@@ -109,3 +109,9 @@ if __name__=='__main__':
     args=parser.parse_args()
     recording_port=recordport(args.output_directory,args.output_filename,args.readrate,args.selected_port)
     recording_port()
+
+
+    # Read two ports at the same time. COM4 and COM9 
+    # 15200
+    # 9600
+    # Two different files. 
