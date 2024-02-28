@@ -53,7 +53,7 @@ class recordport():
         current_time = time.strftime("%Y%m%d_%H%M%S")
         currentdir=os.getcwd()
         self.output_directory=f'{currentdir}/tmp{current_time}/'
-        os.makedir(self.output_directory)
+        os.mkdir(self.output_directory)
                     
     def set_up_output_file(self):
         current_time = time.strftime("%Y%m%d_%H%M%S")
@@ -103,7 +103,7 @@ class recordport():
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
     parser.add_argument("--output_directory",type=str,default=None,help="The directory where you would like to save data")
-    parser.add_argument("--output_file",type=str,default=None,help="Name of the CSV file to save data to. Please input as: yourfilename.csv")
+    parser.add_argument("--output_filename",type=str,default=None,help="Name of the CSV file to save data to. Please input as: yourfilename.csv")
     parser.add_argument("--readrate",type=int,default=9600,help="The rate at which port is read")
     parser.add_argument("--selected_port",default=None, help="The port we will read. Please input as: COMX where X is an int") 
     args=parser.parse_args()
