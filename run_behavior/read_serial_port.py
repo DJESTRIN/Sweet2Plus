@@ -109,10 +109,3 @@ if __name__=='__main__':
     args=parser.parse_args()
     recording_port=recordport(args.output_directory,args.output_filename,args.readrate,args.selected_port)
     recording_port()
-
-
-
-
-
-
-
