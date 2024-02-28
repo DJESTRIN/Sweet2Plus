@@ -4,6 +4,7 @@ import serial
 from csv import writer
 import keyboard
 import os, time
+import argparse
 
 class recordport():
     def __init__(self,output_directory=None,output_filename=None,readrate=9600,selected_port=None):
@@ -18,6 +19,9 @@ class recordport():
         self.readrate=9600  
         self.selected_port=selected_port
         self.sSerial = serial.Serial()
+
+    def __call__(self):
+        #Actions to take when object is called
         self.messages_to_user()
 
     def messages_to_user(self):
@@ -97,11 +101,14 @@ class recordport():
                 break
             
 if __name__=='__main__':
-    #output_directory
-    #otuput_filename
-    #readrate
-    #portnumber 
-    recording_port=recordport()
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--output_directory",type=str,default=None,help="The directory where you would like to save data")
+    parser.add_argument("--output_file",type=str,default=None,help="Name of the CSV file to save data to. Please input as: yourfilename.csv")
+    parser.add_argument("--readrate",type=int,default=9600,help="The rate at which port is read")
+    parser.add_argument("--selected_port",default=None, help="The port we will read. Please input as: COMX where X is an int") 
+    args=parser.parse_args()
+    recording_port=recordport(args.output_directory,args.output_filename,args.readrate,args.selected_port)
+    recording_port()
 
 
 
