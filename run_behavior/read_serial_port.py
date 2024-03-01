@@ -9,6 +9,7 @@ import PySimpleGUI as sg
 import tkinter as tk
 from tkinter import *
 from threading import Thread
+from tkinter import filedialog
 import ipdb
 
 class recordport():
@@ -56,8 +57,9 @@ class recordport():
    
 
 class GUI(recordport):
-    def __init__(self):
+    def __init__(self,wd):
         super().__init__() #Use same inputs as before
+        self.wd=wd
         self.root=tk.Tk()
         self.root.geometry("1000x800+300+100")
         self.root.configure(bg="black")
@@ -73,12 +75,12 @@ class GUI(recordport):
     
     def load_images(self):
         #Get all images used by app
-        self.logo = PhotoImage(file = "D:\\twophoton\\run_behavior\\gui\\logo.png") #Logo
-        OnImage = PhotoImage(file = "D:\\twophoton\\run_behavior\\gui\\on.png") #On off switch
-        offImage = PhotoImage(file = "D:\\twophoton\\run_behavior\\gui\\off.png")#Off switch
-        sensimage = PhotoImage(file = "D:\\twophoton\\run_behavior\\gui\\sens.png") #Used for sens synce switch
-        syncimage = PhotoImage(file = "D:\\twophoton\\run_behavior\\gui\\sync.png") #Used for sens synce switch
-        offsso = PhotoImage(file = "D:\\twophoton\\run_behavior\\gui\\off_sso.png") #Used for sens synce switch
+        self.logo = PhotoImage(file = f'{self.wd}\gui\logo.png') #Logo
+        OnImage = PhotoImage(file = f'{self.wd}\gui\on.png') #On off switch
+        offImage = PhotoImage(file = f'{self.wd}\gui\off.png')#Off switch
+        sensimage = PhotoImage(file = f'{self.wd}\gui\sens.png') #Used for sens synce switch
+        syncimage = PhotoImage(file = f'{self.wd}\gui\sync.png') #Used for sens synce switch
+        offsso = PhotoImage(file = f'{self.wd}\gui\off_sso.png') #Used for sens synce switch
 
         # Resample images for specs of gui
         self.offImage = offImage.subsample(4, 4)
@@ -106,7 +108,7 @@ class GUI(recordport):
         return
 
     def get_directory(self):
-        directory = tk.filedialog.askdirectory()
+        directory = filedialog.askdirectory()
         string=f'Output directory: {directory}'
         self.showdir = tk.Label(text=string,foreground="white", background="black")
         self.showdir.config(font=("Arial", 15))
@@ -229,5 +231,8 @@ class GUI(recordport):
 
 
 if __name__=='__main__':
-    goh=GUI()
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--working_dir",required=True,type=str)
+    args = parser.parse_args()
+    goh=GUI(args.working_dir)
     goh()
