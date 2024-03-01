@@ -5,7 +5,6 @@ from csv import writer
 import keyboard
 import os, time
 import argparse
-import PySimpleGUI as sg
 import tkinter as tk
 from tkinter import *
 from threading import Thread
@@ -45,15 +44,15 @@ class recordport():
         self.portList=portList
 
     def record_port(self,index,running):
-        self.sSeriallist[index].baudrate=self.baudlist[index]
+        self.sSeriallist[index].baudrate=int(self.baudlist[index])
         comoh=self.portList[index]
         comoh = comoh.split(' ')
         comoh = comoh[0]
         self.sSeriallist[index].port=comoh
-        if running:
-            self.sSeriallist[index].open()
-        else:
-            self.sSeriallist[index].close()
+        # if running:
+        #     self.sSeriallist[index].open()
+        # else:
+        #     self.sSeriallist[index].close()
    
 
 class GUI(recordport):
@@ -108,13 +107,13 @@ class GUI(recordport):
         return
 
     def get_directory(self):
-        directory = filedialog.askdirectory()
+        directory = filedialog.askdirectory(initialdir=self.wd)
         string=f'Output directory: {directory}'
         self.showdir = tk.Label(text=string,foreground="white", background="black")
         self.showdir.config(font=("Arial", 15))
         self.showdir.place(x=200,y=50)
-        self.root.mainloop()
-        return directory
+        self.output_directory=directory
+        self.refresh_screen()
 
     def run_recording(self,index):
         state_oh = self.run_btn_lst[index]
@@ -125,8 +124,8 @@ class GUI(recordport):
         else:
             self.recordbuttons[index].config(state='normal', image = self.OnImage)
             self.run_btn_lst[index] = 'on'
-            print(f'I, button number {index}, am on now')
             self.record_port(index,True)
+        self.wait_for_events()
 
     def comp_type(self,index):
         state_oh = self.type_btn_lst[index]
@@ -163,7 +162,7 @@ class GUI(recordport):
 
         self.run_btn_lst=['off'] * n
         self.type_btn_lst=['off'] * n
-        self.baudlist = ['9600'] * n
+        self.baudlist = ['115200'] * n
         self.recordbuttons=[]
         self.typebuttons=[]
         self.sSeriallist=[]
@@ -173,7 +172,14 @@ class GUI(recordport):
 
         for index in range(n):
             #set up serial
-            self.sSeriallist.append(serial.Serial())
+            soh = serial.Serial()
+            soh.baudrate=115200
+            portname=self.portList[index]
+            portname=portname.split(' ')
+            portname=portname[0]
+            soh.port=portname
+            soh.open()
+            self.sSeriallist.append(soh)
 
             #set up label
             stringoh=self.portList[index]
@@ -201,8 +207,6 @@ class GUI(recordport):
         endbtn=Button(self.root,height=1,width=20, bg='red',fg='black',font= ('MS Sans Serif', '10', 'bold'),command=self.kill_switch)
         endbtn.config(text='KILL ALL RECORDINGS')
         endbtn.place(x=800,y=starty+100)
-
-        self.wait_for_events()
     
     def ending_gui(self):
         self.guirunning=False
@@ -213,16 +217,16 @@ class GUI(recordport):
             for index in range(len(self.portList)):
                 onoroff=self.run_btn_lst[index]
                 if onoroff=='on':
-                    print('here')
                     if self.sSeriallist[index].in_waiting:
                         packet=self.sSeriallist[index].readline()
                         decoded_packet=packet.decode('utf').rstrip('\n')
 
                         #Write decoded packet to file
-                        print(self.output_directory)
-                        with open(self.output_file, 'a') as fileob: #OUTPUTFILE NEEDS TO BE INDEXED
+                        final_output=os.path.join(self.output_directory,self.output_files[index])
+                        with open(final_output, 'a') as fileob: #OUTPUTFILE NEEDS TO BE INDEXED
                             wro = writer(fileob)
                             wro.writerow(decoded_packet)
+                            print(decoded_packet)
                             fileob.close() 
 
     def wait_for_events(self):
@@ -231,8 +235,13 @@ class GUI(recordport):
 
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser()
-    parser.add_argument("--working_dir",required=True,type=str)
-    args = parser.parse_args()
-    goh=GUI(args.working_dir)
+    try:
+        parser=argparse.ArgumentParser()
+        parser.add_argument("--working_dir",required=True,type=str)
+        args = parser.parse_args()
+        workingd=args.working_dir
+    except:
+        workingd=os.path.join(os.getcwd(),'run_behavior')
+
+    goh=GUI(workingd)
     goh()
