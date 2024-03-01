@@ -25,10 +25,14 @@ class recordport():
         self.sSeriallist = []
         self.baudlist = [str(readrate)]
                     
-    def set_up_output_file(self,index):
-        comoh=self.portList[index]
-        current_time = time.strftime("%Y%m%d_%H%M%S")
-        self.output_file=f'portrecording{current_time}.csv'
+    def set_up_output_file(self):
+        self.output_files=[]
+        for index in range(len(self.portList)):
+            comoh=self.portList[index]
+            comoh=comoh.split(' ')
+            comoh=comoh[0]
+            current_time = time.strftime("%Y%m%d_%H%M%S")
+            self.output_files.append(f'{comoh}_{current_time}.csv')
 
     def find_port(self):
         ports = serial.tools.list_ports.comports()
@@ -163,6 +167,8 @@ class GUI(recordport):
         self.sSeriallist=[]
         self.entrybuttons=[]
 
+        self.set_up_output_file()
+
         for index in range(n):
             #set up serial
             self.sSeriallist.append(serial.Serial())
@@ -184,7 +190,7 @@ class GUI(recordport):
 
             # Set entry text for save file
             textBox = tk.Entry(self.root) 
-            textBox.insert(0, "This is the default text")
+            textBox.insert(0, self.output_files[index])
             textBox.place(x=550,y=starty+10)
             self.entrybuttons.append(textBox) 
 
