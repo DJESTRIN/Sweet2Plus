@@ -8,6 +8,8 @@ import argparse
 import PySimpleGUI as sg
 import tkinter as tk
 from tkinter import *
+from threading import Thread
+import ipdb
 
 class recordport():
     def __init__(self,output_directory=None,output_filename=None,readrate=9600,selected_port=None):
@@ -19,11 +21,12 @@ class recordport():
         """
         self.output_directory=output_directory 
         self.output_filename=output_filename 
-        self.readrate=readrate  
         self.selected_port=selected_port
-        self.sSerial = serial.Serial()
+        self.sSeriallist = []
+        self.baudlist = [str(readrate)]
                     
-    def set_up_output_file(self):
+    def set_up_output_file(self,index):
+        comoh=self.portList[index]
         current_time = time.strftime("%Y%m%d_%H%M%S")
         self.output_file=f'portrecording{current_time}.csv'
 
@@ -36,28 +39,28 @@ class recordport():
             print(str(port_oh))
         self.portList=portList
 
-    def setserial(self,index,running):
-        self.sSerial[index].baudrate=self.baudlist[index]
-        self.sSerial[index].port=self.portList[index]
-        self.sSerial[index].open()
-
-        while running:
-            if self.sSerial[index].in_waiting:
-                packet=self.sSerial[index].readline()
-                decoded_packet=packet.decode('utf').rstrip('\n')
-
-                #Write decoded packet to file
-                with open(self.output_file, 'a') as fileob:
-                    wro = writer(fileob)
-                    wro.writerow(decoded_packet)
-                    fileob.close()    
+    def record_port(self,index,running):
+        self.sSeriallist[index].baudrate=self.baudlist[index]
+        comoh=self.portList[index]
+        comoh = comoh.split(' ')
+        comoh = comoh[0]
+        self.sSeriallist[index].port=comoh
+        if running:
+            self.sSeriallist[index].open()
+        else:
+            self.sSeriallist[index].close()
+   
 
 class GUI(recordport):
     def __init__(self):
         super().__init__() #Use same inputs as before
         self.root=tk.Tk()
-        self.root.geometry("1000x800")
+        self.root.geometry("1000x800+300+100")
         self.root.configure(bg="black")
+        self.root.overrideredirect(True)
+        self.guirunning=True
+        exit_button = Button(self.root, text="Exit" ,height=1,width=10, bg='black',fg='white',font= ('Arial 10 bold'), command=self.ending_gui)
+        exit_button.place(x=900,y=10)
 
     def __call__(self):
         self.load_images()
@@ -77,16 +80,14 @@ class GUI(recordport):
         self.offImage = offImage.subsample(4, 4)
         self.logo = self.logo.subsample(5, 5)
         self.OnImage = OnImage.subsample(4, 4)
-        self.sensimage = sensimage.subsample(3, 3)
-        self.syncimage = syncimage.subsample(3, 3)
-        self.offsso = offsso.subsample(3, 3)
+        self.sensimage = sensimage.subsample(3, 4)
+        self.syncimage = syncimage.subsample(3, 4)
+        self.offsso = offsso.subsample(3, 4)
 
     def set_up_layout(self):
         self.title = tk.Label(text="Port Reader",foreground="white", background="black")
         self.title.config(font=("Arial", 25))
-        self.title.place(x=450,y=10)
-        #self.logo = tk.Label(image=self.logo)
-        #self.logo.place(x=10,y=0)
+        self.title.pack()
         self.browse_button = tk.Button(text="Set Output Folder",height=1,width=20, bg='black',fg='white',font= ('Arial 10 bold'), command=self.get_directory)
         self.browse_button.place(x=10,y=50)
         self.findportsbutton = tk.Button(self.root, text='Search for COMs', height=1, width=20, bg='black',fg='white', font= ('Arial 10 bold'), command=self.find_port)
@@ -105,7 +106,7 @@ class GUI(recordport):
         string=f'Output directory: {directory}'
         self.showdir = tk.Label(text=string,foreground="white", background="black")
         self.showdir.config(font=("Arial", 15))
-        self.showdir.place(x=200,y=200)
+        self.showdir.place(x=200,y=50)
         self.root.mainloop()
         return directory
 
@@ -114,12 +115,12 @@ class GUI(recordport):
         if state_oh=='on':
             self.recordbuttons[index].config(state='normal', image = self.offImage)
             self.run_btn_lst[index] = 'off'
-            print(f'I, button number {index}, am off now')
+            self.record_port(index,False)
         else:
             self.recordbuttons[index].config(state='normal', image = self.OnImage)
             self.run_btn_lst[index] = 'on'
             print(f'I, button number {index}, am on now')
-            self.display_recording()
+            self.record_port(index,True)
 
     def comp_type(self,index):
         state_oh = self.type_btn_lst[index]
@@ -136,42 +137,91 @@ class GUI(recordport):
             self.type_btn_lst[index] = 'off'
             print(f'I, button number {index}, am off now')
 
+    def kill_switch(self):
+        # Turn off all recordings
+        for index in range(len(self.portList)):
+            self.recordbuttons[index].config(state='normal', image = self.offImage)
+            self.run_btn_lst[index] = 'off'
+
     def set_run_buttons(self,n):
+        starty=200
+        # Set up subtitles to buttons
+        lab=Label(self.root,text="Available COMS ",bg='black',fg='white',font=('Arial', 20, 'bold'))
+        lab.place(x=10,y=starty-50)
+        lab=Label(self.root,text="Filename",bg='black',fg='white',font=('Arial', 15, 'bold'))
+        lab.place(x=550,y=starty-50)
+        lab=Label(self.root,text="COM Type",bg='black',fg='white',font=('Arial', 15, 'bold'))
+        lab.place(x=720,y=starty-50)
+        lab=Label(self.root,text="Recording",bg='black',fg='white',font=('Arial', 15, 'bold'))
+        lab.place(x=880,y=starty-50)
+
         self.run_btn_lst=['off'] * n
         self.type_btn_lst=['off'] * n
+        self.baudlist = ['9600'] * n
         self.recordbuttons=[]
         self.typebuttons=[]
-        starty=300
+        self.sSeriallist=[]
+        self.entrybuttons=[]
+
         for index in range(n):
+            #set up serial
+            self.sSeriallist.append(serial.Serial())
+
+            #set up label
+            stringoh=self.portList[index]
+            lb=Label(self.root,text=stringoh,bg='black',fg='white',font=('Arial', 15, 'bold'))
+            lb.place(x=10,y=starty+5)
+
             #Set up the run button per comp
             btn=Button(self.root,image = self.offImage, highlightthickness = 0, bd = 0, borderwidth=0,command=lambda k=index:self.run_recording(k))
-            btn.place(x=600,y=starty)
+            btn.place(x=900,y=starty)
             self.recordbuttons.append(btn)
 
             #Set up the type button per comp
             btn=Button(self.root,image = self.offsso,highlightthickness = 0, bd = 0, borderwidth=0, command=lambda k=index:self.comp_type(k))
-            btn.place(x=50,y=starty)
+            btn.place(x=700,y=starty)
             self.typebuttons.append(btn)
 
-            starty+=80
+            # Set entry text for save file
+            textBox = tk.Entry(self.root) 
+            textBox.insert(0, "This is the default text")
+            textBox.place(x=550,y=starty+10)
+            self.entrybuttons.append(textBox) 
 
-        
+            starty+=50
+
+        endbtn=Button(self.root,height=1,width=20, bg='red',fg='black',font= ('MS Sans Serif', '10', 'bold'),command=self.kill_switch)
+        endbtn.config(text='KILL ALL RECORDINGS')
+        endbtn.place(x=800,y=starty+100)
+
+        self.wait_for_events()
+    
+    def ending_gui(self):
+        self.guirunning=False
+        self.root.destroy()
+
+    def continous_sampling(self):
+        while self.guirunning:
+            for index in range(len(self.portList)):
+                onoroff=self.run_btn_lst[index]
+                if onoroff=='on':
+                    print('here')
+                    if self.sSeriallist[index].in_waiting:
+                        packet=self.sSeriallist[index].readline()
+                        decoded_packet=packet.decode('utf').rstrip('\n')
+
+                        #Write decoded packet to file
+                        print(self.output_directory)
+                        with open(self.output_file, 'a') as fileob: #OUTPUTFILE NEEDS TO BE INDEXED
+                            wro = writer(fileob)
+                            wro.writerow(decoded_packet)
+                            fileob.close() 
+
+    def wait_for_events(self):
+        Thread(target = self.continous_sampling).start()
+        self.refresh_screen()
+
+
 if __name__=='__main__':
     goh=GUI()
     goh()
-    # parser=argparse.ArgumentParser()
-    # parser.add_argument("--output_directory",type=str,default=None,help="The directory where you would like to save data")
-    # parser.add_argument("--output_filename",type=str,default=None,help="Name of the CSV file to save data to. Please input as: yourfilename.csv")
-    # parser.add_argument("--readrate",type=int,default=9600,help="The rate at which port is read")
-    # parser.add_argument("--selected_port",default=None, help="The port we will read. Please input as: COMX where X is an int") 
-    # args=parser.parse_args()
-    # recording_port=recordport(args.output_directory,args.output_filename,args.readrate,args.selected_port)
-    # recording_port()
-
-    # Look for location of file
-    # prompt name asking for filename 
-    # two serial pulls at same time. 
-    # Read two ports at the same time. COM4 and COM9 
-    # 115200
-    # 9600
-    # Two different files. 
