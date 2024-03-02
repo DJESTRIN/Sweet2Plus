@@ -172,14 +172,17 @@ class GUI(recordport):
 
         for index in range(n):
             #set up serial
-            soh = serial.Serial()
-            soh.baudrate=115200
-            portname=self.portList[index]
-            portname=portname.split(' ')
-            portname=portname[0]
-            soh.port=portname
-            soh.open()
-            self.sSeriallist.append(soh)
+            try:
+                soh = serial.Serial()
+                soh.baudrate=115200
+                portname=self.portList[index]
+                portname=portname.split(' ')
+                portname=portname[0]
+                soh.port=portname
+                soh.open()
+                self.sSeriallist.append(soh)
+            except:
+                continue
 
             #set up label
             stringoh=self.portList[index]
