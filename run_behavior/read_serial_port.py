@@ -56,16 +56,17 @@ class recordport():
    
 
 class GUI(recordport):
-    def __init__(self,wd):
+    def __init__(self,wd,testmode=False):
         super().__init__() #Use same inputs as before
         self.wd=wd
+        self.testmode=testmode
         self.root=tk.Tk()
-        self.root.geometry("1000x800+300+100")
+        self.root.geometry("1500x800+300+100")
         self.root.configure(bg="black")
         self.root.overrideredirect(True)
         self.guirunning=True
         exit_button = Button(self.root, text="Exit" ,height=1,width=10, bg='black',fg='white',font= ('Arial 10 bold'), command=self.ending_gui)
-        exit_button.place(x=900,y=10)
+        exit_button.place(x=1400,y=10)
 
     def __call__(self):
         self.load_images()
@@ -91,11 +92,11 @@ class GUI(recordport):
 
     def set_up_layout(self):
         self.title = tk.Label(text="Port Reader",foreground="white", background="black")
-        self.title.config(font=("Arial", 25))
+        self.title.config(font=('Arial', '25', 'bold'))
         self.title.pack()
-        self.browse_button = tk.Button(text="Set Output Folder",height=1,width=20, bg='black',fg='white',font= ('Arial 10 bold'), command=self.get_directory)
+        self.browse_button = tk.Button(text="Set Output Folder",height=1,width=20, bg='black',fg='white',font= ('Arial', '10', 'bold'), command=self.get_directory)
         self.browse_button.place(x=10,y=50)
-        self.findportsbutton = tk.Button(self.root, text='Search for COMs', height=1, width=20, bg='black',fg='white', font= ('Arial 10 bold'), command=self.find_port)
+        self.findportsbutton = tk.Button(self.root, text='Search for COMs', height=1, width=20, bg='black',fg='white', font= ('Arial', '10', 'bold'), command=self.find_port)
         self.findportsbutton.place(x=10,y=90) 
 
     def refresh_screen(self):
@@ -154,11 +155,13 @@ class GUI(recordport):
         lab=Label(self.root,text="Available COMS ",bg='black',fg='white',font=('Arial', 20, 'bold'))
         lab.place(x=10,y=starty-50)
         lab=Label(self.root,text="Filename",bg='black',fg='white',font=('Arial', 15, 'bold'))
-        lab.place(x=550,y=starty-50)
+        lab.place(x=1015,y=starty-50)
+        lab=Label(self.root,text="Baud rate",bg='black',fg='white',font=('Arial', 15, 'bold'))
+        lab.place(x=800,y=starty-50)
         lab=Label(self.root,text="COM Type",bg='black',fg='white',font=('Arial', 15, 'bold'))
-        lab.place(x=720,y=starty-50)
+        lab.place(x=1220,y=starty-50)
         lab=Label(self.root,text="Recording",bg='black',fg='white',font=('Arial', 15, 'bold'))
-        lab.place(x=880,y=starty-50)
+        lab.place(x=1380,y=starty-50)
 
         self.run_btn_lst=['off'] * n
         self.type_btn_lst=['off'] * n
@@ -167,22 +170,33 @@ class GUI(recordport):
         self.typebuttons=[]
         self.sSeriallist=[]
         self.entrybuttons=[]
+        self.tempoutput=[]
+        self.finalbauds=[]
 
         self.set_up_output_file()
 
         for index in range(n):
             #set up serial
-            try:
+            if self.testmode:
                 soh = serial.Serial()
                 soh.baudrate=115200
                 portname=self.portList[index]
                 portname=portname.split(' ')
                 portname=portname[0]
                 soh.port=portname
-                soh.open()
-                self.sSeriallist.append(soh)
-            except:
-                continue
+                self.sSeriallist.append(soh) 
+            else:
+                try:
+                    soh = serial.Serial()
+                    soh.baudrate=115200
+                    portname=self.portList[index]
+                    portname=portname.split(' ')
+                    portname=portname[0]
+                    soh.port=portname
+                    soh.open()
+                    self.sSeriallist.append(soh)
+                except:
+                    continue
 
             #set up label
             stringoh=self.portList[index]
@@ -191,26 +205,52 @@ class GUI(recordport):
 
             #Set up the run button per comp
             btn=Button(self.root,image = self.offImage, highlightthickness = 0, bd = 0, borderwidth=0,command=lambda k=index:self.run_recording(k))
-            btn.place(x=900,y=starty)
+            btn.place(x=1400,y=starty)
             self.recordbuttons.append(btn)
 
             #Set up the type button per comp
             btn=Button(self.root,image = self.offsso,highlightthickness = 0, bd = 0, borderwidth=0, command=lambda k=index:self.comp_type(k))
-            btn.place(x=700,y=starty)
+            btn.place(x=1200,y=starty)
             self.typebuttons.append(btn)
 
             # Set entry text for save file
-            textBox = tk.Entry(self.root) 
+            self.tempoutput.append(tk.StringVar())
+            textBox = tk.Entry(self.root,width=35,textvariable=self.tempoutput[index]) 
             textBox.insert(0, self.output_files[index])
-            textBox.place(x=550,y=starty+10)
+            textBox.place(x=950,y=starty+10)
+            self.entrybuttons.append(textBox) 
+
+            # Set entry text for baudrate
+            self.finalbauds.append(tk.StringVar())
+            textBox = tk.Entry(self.root,width=15,textvariable=self.finalbauds[index]) 
+            textBox.insert(0, self.baudlist[index])
+            textBox.place(x=800,y=starty+10)
             self.entrybuttons.append(textBox) 
 
             starty+=50
 
-        endbtn=Button(self.root,height=1,width=20, bg='red',fg='black',font= ('MS Sans Serif', '10', 'bold'),command=self.kill_switch)
-        endbtn.config(text='KILL ALL RECORDINGS')
-        endbtn.place(x=800,y=starty+100)
+        endbtn=Button(self.root,height=1,width=20, bg='black',fg='white',font= ('Arial', '10', 'bold'),command=self.kill_switch)
+        endbtn.config(text='End All Recordings')
+        endbtn.place(x=1310,y=starty+100)
+
+        filebtn=Button(self.root,height=1,width=20, bg='black',fg='white',font= ('Arial', '10', 'bold'),command=self.set_output_files)
+        filebtn.config(text='Set Filenames')
+        filebtn.place(x=970,y=starty+100)
+
+        bdbtn=Button(self.root,height=1,width=12, bg='black',fg='white',font= ('Arial', '10', 'bold'),command=self.set_baud_rates)
+        bdbtn.config(text='Set Baud Rate')
+        bdbtn.place(x=798,y=starty+100)
     
+    def set_output_files(self):
+        for index in range(len(self.portList)):
+            new_output = self.tempoutput[index].get()
+            print(new_output)
+
+    def set_baud_rates(self):
+        for index in range(len(self.portList)):
+            new_output = self.finalbauds[index].get()
+            print(new_output)
+
     def ending_gui(self):
         self.guirunning=False
         self.root.destroy()
@@ -220,17 +260,26 @@ class GUI(recordport):
             for index in range(len(self.portList)):
                 onoroff=self.run_btn_lst[index]
                 if onoroff=='on':
-                    if self.sSeriallist[index].in_waiting:
-                        packet=self.sSeriallist[index].readline()
-                        decoded_packet=packet.decode('utf').rstrip('\n')
-
-                        #Write decoded packet to file
+                    if self.testmode:
+                        decoded_packet=f'This is a test for port: {self.portList[index]}. \n It is working well!'
                         final_output=os.path.join(self.output_directory,self.output_files[index])
                         with open(final_output, 'a') as fileob: #OUTPUTFILE NEEDS TO BE INDEXED
-                            wro = writer(fileob)
-                            wro.writerow(decoded_packet)
-                            print(decoded_packet)
-                            fileob.close() 
+                                wro = writer(fileob)
+                                wro.writerow(decoded_packet)
+                                print(decoded_packet)
+                                fileob.close() 
+                    else:
+                        if self.sSeriallist[index].in_waiting:
+                            packet=self.sSeriallist[index].readline()
+                            decoded_packet=packet.decode('utf').rstrip('\n')
+
+                            #Write decoded packet to file
+                            final_output=os.path.join(self.output_directory,self.output_files[index])
+                            with open(final_output, 'a') as fileob: #OUTPUTFILE NEEDS TO BE INDEXED
+                                wro = writer(fileob)
+                                wro.writerow(decoded_packet)
+                                print(decoded_packet)
+                                fileob.close() 
 
     def wait_for_events(self):
         Thread(target = self.continous_sampling).start()
@@ -246,5 +295,5 @@ if __name__=='__main__':
     except:
         workingd=os.path.join(os.getcwd(),'run_behavior')
 
-    goh=GUI(workingd)
+    goh=GUI(workingd,True)
     goh()
