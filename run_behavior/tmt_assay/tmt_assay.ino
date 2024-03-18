@@ -35,6 +35,9 @@ int random(int min, int max) //range : [min, max]
 
 void loop() {
   if (digitalRead (3) == LOW){
+    // Wait 15 minutes
+    delay(900000);
+
     // Run randomly the vanilla, water or peanut oil smells for x trials
     for (int x = 0; x < 60; x++) {
       int randomvalve;
@@ -54,7 +57,6 @@ void loop() {
           digitalWrite(5,LOW);
           delay(15000);
         }
-
 
     break;
 
