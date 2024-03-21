@@ -11,16 +11,17 @@ import os,glob
 import pandas as pd
 
 class get_s2p():
-    def __init__(self,datapath,fs,tau,threshold,batchsize):
+    def __init__(self,datapath,fs=13,tau=1.25,threshold=2,batchsize=200):
         #Set up ops
         self.ops = s2p.default_ops()
         self.ops['batch_size'] = batchsize # we will decrease the batch_size in case low RAM on computer
         self.ops['threshold_scaling'] = threshold # we are increasing the threshold for finding ROIs to limit the number of non-cell ROIs found (sometimes useful in gcamp injections)
         self.ops['fs'] = fs # sampling rate of recording, determines binning for cell detection
         self.ops['tau'] = tau # timescale of gcamp to use for deconvolution
-        
+        self.ops['input_format']="bruker"
         #Set up datapath
-        db = {'data_path': datapath,}
+        self.db = {'data_path': datapath,}
+        ipdb.set_trace()
         
     def register(self):
         self.f_raw = s2p.io.BinaryFile(Ly=Ly, Lx=Lx, filename=fname)
@@ -40,7 +41,7 @@ class get_s2p():
     def get_cells(self):
         iscell = suite2p.classify(stat=stat_after_extraction, classfile=classfile)
 
-    def run_automatic(self):
+    def auto_run(self):
         s2p.run_s2p(ops=self.ops,db=self.db)
 
 class load_serial_output():
@@ -213,12 +214,35 @@ class load_serial_output():
 #     #
 
 # class corralative_activity(funcational_classification):
+        
+def rename_files():
+    images = glob.glob(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*\*.tif')
+    for image in images:
+        newname = image.replace('Ch2','Ch1')
+        os.rename(image, newname)
 
 def main(serialoutput_search, twophoton_search):
-    dirsoh = glob.glob(serialoutput_search)
-    for diry in dirsoh:
-        beh_obj=load_serial_output(diry)
-        beh_obj()
+    # Find and match all 2P image folders with corresponding serial output folders
+    behdirs = glob.glob(serialoutput_search)
+    twoPdirs = glob.glob(twophoton_search)
+    final_list=[]
+    for diroh in twoPdirs:
+        _,cage,mouse,_=diroh.upper().split('_')
+        for bdiroh in behdirs:
+            _,cageb,mouseb = bdiroh.upper().split('_')
+            if cage==cageb and mouse==mouseb:
+                final_list.append([diroh,bdiroh])
+
+    for imagepath,behpath in final_list:
+        images = glob.glob(os.path.join(imagepath,'*.tif*'))
+        pathoh = os.path.dirname(images[0])
+        ipdb.set_trace()
+        s2p_obj = get_s2p(imagepath)
+        ipdb.set_trace()
+    # for diry in dirsoh:
+    #     beh_obj=load_serial_output(diry)
+    #     beh_obj()
+
 
 if __name__=='__main__':
     # parser = argparse.ArgumentParser()
@@ -226,7 +250,8 @@ if __name__=='__main__':
     # parser.add_argument('--serial_output_data',type=str,required=True) #Folder containing the serial outputs from the sync and sens aurduinos
     # parser.add_argument('--deep_lab_cut_data',type=str) #Folder continaing deeplabcut output data for video. 
     # corralative_activity()
-    main(r'C:\Users\listo\tmt_assay\tmt_2P_assay\Day1\serialoutput\**\*24*')
+    rename_files()
+    main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
 
 
 # Presure temp hum plot them 
