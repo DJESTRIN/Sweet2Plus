@@ -9,40 +9,119 @@ import argparse
 import ipdb
 import os,glob
 import pandas as pd
+#import seaborn as sns
+#sns.set_style('whitegrid')
 
 class get_s2p():
-    def __init__(self,datapath,fs=13,tau=1.25,threshold=2,batchsize=200):
-        #Set up ops
+    def __init__(self,datapath,resultpath=os.getcwd(),fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1):
+        #Set directories up
+        self.datapath=datapath
+        self.resultpath=os.path.join(self.datapath,'figures')
+        if not os.path.exists(self.resultpath): #Make the figure directory if not already made
+            os.mkdir(self.resultpath)
+
+        #Set suite2P ops
         self.ops = s2p.default_ops()
-        self.ops['batch_size'] = batchsize # we will decrease the batch_size in case low RAM on computer
-        self.ops['threshold_scaling'] = threshold # we are increasing the threshold for finding ROIs to limit the number of non-cell ROIs found (sometimes useful in gcamp injections)
+        ipdb.set_trace()
+        self.ops['batch_size'] = batch_size # we will decrease the batch_size in case low RAM on computer
+        self.ops['threshold_scaling'] = threshold_scaling # we are increasing the threshold for finding ROIs to limit the number of non-cell ROIs found (sometimes useful in gcamp injections)
         self.ops['fs'] = fs # sampling rate of recording, determines binning for cell detection
         self.ops['tau'] = tau # timescale of gcamp to use for deconvolution
         self.ops['input_format']="bruker"
+        self.ops['blocksize']=blocksize
+        self.ops['reg_tif']=reg_tif
+        self.ops['denoise']=denoise
+
         #Set up datapath
-        self.db = {'data_path': datapath,}
-        ipdb.set_trace()
-        
-    def register(self):
-        self.f_raw = s2p.io.BinaryFile(Ly=Ly, Lx=Lx, filename=fname)
-        self.f_reg = s2p.io.BinaryFile(Ly=Ly, Lx=Lx, filename='registered_data.bin', n_frames = f_raw.shape[0]) # Set registered binary file to have same n_frames
-        refImg, rmin, rmax, meanImg, rigid_offsets, nonrigid_offsets, zest, meanImg_chan2, badframes, yrange, xrange \
-            = s2p.registration_wrapper(f_reg, f_raw=f_raw, f_reg_chan2=None, f_raw_chan2=None, refImg=None, align_by_chan2=False, ops=self.ops)
-
-    def get_ROI(self):
-        classfile = suite2p.classification.builtin_classfile
-        data = np.load(classfile, allow_pickle=True)[()]
-        ops, stat = suite2p.detection_wrapper(f_reg=f_reg, ops=ops, classfile=classfile)
-
-    def get_extraction(self):
-        stat_after_extraction, F, Fneu, F_chan2, Fneu_chan2 = suite2p.extraction_wrapper(stat, f_reg,
-                                                                   f_reg_chan2 = None,ops=ops)
-        
-    def get_cells(self):
-        iscell = suite2p.classify(stat=stat_after_extraction, classfile=classfile)
+        self.db = {'data_path': [self.datapath],}
+    
+    def __call__(self):
+        self.auto_run()
+        self.get_reference_image()
 
     def auto_run(self):
-        s2p.run_s2p(ops=self.ops,db=self.db)
+        self.output_all=s2p.run_s2p(ops=self.ops,db=self.db)
+
+    def get_reference_image(self):
+        filename=os.path.basename(self.datapath)
+        filename_ref=os.path.join(self.resultpath,f'{filename}referenceimage.jpg')
+        filename_rigids=os.path.join(self.resultpath,f'{filename}rigid.jpg')
+        plt.figure(figsize=(20,20))
+        plt.subplot(1, 4, 1)
+        plt.imshow(self.output_all['refImg'],cmap='gray')
+
+        plt.subplot(1, 4, 2)
+        plt.imshow(self.output_all['max_proj'], cmap='gray')
+        plt.title("Registered Image, Max Projection");
+
+        plt.subplot(1, 4, 3)
+        plt.imshow(self.output_all['meanImg'], cmap='gray')
+        plt.title("Mean registered image")
+
+        plt.subplot(1, 4, 4)
+        plt.imshow(self.output_all['meanImgE'], cmap='gray')
+        plt.title("High-pass filtered Mean registered image")
+        plt.savefig(filename_ref)
+
+class parse_s2p(get_s2p):
+    def __init__(self,datapath,resultpath=os.getcwd(),fs=1.315235,tau=1,threshold=2,batchsize=800,blocksize=128,reg_tif=True,denoise=1):
+        super().__init__(datapath,resultpath=os.getcwd(),fs=1.315235,tau=1,threshold=2,batchsize=800,blocksize=128,reg_tif=True,denoise=1) #Use initialization from previous class
+
+    def get_s2p_outputs(self):
+        #Find planes and get recording/probability files
+        search_path = os.path.join(self.datapath,'suite2p/plane*/')
+        self.recording_files=[]
+        self.probability_files=[]
+        planes = [result for result in glob.glob(search_path)]
+        self.recording_files.append(os.path.join(planes[0],'F.npy'))
+        self.probability_files.append(os.path.join(planes[0],'iscell.npy'))
+
+         
+        if len(self.recording_files)>1 and len(self.probability_files)>1:
+            #Loop over files
+            self.__call__
+        else:
+            self.recording_file=self.recording_files[0]
+            self.probability_file=self.probability_files[0]
+            self.neuron_prob=np.load(self.probability_file)
+            self.neuron_prob=self.neuron_prob[:,1]
+            self.traces=np.load(self.recording_file)
+
+        return
+    
+    def __call__(self):
+        super().__call__()
+        self.get_s2p_outputs()
+        self.threshold_neurons()
+        self.zscore_neurons()
+        self.plot_neurons('Frames','F')
+        
+    def threshold_neurons(self):
+        self.traces=self.traces[np.where(self.neuron_prob>0.9),:]
+        self.traces=self.traces.squeeze()
+        return
+        
+    def zscore_neurons(self):
+        z_scored=[]
+        for trace in self.traces:
+            trace=trace-np.mean(trace)/np.std(trace)
+            z_scored.append(trace)
+        self.z_traces=np.asarray(z_scored)
+        return
+        
+    def plot_neurons(self,x_label,y_label):   
+        # Plot neuron traces and save them without opening
+        for i,row in enumerate(self.traces):
+            fig,ax=plt.subplots()
+            row+=i
+            plt.plot(row)
+            file_string=os.path.join(self.resultpath,f'trace{i}.pdf')
+            plt.title(file_string)
+            ax.set_ylabel(y_label)
+            ax.set_ylabel(x_label)
+            plt.savefig(file_string)
+            plt.close()
+        return
 
 class load_serial_output():
     def __init__(self,path):
@@ -233,16 +312,13 @@ def main(serialoutput_search, twophoton_search):
             if cage==cageb and mouse==mouseb:
                 final_list.append([diroh,bdiroh])
 
+    recordings=[]
     for imagepath,behpath in final_list:
-        images = glob.glob(os.path.join(imagepath,'*.tif*'))
-        pathoh = os.path.dirname(images[0])
-        ipdb.set_trace()
-        s2p_obj = get_s2p(imagepath)
-        ipdb.set_trace()
-    # for diry in dirsoh:
-    #     beh_obj=load_serial_output(diry)
-    #     beh_obj()
+        s2p_obj = parse_s2p(imagepath,resultpath='C:\\Users\\listo\\twophoton\\figures\\')
+        s2p_obj()
+        recordings.append(s2p_obj)
 
+    return recordings
 
 if __name__=='__main__':
     # parser = argparse.ArgumentParser()
@@ -251,7 +327,8 @@ if __name__=='__main__':
     # parser.add_argument('--deep_lab_cut_data',type=str) #Folder continaing deeplabcut output data for video. 
     # corralative_activity()
     rename_files()
-    main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
+    recordings=main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
+    ipdb.set_trace()
 
 
 # Presure temp hum plot them 
