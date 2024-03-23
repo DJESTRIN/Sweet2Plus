@@ -9,8 +9,20 @@ import argparse
 import ipdb
 import os,glob
 import pandas as pd
+from multiprocessing import Pool
 #import seaborn as sns
 #sns.set_style('whitegrid')
+
+
+"""
+To do list
+Normalize trace via z-score
+High res output for heatmaps
+Have masks imported back into movie to show which neurons are called neurons. 
+
+
+"""
+
 
 class get_s2p():
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1):
@@ -105,18 +117,44 @@ class parse_s2p(get_s2p):
         self.plot_neurons('Frames','F')
         
     def threshold_neurons(self):
-        self.traces=self.traces[np.where(self.neuron_prob>0.9),:]
+        self.traces=self.traces[np.where(self.neuron_prob>0.9),:] #Need to add threshold as attirbute
         self.traces=self.traces.squeeze()
         return
         
-    def zscore_neurons(self):
-        z_scored=[]
-        for trace in self.traces:
-            trace=trace-np.mean(trace)/np.std(trace)
-            z_scored.append(trace)
-        self.z_traces=np.asarray(z_scored)
-        return
-        
+    def zscore_trace(trace):
+        """ Using a sliding window, trace is zscored. 
+        The sliding window is offset each iteration of the loop
+        This removes any artifacts created by z score. 
+        """
+        ztrace=[]
+        window_width=100
+        for rvalue in range(window_width):
+            start=rvalue
+            stop=rvalue+window_width
+            zscored_trace=[]
+            for i in range(len(trace)/(stop-start)):
+                if start>0:
+                    window=trace[0:start]
+                    window=(window-np.mean(window))/np.std(window) #Zscrore winow
+                    zscored_trace.append(window)
+
+                window=trace[start:stop]
+                window=(window-np.mean(window))/np.std(window) #Zscrore winow
+                start+=window_width
+                stop+=window_width
+                zscored_trace.append(window)
+            
+            zscored_trace=np.asarray(zscored_trace)
+            zscored_trace=zscored_trace.reshape(len(trace),)
+            ztrace.append(zscored_trace)
+            
+        ztrace=np.median(ztrace,axis=0)
+        return ztrace
+    
+    def parallel_zscore(self):
+        with Pool() as P:
+            self.ztraces = P.map(self.zscore_trace,self.traces)
+
     def plot_neurons(self,x_label,y_label):   
         # Plot neuron traces and save them without opening
         for i,row in enumerate(self.z_traces):
@@ -356,8 +394,11 @@ def main(serialoutput_search, twophoton_search):
 
     recordings=[]
     for imagepath,behpath in final_list:
-        so_obj = load_serial_output(behpath):
-        s2p_obj = funcational_classification(imagepath)
+        #Get behavior data object
+        so_obj = load_serial_output(behpath)
+        so_obj()
+
+        s2p_obj = funcational_classification(imagepath,so_obj)
         s2p_obj()
         s2p_obj.get_activity_heatmap(s2p_obj.traces) #Get the heatmap for whole session
         s2p_obj.get_activity_correlation(s2p_obj.traces) #Get the correlation matrix plot for all neurons
@@ -366,18 +407,17 @@ def main(serialoutput_search, twophoton_search):
     return recordings
 
 if __name__=='__main__':
+    #Set up command line argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument('--headless', action='store_true') #Folder containing two photon's TIFF images
-    parser.add_argument('--subject_two_photon_data',type=str,required=False) #Folder containing two photon's TIFF images
     parser.add_argument('--subject_two_photon_data',type=str,required=False) #Folder containing two photon's TIFF images
     parser.add_argument('--serial_output_data',type=str,required=False) #Folder containing the serial outputs from the sync and sens aurduinos
     parser.add_argument('--deep_lab_cut_data',type=str,required=False) #Folder continaing deeplabcut output data for video.
     args=parser.parse_args()
+
+    # Run headless or run main function.
     if args.headless:
         print('headless mode')
     else:
         recordings=main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
-    ipdb.set_trace()
-
-
-# Presure temp hum plot them 
+        ipdb.set_trace()
