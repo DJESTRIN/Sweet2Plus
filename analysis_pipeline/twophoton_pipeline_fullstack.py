@@ -13,16 +13,23 @@ import pandas as pd
 #sns.set_style('whitegrid')
 
 class get_s2p():
-    def __init__(self,datapath,resultpath=os.getcwd(),fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1):
-        #Set directories up
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1):
+        #Set input and output directories
         self.datapath=datapath
-        self.resultpath=os.path.join(self.datapath,'figures')
-        if not os.path.exists(self.resultpath): #Make the figure directory if not already made
+        self.resultpath=os.path.join(self.datapath,'figures/')
+        self.resultpath_so=os.path.join(self.datapath,'figures/serialoutput/')
+        self.resultpath_neur=os.path.join(self.datapath,'figures/neuronal/')
+
+        if not os.path.exists(self.resultpath): #Make the figure directory
             os.mkdir(self.resultpath)
+        if not os.path.exists(self.resultpath_so): #Make subfolder for serialoutput/behavioral data
+            os.mkdir(self.resultpath_so)
+        if not os.path.exists(self.resultpath_neur): #Make subfolder for neural data
+            os.mkdir(self.resultpath_neur)
+
 
         #Set suite2P ops
         self.ops = s2p.default_ops()
-        ipdb.set_trace()
         self.ops['batch_size'] = batch_size # we will decrease the batch_size in case low RAM on computer
         self.ops['threshold_scaling'] = threshold_scaling # we are increasing the threshold for finding ROIs to limit the number of non-cell ROIs found (sometimes useful in gcamp injections)
         self.ops['fs'] = fs # sampling rate of recording, determines binning for cell detection
@@ -44,8 +51,8 @@ class get_s2p():
 
     def get_reference_image(self):
         filename=os.path.basename(self.datapath)
-        filename_ref=os.path.join(self.resultpath,f'{filename}referenceimage.jpg')
-        filename_rigids=os.path.join(self.resultpath,f'{filename}rigid.jpg')
+        filename_ref=os.path.join(self.resultpath_neur,f'{filename}referenceimage.jpg')
+        filename_rigids=os.path.join(self.resultpath_neur,f'{filename}rigid.jpg')
         plt.figure(figsize=(20,20))
         plt.subplot(1, 4, 1)
         plt.imshow(self.output_all['refImg'],cmap='gray')
@@ -64,8 +71,9 @@ class get_s2p():
         plt.savefig(filename_ref)
 
 class parse_s2p(get_s2p):
-    def __init__(self,datapath,resultpath=os.getcwd(),fs=1.315235,tau=1,threshold=2,batchsize=800,blocksize=128,reg_tif=True,denoise=1):
-        super().__init__(datapath,resultpath=os.getcwd(),fs=1.315235,tau=1,threshold=2,batchsize=800,blocksize=128,reg_tif=True,denoise=1) #Use initialization from previous class
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65):
+        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1) #Use initialization from previous class
+        self.cellthreshold=cellthreshold # Threshold to determine whether a cell is a cell. 0.7 means only the top 30% of ROIS make it to real dataset as neurons.
 
     def get_s2p_outputs(self):
         #Find planes and get recording/probability files
@@ -111,17 +119,40 @@ class parse_s2p(get_s2p):
         
     def plot_neurons(self,x_label,y_label):   
         # Plot neuron traces and save them without opening
-        for i,row in enumerate(self.traces):
+        for i,row in enumerate(self.z_traces):
             fig,ax=plt.subplots()
             row+=i
             plt.plot(row)
-            file_string=os.path.join(self.resultpath,f'trace{i}.pdf')
+            file_string=os.path.join(self.resultpath_neur,f'trace{i}.pdf')
             plt.title(file_string)
             ax.set_ylabel(y_label)
             ax.set_ylabel(x_label)
             plt.savefig(file_string)
             plt.close()
         return
+
+class corralative_activity(parse_s2p):
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65):
+        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65)
+
+    def get_activity_heatmap(self,data):
+        plt.figure(figsize=(15,25))
+        plt.imshow(data,cmap='coolwarm')
+        plt.ylabel('Neurons')
+        plt.xlabel('Frames')
+        plt.savefig(os.path.join(self.resultpath_neur,'general_heatmap.jpg'))
+
+    def get_activity_correlation(self,data):
+        data=data.T
+        data=pd.DataFrame(data)
+        correlations=data.corr(method='pearson')
+        plt.figure(figsize=(15,15))
+        plt.matshow(correlations,cmap='inferno')
+        plt.legend()
+        plt.ylabel('Neuron #')
+        plt.xlabel('Neuron #')
+        plt.savefig(os.path.join(self.resultpath_neur,'correlation_analysis.jpg'))
+
 
 class load_serial_output():
     def __init__(self,path):
@@ -214,7 +245,6 @@ class load_serial_output():
                                   'Humidity': self.sens[:, 3], 'Time': self.sens[:, 4], 'VanillaBoolean': self.sens[:, 5],\
                                   'PeanutButterBoolean': self.sens[:, 6], 'WaterBoolean': self.sens[:, 7], 'FoxUrineBoolean': self.sens[:, 8],})
         self.behdf = pd.merge(self.syncdf,self.sensdf,on=['LoopNumber'])
-        ipdb.set_trace()
 
     def count_trials(self):
         # Loop through trial types and count total number of trials
@@ -285,21 +315,33 @@ class load_serial_output():
         plt.scatter(x=range(len(times)),y=times)
         plt.savefig('timehist.jpg')
 
-# class funcational_classification(get_s2p,load_serial_output):
-#     # Get Raster-PETH for each neuron's activity across conditions. (10 second before and after)?
-#         # Plot raster-PETHS across trials 
-#     # Classify neurons into sections (Water, TMT, Vanilla, Peanut Butter)
-#         # Based on change in activity from baseline and fidelity?
-#     #
 
-# class corralative_activity(funcational_classification):
+class funcational_classification(parse_s2p):
+    def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65):
+        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65)
+        self.so=serialoutput_object.behdf #Pass in serial_output_object
+
+    def PETH(self):
+        """ PETH method will align neuronal trace data to each event of interest. 
+        Inputs:
+        data: float -- This is a matrix of data where each row contains dF trace data for a single neuron. Each column is a frame/time point
+        timestamps: float -- This is the timestamps (taken from load_serial_output class) for trial of interest. 
+        window: float default=10 -- The time (seconds) before and after each event that you would like to plot.
+        baseline_period: list of two floats default=[-10,-5] -- 
+        event_period: list of two floats default=[-10,-5]
+        event_name: str -- This string will be used to create a subfolder in figures path. Suggest using the name of the trial type. Example: 'shocktrials'.
+
+        Outputs:
+        self.peth_stats -- Class attribute containg a list of important Area Under the Curve statistics for baseline and event. Each element corresponds to stats for a single neuron. 
+        PETH graphs -> saved to the provided datapath /figures/neuronal/peths/eventname/peth_neuron{X}.jpg. If given N traces, there will be N peth graphs saved.
+        """
+
+        # Get Raster-PETH for each neuron's activity across conditions. (10 second before and after)
+        # Plot raster-PETHS across trials 
+    # Classify neurons into sections (Water, TMT, Vanilla, Peanut Butter)
+        # Based on change in activity from baseline and fidelity?
+    #
         
-def rename_files():
-    images = glob.glob(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*\*.tif')
-    for image in images:
-        newname = image.replace('Ch2','Ch1')
-        os.rename(image, newname)
-
 def main(serialoutput_search, twophoton_search):
     # Find and match all 2P image folders with corresponding serial output folders
     behdirs = glob.glob(serialoutput_search)
@@ -314,20 +356,27 @@ def main(serialoutput_search, twophoton_search):
 
     recordings=[]
     for imagepath,behpath in final_list:
-        s2p_obj = parse_s2p(imagepath,resultpath='C:\\Users\\listo\\twophoton\\figures\\')
+        so_obj = load_serial_output(behpath):
+        s2p_obj = funcational_classification(imagepath)
         s2p_obj()
+        s2p_obj.get_activity_heatmap(s2p_obj.traces) #Get the heatmap for whole session
+        s2p_obj.get_activity_correlation(s2p_obj.traces) #Get the correlation matrix plot for all neurons
         recordings.append(s2p_obj)
 
     return recordings
 
 if __name__=='__main__':
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--subject_two_photon_data',type=str,required=True) #Folder containing two photon's TIFF images
-    # parser.add_argument('--serial_output_data',type=str,required=True) #Folder containing the serial outputs from the sync and sens aurduinos
-    # parser.add_argument('--deep_lab_cut_data',type=str) #Folder continaing deeplabcut output data for video. 
-    # corralative_activity()
-    rename_files()
-    recordings=main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--headless', action='store_true') #Folder containing two photon's TIFF images
+    parser.add_argument('--subject_two_photon_data',type=str,required=False) #Folder containing two photon's TIFF images
+    parser.add_argument('--subject_two_photon_data',type=str,required=False) #Folder containing two photon's TIFF images
+    parser.add_argument('--serial_output_data',type=str,required=False) #Folder containing the serial outputs from the sync and sens aurduinos
+    parser.add_argument('--deep_lab_cut_data',type=str,required=False) #Folder continaing deeplabcut output data for video.
+    args=parser.parse_args()
+    if args.headless:
+        print('headless mode')
+    else:
+        recordings=main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
     ipdb.set_trace()
 
 
