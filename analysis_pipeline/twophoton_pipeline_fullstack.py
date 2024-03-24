@@ -23,7 +23,6 @@ Have masks imported back into movie to show which neurons are called neurons.
 
 """
 
-
 class get_s2p():
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1):
         #Set input and output directories
@@ -113,7 +112,8 @@ class parse_s2p(get_s2p):
         super().__call__()
         self.get_s2p_outputs()
         self.threshold_neurons()
-        self.zscore_neurons()
+        toh=self.traces[10,:]
+        self.zscore_trace(toh)
         self.plot_neurons('Frames','F')
         
     def threshold_neurons(self):
@@ -121,19 +121,22 @@ class parse_s2p(get_s2p):
         self.traces=self.traces.squeeze()
         return
         
-    def zscore_trace(trace):
+    def zscore_trace(self,trace):
         """ Using a sliding window, trace is zscored. 
         The sliding window is offset each iteration of the loop
         This removes any artifacts created by z score. 
         """
+        ipdb.set_trace()
         ztrace=[]
-        window_width=100
+        window_width=20
         for rvalue in range(window_width):
             start=rvalue
             stop=rvalue+window_width
             zscored_trace=[]
-            for i in range(len(trace)/(stop-start)):
-                if start>0:
+            ipdb.set_trace()
+            for i in range(round(len(trace)/(stop-start))):
+                if start>0 and i==0:
+                    ipdb.set_trace()
                     window=trace[0:start]
                     window=(window-np.mean(window))/np.std(window) #Zscrore winow
                     zscored_trace.append(window)
@@ -144,10 +147,15 @@ class parse_s2p(get_s2p):
                 stop+=window_width
                 zscored_trace.append(window)
             
+            for i,window in enumerate(zscored_trace):
+                if i==0:
+                    zscored_trace=
+                
             zscored_trace=np.asarray(zscored_trace)
             zscored_trace=zscored_trace.reshape(len(trace),)
             ztrace.append(zscored_trace)
             
+        ipdb.set_trace()
         ztrace=np.median(ztrace,axis=0)
         return ztrace
     
@@ -267,6 +275,9 @@ class load_serial_output():
 
         if len(stops)<1:
             stops=imagecount[-2]
+
+        if type(stops) is np.float64:
+            stops=[int(stops)]
 
         if len(starts)>1 or len(stops)>1:
             raise Exception("More than 1 start or stop calculated, code must be fixed")
@@ -408,16 +419,16 @@ def main(serialoutput_search, twophoton_search):
 
 if __name__=='__main__':
     #Set up command line argument parser
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--headless', action='store_true') #Folder containing two photon's TIFF images
-    parser.add_argument('--subject_two_photon_data',type=str,required=False) #Folder containing two photon's TIFF images
-    parser.add_argument('--serial_output_data',type=str,required=False) #Folder containing the serial outputs from the sync and sens aurduinos
-    parser.add_argument('--deep_lab_cut_data',type=str,required=False) #Folder continaing deeplabcut output data for video.
-    args=parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--headless', action='store_true') #Folder containing two photon's TIFF images
+    # parser.add_argument('--subject_two_photon_data',type=str,required=False) #Folder containing two photon's TIFF images
+    # parser.add_argument('--serial_output_data',type=str,required=False) #Folder containing the serial outputs from the sync and sens aurduinos
+    # parser.add_argument('--deep_lab_cut_data',type=str,required=False) #Folder continaing deeplabcut output data for video.
+    # args=parser.parse_args()
 
-    # Run headless or run main function.
-    if args.headless:
-        print('headless mode')
-    else:
-        recordings=main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
-        ipdb.set_trace()
+    # # Run headless or run main function.
+    # if args.headless:
+    #     print('headless mode')
+    # else:
+    recordings=main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
+        # ipdb.set_trace()
