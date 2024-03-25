@@ -10,21 +10,20 @@ import ipdb
 import os,glob
 import pandas as pd
 from multiprocessing import Pool
-#import seaborn as sns
+import random as rand
+import seaborn as sns
+from behavior import load_serial_output
 #sns.set_style('whitegrid')
 
-
-"""
-To do list
+""" To do list
+Add pickling method to load and save objects easily. 
 Normalize trace via z-score
-High res output for heatmaps
+High res output for heatmaps =
 Have masks imported back into movie to show which neurons are called neurons. 
-
-
 """
 
 class get_s2p():
-    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1):
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1):
         #Set input and output directories
         self.datapath=datapath
         self.resultpath=os.path.join(self.datapath,'figures/')
@@ -48,14 +47,18 @@ class get_s2p():
         self.ops['input_format']="bruker"
         self.ops['blocksize']=blocksize
         self.ops['reg_tif']=reg_tif
+        self.ops['reg_tif_chan2']=reg_tif_chan2
         self.ops['denoise']=denoise
 
         #Set up datapath
         self.db = {'data_path': [self.datapath],}
     
     def __call__(self):
-        self.auto_run()
-        self.get_reference_image()
+        searchstring=os.path.join(self.datapath,'**/F.npy')
+        res = glob.glob(searchstring,recursive=True)
+        if not res:
+            self.auto_run()
+            self.get_reference_image()
 
     def auto_run(self):
         self.output_all=s2p.run_s2p(ops=self.ops,db=self.db)
@@ -82,8 +85,8 @@ class get_s2p():
         plt.savefig(filename_ref)
 
 class parse_s2p(get_s2p):
-    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65):
-        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1) #Use initialization from previous class
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
+        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1) #Use initialization from previous class
         self.cellthreshold=cellthreshold # Threshold to determine whether a cell is a cell. 0.7 means only the top 30% of ROIS make it to real dataset as neurons.
 
     def get_s2p_outputs(self):
@@ -112,34 +115,36 @@ class parse_s2p(get_s2p):
         super().__call__()
         self.get_s2p_outputs()
         self.threshold_neurons()
-        toh=self.traces[10,:]
-        self.zscore_trace(toh)
-        self.plot_neurons('Frames','F')
+        self.parallel_zscore()
+        self.plot_all_neurons('Frames','Z-Score + i')
+        self.plot_neurons('Frames','Z-Score')
         
     def threshold_neurons(self):
         self.traces=self.traces[np.where(self.neuron_prob>0.9),:] #Need to add threshold as attirbute
         self.traces=self.traces.squeeze()
         return
         
-    def zscore_trace(self,trace):
+    def zscore_trace(self,trace,window_width=500):
         """ Using a sliding window, trace is zscored. 
         The sliding window is offset each iteration of the loop
         This removes any artifacts created by z score. 
         """
-        ipdb.set_trace()
         ztrace=[]
-        window_width=20
         for rvalue in range(window_width):
             start=rvalue
             stop=rvalue+window_width
             zscored_trace=[]
-            ipdb.set_trace()
-            for i in range(round(len(trace)/(stop-start))):
+            for i in range(round((len(trace)/(stop-start))+1)):
                 if start>0 and i==0:
-                    ipdb.set_trace()
                     window=trace[0:start]
                     window=(window-np.mean(window))/np.std(window) #Zscrore winow
                     zscored_trace.append(window)
+
+                if stop>len(trace):
+                    window=trace[start:]
+                    window=(window-np.mean(window))/np.std(window) #Zscrore winow
+                    zscored_trace.append(window)
+                    break
 
                 window=trace[start:stop]
                 window=(window-np.mean(window))/np.std(window) #Zscrore winow
@@ -149,13 +154,13 @@ class parse_s2p(get_s2p):
             
             for i,window in enumerate(zscored_trace):
                 if i==0:
-                    zscored_trace=
+                    zscored_trace=window
+                else:
+                    zscored_trace=np.concatenate((zscored_trace,np.asarray(window)),axis=0)
                 
-            zscored_trace=np.asarray(zscored_trace)
-            zscored_trace=zscored_trace.reshape(len(trace),)
             ztrace.append(zscored_trace)
-            
-        ipdb.set_trace()
+
+        ztrace=np.asarray(ztrace)
         ztrace=np.median(ztrace,axis=0)
         return ztrace
     
@@ -163,214 +168,99 @@ class parse_s2p(get_s2p):
         with Pool() as P:
             self.ztraces = P.map(self.zscore_trace,self.traces)
 
-    def plot_neurons(self,x_label,y_label):   
+    def plot_all_neurons(self,x_label,y_label):
         # Plot neuron traces and save them without opening
-        for i,row in enumerate(self.z_traces):
-            fig,ax=plt.subplots()
-            row+=i
+        fig,ax=plt.subplots(dpi=1200)
+        fig.set_figheight(100)
+        fig.set_figwidth(15)
+        addit=0
+        for i,row in enumerate(self.ztraces):
+            row+=addit
+            plt.plot(row)
+            addit=np.nanmax(row)
+
+        plt.title('All Neuronal traces')
+        ax.set_ylabel(x_label)
+        ax.set_ylabel(y_label)
+
+        file_string=os.path.join(self.resultpath_neur,'all_neurons.pdf')
+        plt.savefig(file_string)
+        plt.close()
+        return
+
+    def plot_neurons(self,x_label,y_label):   
+        # Set up folder to drop traces
+        self.resultpath_neur_traces = os.path.join(self.resultpath_neur,'traces')
+        if not os.path.exists(self.resultpath_neur_traces):
+            os.mkdir(self.resultpath_neur_traces)
+
+        # Plot neuron traces and save them without opening
+        for i,row in enumerate(self.ztraces):
+            fig,ax=plt.subplots(dpi=1200)
             plt.plot(row)
             file_string=os.path.join(self.resultpath_neur,f'trace{i}.pdf')
             plt.title(file_string)
-            ax.set_ylabel(y_label)
             ax.set_ylabel(x_label)
+            ax.set_ylabel(y_label)
             plt.savefig(file_string)
             plt.close()
-        return
 
 class corralative_activity(parse_s2p):
-    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65):
-        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65)
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
+        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
 
     def get_activity_heatmap(self,data):
-        plt.figure(figsize=(15,25))
+        plt.figure(figsize=(15,25),dpi=1200)
         plt.imshow(data,cmap='coolwarm')
         plt.ylabel('Neurons')
         plt.xlabel('Frames')
+        plt.colorbar()
         plt.savefig(os.path.join(self.resultpath_neur,'general_heatmap.jpg'))
 
     def get_activity_correlation(self,data):
         data=data.T
         data=pd.DataFrame(data)
         correlations=data.corr(method='pearson')
-        plt.figure(figsize=(15,15))
+        plt.figure(figsize=(15,15),dpi=1200)
         plt.matshow(correlations,cmap='inferno')
-        plt.legend()
         plt.ylabel('Neuron #')
         plt.xlabel('Neuron #')
+        plt.colorbar()
         plt.savefig(os.path.join(self.resultpath_neur,'correlation_analysis.jpg'))
 
+    def general_pipeline(self):
+        # Look at correlation of activity during baseline
+        # Look at correlation of activity during US
+        # Look at correlation of activity during post-TMT
+        # Get PETHS and classify neurons by activity
+        # Look at each of above correlations with respect to functional classification of neurons 
 
-class load_serial_output():
-    def __init__(self,path):
-        self.path = path 
-   
-    def __call__(self):
-        self.get_file_name()
-        self.load_data()
-        self.count_trials()
-        #self.plot_trials() 
-        self.crop_data()
-        #self.graph_aurduino_serialoutput_rate()
-    
-    def get_file_name(self):
-        bn = os.path.basename(self.path)
-        self.outputfilename=bn+'_plottrials'
-
-    def load_data(self):
-        #Search given path for putty files
-        search_string = os.path.join(self.path,'*')
-        files = glob.glob(search_string)
-        #Loop through all files in the path and grab data
-        for j,file in enumerate(files):
-            file = open(file, "r") # Read file
-            content = file.read().splitlines() #Separate into correct shape
-            alldata=[] #Generate empty list
-            
-            if 'sens' in files[j]:
-                for line in content: #Go through each line and filter
-                    try: #If line does not fit specific shape, throws an error. 
-                        line = line.split(',')
-                        line = np.asarray(line)
-                        line = line.astype(float)
-                        if line.shape[0]!=9: #Hard coded shape in, remove later
-                            continue
-                        alldata.append(line) #Append to empty list
-                    except:
-                        continue
-            
-                alldata=np.asarray(alldata) #Reshape list into numpy array
-                self.sens=alldata
-
-            # If file name contains sens or sync, put in correct variable name
-            if 'sync' in files[j]:
-                for line in content: #Go through each line and filter
-                    try: #If line does not fit specific shape, throws an error. 
-                        line = line.split(',')
-                        line = np.asarray(line)
-                        line = line.astype(float)
-                        if line.shape[0]!=3: #Hard coded shape in, remove later
-                            continue
-                        alldata.append(line) #Append to empty list
-                    except:
-                        continue
-            
-                alldata=np.asarray(alldata) #Reshape list into numpy array
-                self.sync=alldata
-
-    def crop_data(self):
-        """ Takes sens and sync data, crops them to only important the experiment
-        """
-        # Seperate array columns temporarily
-        imagecount = self.sync[:,0] #Writing this out for our own sanity
-        loopnumber = self.sync[:,1]
-
-        # Roll through image count array to find start and stop
-        starts=[]
-        stops=[]
-        for i,val in enumerate(imagecount[:-1]):
-            if imagecount[i]==0 and imagecount[i+1]==1:
-                starts.append(i)
-            if imagecount[i]>0 and imagecount[i+1]==0:
-                stops.append(i)
-
-        if len(stops)<1:
-            stops=imagecount[-2]
-
-        if type(stops) is np.float64:
-            stops=[int(stops)]
-
-        if len(starts)>1 or len(stops)>1:
-            raise Exception("More than 1 start or stop calculated, code must be fixed")
-
-        # Crop data to only the recording
-        self.sync = self.sync[starts[0]:stops[0],:]
-        loopstart,loopstop=loopnumber[starts[0]],loopnumber[stops[0]]
-        loopstart,loopstop=np.where(self.sens[:,0]==loopstart),np.where(self.sens[:,0]==loopstop)
-        self.sens=self.sens[int(loopstart[0][0]):int(loopstop[0][0]),:]
-
-        # Convert to pandas dataframe
-        self.syncdf = pd.DataFrame({'ImageNumber': self.sync[:, 0], 'LoopNumber': self.sync[:, 1], 'LaserTrigger': self.sync[:, 2]})
-        self.sensdf = pd.DataFrame({'LoopNumber': self.sens[:, 0], 'Pressure': self.sens[:, 1], 'Temperature': self.sens[:, 2], \
-                                  'Humidity': self.sens[:, 3], 'Time': self.sens[:, 4], 'VanillaBoolean': self.sens[:, 5],\
-                                  'PeanutButterBoolean': self.sens[:, 6], 'WaterBoolean': self.sens[:, 7], 'FoxUrineBoolean': self.sens[:, 8],})
-        self.behdf = pd.merge(self.syncdf,self.sensdf,on=['LoopNumber'])
-
-    def count_trials(self):
-        # Loop through trial types and count total number of trials
-        trials=['Vanilla','Peanut Butter', 'Water', 'Fox Urine']
-        for i,trial in zip(range(5,9),trials):
-            count=0
-            for start,stop in zip(self.sens[:-1,i],self.sens[1:,i]):
-                if start==0 and stop==1:
-                    count+=1
-            
-            print(f'There were {count} {trial} trials')
-
-    def plot_trials(self):
-        # Get start and end
-        av=np.sum(self.sens[:,5:],axis=1)
-        for i,val in enumerate(av[:-1]):
-            val2=av[i+1]
-            if val==0 and val2==1:
-                start=i
-                break
-
-        fav=np.flip(av)
-        for i,val in enumerate(fav):
-            val2=fav[i+1]
-            if val==0 and val2==1:
-                print(val2)
-                finish=len(fav)-i
-                break
-
-        plt.figure()
-        for i in range(5,9):
-            plt.plot(self.sens[start:finish,i]+(i*1.5-5))
-        filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'.jpg')
-        pres=self.sens[start:finish,1]
-        pres=(pres-pres.min())/(pres.max()-pres.min())+1
-        print(pres.min())
-        plt.plot(pres)
-        filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'pressure.jpg')
-        plt.xlabel('Loop Number')
-        plt.ylabel('On or Off')
-        plt.legend(['Vanilla','Peanut Butter','Water', 'Fox Urine','Normalized Pressure'],loc='upper left')
-        plt.savefig(filename)
-
-        #Pressure
-        plt.figure()
-        plt.plot(self.sens[start:finish,2])
-        filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'temp.jpg')
-        plt.xlabel('Loop Number')
-        plt.ylabel('Temp')
-        plt.savefig(filename)
- 
-        #Pressure
-        plt.figure()
-        plt.plot(self.sens[start:finish,3])
-        filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'humidity.jpg')
-        plt.xlabel('Loop Number')
-        plt.ylabel('Humidity')
-        plt.savefig(filename)  
-
-    def graph_aurduino_serialoutput_rate(self):
-        time = self.sens[:,4]
-        times=[]
-        for i,t in enumerate(time[:-1]):
-            times.append(time[i+1]-time[i])
-
-        times=np.asarray(times)
-        plt.figure()
-        plt.scatter(x=range(len(times)),y=times)
-        plt.savefig('timehist.jpg')
-
+        a=1
 
 class funcational_classification(parse_s2p):
-    def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65):
-        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,denoise=1,cellthreshold=0.65)
+    def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
+        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
         self.so=serialoutput_object.behdf #Pass in serial_output_object
 
-    def PETH(self):
+    def __call__(self):
+        super().__call__()
+        self.FoxUrineTimestamps = self.parse_behavior_df('FoxUrineBoolean')
+        ipdb.set_trace()
+
+    def parse_behavior_df(self,ColumnName):
+        #Convert from Pandas dataframe back to numpy
+        Event=self.so[ColumnName]
+        ImageNumbers=self.so['ImageNumber']
+        ImageNumbers=ImageNumbers.to_numpy()
+        Event=Event.to_numpy()
+
+        # Find Image number where event occurs
+        ImageNumberTS=[]
+        for i in range(len(Event)):
+            if Event[i]==0 and Event[i+1]==1:
+                ImageNumberTS.append(ImageNumbers[i])
+
+    def PETH(self,data,timestamps,window,baseline_period,event_period,event_name):
         """ PETH method will align neuronal trace data to each event of interest. 
         Inputs:
         data: float -- This is a matrix of data where each row contains dF trace data for a single neuron. Each column is a frame/time point
@@ -384,12 +274,53 @@ class funcational_classification(parse_s2p):
         self.peth_stats -- Class attribute containg a list of important Area Under the Curve statistics for baseline and event. Each element corresponds to stats for a single neuron. 
         PETH graphs -> saved to the provided datapath /figures/neuronal/peths/eventname/peth_neuron{X}.jpg. If given N traces, there will be N peth graphs saved.
         """
+        sampling_frequency=self.ops['fs'] # Number of Images taken per second
+        window = round(window*sampling_frequency) # Convert the window (s) * the sampling frequency (Frames/s) to get number of frames in window. 
+
+        for i,neuron_trace in enumerate(data):
+            heatmap_data=[]
+            BL_AUC=[] # Save the baseline AUC stats
+            EV_AUC=[] # Save the Event AUC stats
+            for time in timestamps:
+                trace_event = neuron_trace[(time-window):(time+window)]
+                heatmap_data.append(trace_event)
+
+                #Calculate AUC for Baseline
+                bl_trace=neuron_trace[(time+baseline_period[0]):(time+baseline_period[1])]
+                BL_AUC.append(np.trapz(bl_trace))
+
+                #Calculate AUC for Event
+                bl_trace=neuron_trace[(time+event_period[0]):(time+event_period[1])]
+                EV_AUC.append(np.trapz(bl_trace))
+
+            mean_trace=np.asarray(heatmap_data).mean(axis=0) # Get Average trace across events for Neuron
+
+            ipdb.set_trace()
+            # Plot PETH
+            plt.figure(figsize=(15,15),dpi=1200)
+            f, axes = plt.subplots(2, 1, sharex='col')
+            axes[0] = plt.plot(mean_trace)
+            axes[1].pcolor(heatmap_data)
+            axes[1].colarbar()
+            plt.savefig('ExamplePETH1.jpg')
+
 
         # Get Raster-PETH for each neuron's activity across conditions. (10 second before and after)
         # Plot raster-PETHS across trials 
+
+    def classify_neuron(self):
+        ipdb.set_trace()
+        # Vanilla Event, Peanut Butter Event
+        # Trial 1 , 2 , 3 ,4, 5, .. N, 
+        # delta AUC1 (Baseline-Event), delta AUC2
     # Classify neurons into sections (Water, TMT, Vanilla, Peanut Butter)
         # Based on change in activity from baseline and fidelity?
     #
+        
+    def create_labeled_movie(self):
+        #Take motion corrected images and overlay mask based on functional classification in python
+        a=1
+
         
 def main(serialoutput_search, twophoton_search):
     # Find and match all 2P image folders with corresponding serial output folders
