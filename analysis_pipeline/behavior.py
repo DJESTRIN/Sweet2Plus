@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os,glob
 import pandas as pd
+import ipdb
 
 class load_serial_output():
     def __init__(self,path):
@@ -77,9 +78,11 @@ class load_serial_output():
                 stops.append(i)
 
         if len(stops)<1:
-            stops=imagecount[-2]
+            stops=imagecount[-1]-1
+            stops=np.where(imagecount==stops)
+            stops=[int(stops[0][-1])]
 
-        if type(stops) is np.float64:
+        if type(stops) is np.float64 or type(stops) is np.int64:
             stops=[int(stops)]
 
         if len(starts)>1 or len(stops)>1:
@@ -96,7 +99,7 @@ class load_serial_output():
         self.sensdf = pd.DataFrame({'LoopNumber': self.sens[:, 0], 'Pressure': self.sens[:, 1], 'Temperature': self.sens[:, 2], \
                                   'Humidity': self.sens[:, 3], 'Time': self.sens[:, 4], 'VanillaBoolean': self.sens[:, 5],\
                                   'PeanutButterBoolean': self.sens[:, 6], 'WaterBoolean': self.sens[:, 7], 'FoxUrineBoolean': self.sens[:, 8],})
-        self.behdf = pd.merge(self.syncdf,self.sensdf,on=['LoopNumber'])
+        self.behdf = pd.merge(self.syncdf,self.sensdf,on=['LoopNumber'],how='outer')
 
     def count_trials(self):
         # Loop through trial types and count total number of trials

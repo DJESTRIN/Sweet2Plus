@@ -1,19 +1,13 @@
-import os, requests
-from pathlib import Path
-import matplotlib.pyplot as plt
 import numpy as np
 import suite2p as s2p
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import argparse 
+import matplotlib.pyplot as plt 
 import ipdb
 import os,glob
 import pandas as pd
 from multiprocessing import Pool
-import random as rand
 import seaborn as sns
 from behavior import load_serial_output
-#sns.set_style('whitegrid')
+sns.set_style('whitegrid')
 
 """ To do list
 Add pickling method to load and save objects easily. 
@@ -244,7 +238,8 @@ class funcational_classification(parse_s2p):
 
     def __call__(self):
         super().__call__()
-        self.FoxUrineTimestamps = self.parse_behavior_df('FoxUrineBoolean')
+        self.VanillaTS = self.parse_behavior_df('VanillaBoolean')
+        self.PETH(self.ztraces,self.VanillaTS,10,[-10,-5],[0,5],'Vanilla')
         ipdb.set_trace()
 
     def parse_behavior_df(self,ColumnName):
@@ -256,9 +251,11 @@ class funcational_classification(parse_s2p):
 
         # Find Image number where event occurs
         ImageNumberTS=[]
-        for i in range(len(Event)):
+        for i in range(len(Event)-1):
             if Event[i]==0 and Event[i+1]==1:
                 ImageNumberTS.append(ImageNumbers[i])
+        
+        return ImageNumberTS
 
     def PETH(self,data,timestamps,window,baseline_period,event_period,event_name):
         """ PETH method will align neuronal trace data to each event of interest. 
@@ -282,28 +279,30 @@ class funcational_classification(parse_s2p):
             BL_AUC=[] # Save the baseline AUC stats
             EV_AUC=[] # Save the Event AUC stats
             for time in timestamps:
-                trace_event = neuron_trace[(time-window):(time+window)]
+                trace_event = neuron_trace[int(time-window):int(time+window)]
                 heatmap_data.append(trace_event)
 
                 #Calculate AUC for Baseline
-                bl_trace=neuron_trace[(time+baseline_period[0]):(time+baseline_period[1])]
+                bl_trace=neuron_trace[int(time+round(baseline_period[0]*sampling_frequency)):int(time+round(baseline_period[1]*sampling_frequency))]
                 BL_AUC.append(np.trapz(bl_trace))
 
                 #Calculate AUC for Event
-                bl_trace=neuron_trace[(time+event_period[0]):(time+event_period[1])]
-                EV_AUC.append(np.trapz(bl_trace))
+                ev_trace=neuron_trace[int(time+round(event_period[0]*sampling_frequency)):int(time+round(event_period[1]*sampling_frequency))]
+                EV_AUC.append(np.trapz(ev_trace))
 
             mean_trace=np.asarray(heatmap_data).mean(axis=0) # Get Average trace across events for Neuron
 
-            ipdb.set_trace()
             # Plot PETH
             plt.figure(figsize=(15,15),dpi=1200)
             f, axes = plt.subplots(2, 1, sharex='col')
+            plt.subplot(2, 1, 1)
             axes[0] = plt.plot(mean_trace)
+            ax = plt.subplot(2, 1, 2)
             axes[1].pcolor(heatmap_data)
-            axes[1].colarbar()
-            plt.savefig('ExamplePETH1.jpg')
-
+            #ax.colarbar()
+            plt.title(event_name)
+            plt.savefig(os.path.join(self.resultpath_neur,f'{event_name}PETH_Neuron{i}.pdf'))
+            plt.close()
 
         # Get Raster-PETH for each neuron's activity across conditions. (10 second before and after)
         # Plot raster-PETHS across trials 
