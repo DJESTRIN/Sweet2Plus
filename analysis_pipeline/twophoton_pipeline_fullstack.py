@@ -91,19 +91,15 @@ class parse_s2p(get_s2p):
         planes = [result for result in glob.glob(search_path)]
         self.recording_files.append(os.path.join(planes[0],'F.npy'))
         self.probability_files.append(os.path.join(planes[0],'iscell.npy'))
-
-         
-        if len(self.recording_files)>1 and len(self.probability_files)>1:
-            #Loop over files
-            self.__call__
-        else:
-            self.recording_file=self.recording_files[0]
-            self.probability_file=self.probability_files[0]
-            self.neuron_prob=np.load(self.probability_file)
-            self.neuron_prob=self.neuron_prob[:,1]
-            self.traces=np.load(self.recording_file)
-
-        return
+    
+        assert (len(self.recording_files)==1 and len(self.probability_files)==1) #Make sure there is only one file.
+ 
+        self.recording_file=self.recording_files[0]
+        self.probability_file=self.probability_files[0]
+        self.neuron_prob=np.load(self.probability_file)
+        self.neuron_prob=self.neuron_prob[:,1]
+        self.traces=np.load(self.recording_file)
+       
     
     def __call__(self):
         super().__call__()
@@ -204,23 +200,36 @@ class corralative_activity(parse_s2p):
         super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
 
     def get_activity_heatmap(self,data):
-        plt.figure(figsize=(15,25),dpi=1200)
-        plt.imshow(data,cmap='coolwarm')
+        plt.figure(figsize=(30,30),dpi=1200)
+        plt.matshow(data,cmap='coolwarm')
         plt.ylabel('Neurons')
         plt.xlabel('Frames')
         plt.colorbar()
-        plt.savefig(os.path.join(self.resultpath_neur,'general_heatmap.jpg'))
+        plt.savefig(os.path.join(self.resultpath_neur,'general_heatmap.pdf'))
 
     def get_activity_correlation(self,data):
+        ipdb.set_trace()
+        data=np.asarray(data)
         data=data.T
         data=pd.DataFrame(data)
         correlations=data.corr(method='pearson')
-        plt.figure(figsize=(15,15),dpi=1200)
-        plt.matshow(correlations,cmap='inferno')
+        cor_rankings=correlations.sum(axis=1)
+        order = np.argsort(cor_rankings)
+        data_sorted=data[order]
+        correlations=data_sorted.corr(method='pearson')
+
+        plt.figure(figsize=(30,30),dpi=1200)
+        ax = sns.heatmap(correlations, annot=True, linewidths=.5)
+        #.matshow(correlations,cmap='inferno')
+
         plt.ylabel('Neuron #')
         plt.xlabel('Neuron #')
-        plt.colorbar()
-        plt.savefig(os.path.join(self.resultpath_neur,'correlation_analysis.jpg'))
+        #plt.colorbar()
+        plt.savefig(os.path.join(self.resultpath_neur,'correlation_analysis.pdf'))
+
+        # Get correlation values other than 1. 
+        corr_ed=correlations
+        corr_ed[corr_ed==1]=np.nan
 
     def general_pipeline(self):
         # Look at correlation of activity during baseline
@@ -239,6 +248,7 @@ class funcational_classification(parse_s2p):
     def __call__(self):
         super().__call__()
         self.VanillaTS = self.parse_behavior_df('VanillaBoolean')
+        ipdb.set_trace()
         self.PETH(self.ztraces,self.VanillaTS,10,[-10,-5],[0,5],'Vanilla')
         ipdb.set_trace()
 
@@ -334,15 +344,15 @@ def main(serialoutput_search, twophoton_search):
                 final_list.append([diroh,bdiroh])
 
     recordings=[]
-    for imagepath,behpath in final_list:
+    for i,(imagepath,behpath) in enumerate(final_list):
         #Get behavior data object
-        so_obj = load_serial_output(behpath)
-        so_obj()
+        #so_obj = load_serial_output(behpath)
+        #so_obj()
 
-        s2p_obj = funcational_classification(imagepath,so_obj)
+        s2p_obj = corralative_activity(imagepath)
         s2p_obj()
-        s2p_obj.get_activity_heatmap(s2p_obj.traces) #Get the heatmap for whole session
-        s2p_obj.get_activity_correlation(s2p_obj.traces) #Get the correlation matrix plot for all neurons
+        s2p_obj.get_activity_heatmap(s2p_obj.ztraces) #Get the heatmap for whole session
+        s2p_obj.get_activity_correlation(s2p_obj.ztraces) #Get the correlation matrix plot for all neurons
         recordings.append(s2p_obj)
 
     return recordings

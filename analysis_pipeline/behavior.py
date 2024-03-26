@@ -11,7 +11,7 @@ class load_serial_output():
     def __call__(self):
         self.get_file_name()
         self.load_data()
-        self.count_trials()
+        self.quick_timestamps()
         #self.plot_trials() 
         self.crop_data()
         #self.graph_aurduino_serialoutput_rate()
@@ -101,16 +101,22 @@ class load_serial_output():
                                   'PeanutButterBoolean': self.sens[:, 6], 'WaterBoolean': self.sens[:, 7], 'FoxUrineBoolean': self.sens[:, 8],})
         self.behdf = pd.merge(self.syncdf,self.sensdf,on=['LoopNumber'],how='outer')
 
-    def count_trials(self):
+    def quick_timestamps(self):
         # Loop through trial types and count total number of trials
         trials=['Vanilla','Peanut Butter', 'Water', 'Fox Urine']
+        all_evts=[]
         for i,trial in zip(range(5,9),trials):
             count=0
-            for start,stop in zip(self.sens[:-1,i],self.sens[1:,i]):
+            all_ts=[]
+            for index,(start,stop) in enumerate(zip(self.sens[:-1,i],self.sens[1:,i])):
                 if start==0 and stop==1:
+                    LoopNumber = self.sens[index,0]
                     count+=1
-            
+                    all_ts.append(LoopNumber)
+            all_evts.append(all_ts)
             print(f'There were {count} {trial} trials')
+        self.all_evts=all_evts
+        
 
     def plot_trials(self):
         # Get start and end
