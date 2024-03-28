@@ -114,12 +114,13 @@ class parse_s2p(get_s2p):
         self.traces=self.traces.squeeze()
         return
         
-    def zscore_trace(self,trace,window_width=500):
+    def zscore_trace(self,trace):
         """ Using a sliding window, trace is zscored. 
         The sliding window is offset each iteration of the loop
-        This removes any artifacts created by z score. 
-        """
+        This removes any artifacts created by z score. """
+
         ztrace=[]
+        window_width=500
         for rvalue in range(window_width):
             start=rvalue
             stop=rvalue+window_width
@@ -151,12 +152,13 @@ class parse_s2p(get_s2p):
             ztrace.append(zscored_trace)
 
         ztrace=np.asarray(ztrace)
-        ztrace=np.median(ztrace,axis=0)
+        ztrace=np.nanmedian(ztrace,axis=0)
         return ztrace
     
     def parallel_zscore(self):
         with Pool() as P:
             self.ztraces = P.map(self.zscore_trace,self.traces)
+            self.ztraces_copy=np.copy(self.ztraces)
 
     def plot_all_neurons(self,x_label,y_label):
         # Plot neuron traces and save them without opening
@@ -200,31 +202,39 @@ class corralative_activity(parse_s2p):
         super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
 
     def get_activity_heatmap(self,data):
-        plt.figure(figsize=(30,30),dpi=1200)
-        plt.matshow(data,cmap='coolwarm')
+        plt.figure(figsize=(30,30),dpi=300)
+        ax = sns.heatmap(data)
         plt.ylabel('Neurons')
         plt.xlabel('Frames')
-        plt.colorbar()
         plt.savefig(os.path.join(self.resultpath_neur,'general_heatmap.pdf'))
 
+        plt.figure(figsize=(30,30),dpi=300)
+        dataav=np.copy(data)
+        dataav=np.nanmean(dataav,axis=0)
+        plt.plot(dataav,linewidth=3)
+        plt.ylabel('Average Z-score(F)', fontsize=15)
+        plt.xlabel('Frames', fontsize=15)
+        plt.title('Neuronal Population Activity')
+        plt.savefig(os.path.join(self.resultpath_neur,'population_activity.pdf'))
+
     def get_activity_correlation(self,data):
-        ipdb.set_trace()
         data=np.asarray(data)
         data=data.T
         data=pd.DataFrame(data)
         correlations=data.corr(method='pearson')
+
+        # Rank order the neurons based on highest to lowest correlations
         cor_rankings=correlations.sum(axis=1)
         order = np.argsort(cor_rankings)
+        order = order[::-1] # We want the highest correlations at the top of graph. 
         data_sorted=data[order]
         correlations=data_sorted.corr(method='pearson')
 
-        plt.figure(figsize=(30,30),dpi=1200)
-        ax = sns.heatmap(correlations, annot=True, linewidths=.5)
-        #.matshow(correlations,cmap='inferno')
-
+        palleteoh=sns.color_palette("coolwarm", as_cmap=True)
+        plt.figure(figsize=(15,15),dpi=300)
+        ax = sns.heatmap(correlations,vmin=-0.2,vmax=0.8)
         plt.ylabel('Neuron #')
         plt.xlabel('Neuron #')
-        #plt.colorbar()
         plt.savefig(os.path.join(self.resultpath_neur,'correlation_analysis.pdf'))
 
         # Get correlation values other than 1. 
@@ -351,8 +361,8 @@ def main(serialoutput_search, twophoton_search):
 
         s2p_obj = corralative_activity(imagepath)
         s2p_obj()
-        s2p_obj.get_activity_heatmap(s2p_obj.ztraces) #Get the heatmap for whole session
-        s2p_obj.get_activity_correlation(s2p_obj.ztraces) #Get the correlation matrix plot for all neurons
+        s2p_obj.get_activity_heatmap(s2p_obj.ztraces_copy) #Get the heatmap for whole session
+        s2p_obj.get_activity_correlation(s2p_obj.ztraces_copy) #Get the correlation matrix plot for all neurons
         recordings.append(s2p_obj)
 
     return recordings
