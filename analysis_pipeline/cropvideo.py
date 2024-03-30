@@ -28,7 +28,7 @@ def cropvideo(file,newfilename,fps,x=[625,1300],y=[400,800]):
             framenew=cv2.resize(framenew,(x[1]-x[0],y[1]-y[0]))
             out.write(framenew)
         except:
-            ipdb.set_trace()
+           # ipdb.set_trace()
             cap.release()
             out.release()
             break
@@ -37,10 +37,10 @@ def cropvideo(file,newfilename,fps,x=[625,1300],y=[400,800]):
  
 if __name__=='__main__':
 
-    input_video_path = r"D:\\TMT Experiment\\"
+    input_video_path = r"E:\\TMT Experiment\\"
     serchstring = os.path.join(input_video_path,"**\\*.avi")
     files = gb.glob(serchstring, recursive=True)
-    for fileoh in files:
+    for fileoh in tqdm.tqdm(files):
         currentfile = appendedname(fileoh)
         
         if '_Cropped' in fileoh:
