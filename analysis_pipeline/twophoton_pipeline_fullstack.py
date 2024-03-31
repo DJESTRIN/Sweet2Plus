@@ -253,14 +253,15 @@ class corralative_activity(parse_s2p):
 class funcational_classification(parse_s2p):
     def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
         super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
-        self.so=serialoutput_object.behdf #Pass in serial_output_object
+        self.so=serialoutput_object #Pass in serial_output_object
 
     def __call__(self):
         super().__call__()
-        self.VanillaTS = self.parse_behavior_df('VanillaBoolean')
-        ipdb.set_trace()
-        self.PETH(self.ztraces,self.VanillaTS,10,[-10,-5],[0,5],'Vanilla')
-        ipdb.set_trace()
+        #Create Peths per trial type
+        self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[0],15,[-10,-5],[0,5],'Vanilla')
+        self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[1],15,[-10,-5],[0,5],'PeanutButter')
+        self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[2],15,[-10,-5],[0,5],'Water')
+        self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[3],15,[-10,-5],[0,5],'FoxUrine')
 
     def parse_behavior_df(self,ColumnName):
         #Convert from Pandas dataframe back to numpy
@@ -356,13 +357,13 @@ def main(serialoutput_search, twophoton_search):
     recordings=[]
     for i,(imagepath,behpath) in enumerate(final_list):
         #Get behavior data object
-        #so_obj = load_serial_output(behpath)
-        #so_obj()
+        so_obj = load_serial_output(behpath)
+        so_obj()
 
-        s2p_obj = corralative_activity(imagepath)
+        s2p_obj = funcational_classification(imagepath,so_obj)
         s2p_obj()
-        s2p_obj.get_activity_heatmap(s2p_obj.ztraces_copy) #Get the heatmap for whole session
-        s2p_obj.get_activity_correlation(s2p_obj.ztraces_copy) #Get the correlation matrix plot for all neurons
+        #s2p_obj.get_activity_heatmap(s2p_obj.ztraces_copy) #Get the heatmap for whole session
+        #s2p_obj.get_activity_correlation(s2p_obj.ztraces_copy) #Get the correlation matrix plot for all neurons
         recordings.append(s2p_obj)
 
     return recordings

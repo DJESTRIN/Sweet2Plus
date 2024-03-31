@@ -12,9 +12,11 @@ class load_serial_output():
         self.get_file_name()
         self.load_data()
         self.quick_timestamps()
+        last_trial = np.where(self.sync[:,1]==self.all_evts[3][-1]) #Sanity check to validate 2P was recording
         #self.plot_trials() 
         self.crop_data()
         #self.graph_aurduino_serialoutput_rate()
+        return last_trial
     
     def get_file_name(self):
         bn = os.path.basename(self.path)
@@ -30,8 +32,8 @@ class load_serial_output():
             content = file.read().splitlines() #Separate into correct shape
             alldata=[] #Generate empty list
             
-            if 'sens' in files[j]:
-                for line in content: #Go through each line and filter
+            if 'sens' in files[j].lower():
+                for line in content: #Go through each line and filter 
                     try: #If line does not fit specific shape, throws an error. 
                         line = line.split(',')
                         line = np.asarray(line)
@@ -46,7 +48,7 @@ class load_serial_output():
                 self.sens=alldata
 
             # If file name contains sens or sync, put in correct variable name
-            if 'sync' in files[j]:
+            if 'sync' in files[j].lower():
                 for line in content: #Go through each line and filter
                     try: #If line does not fit specific shape, throws an error. 
                         line = line.split(',')
@@ -82,6 +84,9 @@ class load_serial_output():
             stops=np.where(imagecount==stops)
             stops=[int(stops[0][-1])]
 
+        if len(stops)>1:
+            stops=[stops[-1]]
+
         if type(stops) is np.float64 or type(stops) is np.int64:
             stops=[int(stops)]
 
@@ -91,7 +96,7 @@ class load_serial_output():
         # Crop data to only the recording
         self.sync = self.sync[starts[0]:stops[0],:]
         loopstart,loopstop=loopnumber[starts[0]],loopnumber[stops[0]]
-        loopstart,loopstop=np.where(self.sens[:,0]==loopstart),np.where(self.sens[:,0]==loopstop)
+        loopstart,loopstop=np.where(self.sens[:,0]==loopstart),np.where(self.sens[:,0]==(loopstop-1))
         self.sens=self.sens[int(loopstart[0][0]):int(loopstop[0][0]),:]
 
         # Convert to pandas dataframe
@@ -116,6 +121,35 @@ class load_serial_output():
             all_evts.append(all_ts)
             print(f'There were {count} {trial} trials')
         self.all_evts=all_evts
+
+        # Convert list of loop numbers to 2P Image Numbers
+        self.all_evts_imagetime=[]
+        for trial_list in self.all_evts:
+            all_ts=[]
+            for start_time in trial_list:
+                try:
+                    row_number=np.where(self.sync[:,1]==start_time)[0][0]
+                    image_time=self.sync[row_number,0]
+                    all_ts.append(image_time)
+                except:
+                    continue
+            self.all_evts_imagetime.append(all_ts)
+
+        # Get Pre Trial Period
+        for i,listoh in enumerate(self.all_evts_imagetime):
+            if i==0:
+                alltimestamps=np.asarray(listoh)
+            else:
+                alltimestamps=np.concatenate((alltimestamps,np.asarray(listoh)),axis=0)
+
+        self.pretrial_period=[0,alltimestamps[0]]
+
+        # Get Post Trial Period
+        if len(alltimestamps)==65:
+            self.posttrial_period=[alltimestamps[-1], self.sync[:,0].max()]
+        else:
+            self.posttrial_period=None
+        
         
 
     def plot_trials(self):
@@ -175,3 +209,15 @@ class load_serial_output():
         plt.figure()
         plt.scatter(x=range(len(times)),y=times)
         plt.savefig('timehist.jpg')
+
+
+
+if __name__=='__main__':
+    behdirs = glob.glob(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*')
+    #behdirs=behdirs[1:]
+    working=[]
+    for pathoh in behdirs:
+        so_obj = load_serial_output(pathoh)
+        last_trial = so_obj()
+        working.append(last_trial)
+

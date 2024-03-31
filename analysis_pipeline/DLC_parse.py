@@ -1,10 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sat Mar 30 13:01:13 2024
-
-@author: johns
-"""
-
 import tqdm
 import pandas as pd
 import numpy as np
@@ -15,6 +9,13 @@ import os
 import ipdb
 from multiprocessing import Pool
 from math import dist as dist
+
+""" TO DO LIST:
+(1) Get average distance traveled after each trial.
+(2) Get average velocity after each trial
+(3) Plot distances and velocity across time and include 
+
+"""
 
 class DLCparser():
     def __init__(self,fileoh,threshold=0.60,framenumber=1000):
@@ -102,6 +103,7 @@ class DLCparser():
         plt.close()
         
         #plt.scatter(x, y, kwargs)
+
 def traj_grid(files):
     plt.figure(figsize=(15,15),dpi=400)
     for i, file in enumerate(files):
@@ -116,7 +118,6 @@ def traj_grid(files):
         
     
 if __name__=='__main__':
-
     input_video_path = r"C:\\Users\johns\Desktop\Head_Fixed_Side-Kenneth-2024-03-21\videos\\"
     serchstring = os.path.join(input_video_path,"**\\*.csv")
     files = gb.glob(serchstring, recursive=True)
