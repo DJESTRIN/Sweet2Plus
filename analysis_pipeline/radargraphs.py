@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import ipdb
 
-def radar_plot(labels,values,single_neuron=True):
+def radar_plot(labels,values,title,filename_path,single_neuron=True):
     """
     Citation: https://www.pythoncharts.com/matplotlib/radar-charts/
     """
@@ -57,5 +57,5 @@ def radar_plot(labels,values,single_neuron=True):
     ax.spines['polar'].set_color('#222222')
     # Change the background color inside the circle itself.
     ax.set_facecolor('#FAFAFA')
-    ax.set_title('Neuron', y=1.08)
-    plt.savefig('ExampleRadar.pdf')
+    ax.set_title(title, y=1.08)
+    plt.savefig(filename_path)
