@@ -7,6 +7,7 @@ import pandas as pd
 from multiprocessing import Pool
 import seaborn as sns
 from behavior import load_serial_output
+from radargraphs import radar_plot
 sns.set_style('whitegrid')
 
 """ To do list
@@ -262,6 +263,7 @@ class funcational_classification(parse_s2p):
         trial_list = ['Vanilla','PeanutButter','Water','FoxUrine']
         self.plot_all_neurons_with_trials('Frames','Z-Score DF',trial_list)
         self.get_baseline_AUCs()
+        self.get_event_aucs(30)
         for i,trial_name in enumerate(trial_list):
             self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[i],15,[-10,-5],[0,5],trial_name)
 
@@ -350,6 +352,43 @@ class funcational_classification(parse_s2p):
         file_string=os.path.join(self.resultpath_neur,f'preTMT_postTMT_AUCs.pdf')
         plt.savefig(file_string)
         plt.close()
+
+    def get_event_aucs(self,window):
+        """ Calculate the AUC for each trial """
+        #Set up window 
+        window=window*self.ops['fs']
+        dataoh = np.copy(self.ztraces_copy) # Copy the numpy array of z traces
+        all_aucs=[] #Create list to put results in
+        for trial_type in self.so.all_evts_imagetime:
+            current_trial=[]
+            for trace in dataoh:
+                neuron_AUCs=[]
+
+                #Loop over every trial
+                for trial in trial_type:
+                    auc_oh = np.trapz(trace[int(trial):int(round(trial+window))])
+                    neuron_AUCs.append(auc_oh)
+
+                #Average accross trials
+                neuron_AUCs=np.asarray(neuron_AUCs)
+                neuron_AUCs=neuron_AUCs.mean(axis=0)
+                current_trial.append(neuron_AUCs) #Append Average AUC for that trial per neuron
+            all_aucs.append(current_trial)
+        
+        neuron_number = len(all_aucs[0])
+        all_values=[]
+        for neuron in range(neuron_number):
+            # Get AUC data for that neuron
+            VanillaAUC=all_aucs[0][neuron]
+            PbAUC=all_aucs[1][neuron]
+            WaterAUC=all_aucs[2][neuron]
+            FoxUrineAUC=all_aucs[3][neuron]
+            labels=['Vanilla','Peanut Butter', 'Water', 'Fox Urine']
+            values=[VanillaAUC,PbAUC,WaterAUC,FoxUrineAUC]
+            all_values.append(values)
+        
+        radar_plot(labels,all_values,'All Neurons',os.path.join(self.resultpath_neur,f'AllNeuronsRadar.pdf'),single_neuron=False)
+        ipdb.set_trace()
 
     def parse_behavior_df(self,ColumnName):
         #Convert from Pandas dataframe back to numpy
