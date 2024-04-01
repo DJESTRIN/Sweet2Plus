@@ -19,7 +19,7 @@ Have masks imported back into movie to show which neurons are called neurons.
 """
 
 class parse_s2p(get_s2p):
-    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.9):
         super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1) #Use initialization from previous class
         self.cellthreshold=cellthreshold # Threshold to determine whether a cell is a cell. 0.7 means only the top 30% of ROIS make it to real dataset as neurons.
 
@@ -50,7 +50,7 @@ class parse_s2p(get_s2p):
         self.plot_neurons('Frames','Z-Score')
         
     def threshold_neurons(self):
-        self.traces=self.traces[np.where(self.neuron_prob>0.9),:] #Need to add threshold as attirbute
+        self.traces=self.traces[np.where(self.neuron_prob>self.cellthreshold),:] #Need to add threshold as attirbute
         self.traces=self.traces.squeeze()
         return
         
@@ -102,11 +102,12 @@ class parse_s2p(get_s2p):
 
     def plot_all_neurons(self,x_label,y_label):
         # Plot neuron traces and save them without opening
+        dataoh = np.copy(self.ztraces)
         fig,ax=plt.subplots(dpi=1200)
         fig.set_figheight(100)
         fig.set_figwidth(15)
         addit=0
-        for i,row in enumerate(self.ztraces):
+        for i,row in enumerate(dataoh):
             row+=addit
             plt.plot(row)
             addit=np.nanmax(row)

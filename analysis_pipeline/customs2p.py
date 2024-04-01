@@ -1,10 +1,19 @@
+""" Custom S2P by David James Estrin
+"""
 import suite2p as s2p
 import matplotlib.pyplot as plt 
 import os,glob
 import seaborn as sns
+import ipdb
+import numpy as np
+import cv2
+import tqdm
 sns.set_style('whitegrid')
 
 class get_s2p():
+    """ get suite 2P:
+    This class is meant to run suite2P without the gui. 
+    """
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1):
         #Set input and output directories
         self.datapath=datapath
@@ -65,3 +74,104 @@ class get_s2p():
         plt.imshow(self.output_all['meanImgE'], cmap='gray')
         plt.title("High-pass filtered Mean registered image")
         plt.savefig(filename_ref)
+
+class manual_classification(get_s2p):
+    def get_s2p_outputs(self):
+        #Find planes and get recording/probability files
+        search_path = os.path.join(self.datapath,'suite2p/plane*/')
+        self.recording_files=[]
+        self.probability_files=[]
+        self.stat_files=[]
+        planes = [result for result in glob.glob(search_path)]
+        self.recording_files.append(os.path.join(planes[0],'F.npy'))
+        self.probability_files.append(os.path.join(planes[0],'iscell.npy'))
+        self.stat_files.append(os.path.join(planes[0],'stat.npy'))
+
+        assert (len(self.recording_files)==1 and len(self.probability_files)==1) #Make sure there is only one file.
+
+        self.recording_file=self.recording_files[0]
+        self.probability_file=self.probability_files[0]
+        self.neuron_prob=np.load(self.probability_file)
+        self.neuron_prob=self.neuron_prob[:,1]
+        self.traces=np.load(self.recording_file)
+
+    def threshold_neurons(self):
+        self.traces=self.traces[np.where(self.neuron_prob>0.9),:] #Need to add threshold as attirbute
+        self.traces=self.traces.squeeze()
+        return
+
+    def __call__(self):
+        self.get_s2p_outputs()
+        self.threshold_neurons()
+        self.create_vids()
+        self.evaluate_neurons()
+    
+    def scale_image(self,image,scalar):
+        image=np.copy(image)
+        image_new=image*scalar
+        if image_new.max()>255:
+            scalar=scalar-1
+            image_new = self.scale_image(image,scalar)
+        return image_new,scalar
+
+    def create_vids(self):
+        # Plot all neuron masks on video across frames
+        self.stat=np.load(self.stat_files[0],allow_pickle=True)
+        search_path = os.path.join(self.datapath,'*.tif*')
+        images = glob.glob(search_path)
+
+        dataoh = np.copy(self.traces)
+        trace_oh = dataoh[0]
+        norm_trace_oh = (trace_oh-trace_oh.min())/(trace_oh.max()-trace_oh.min())*100
+
+        scalar=40
+        for i,image in enumerate(images):
+            img = cv2.imread(image,cv2.IMREAD_GRAYSCALE)
+            #img,scalar=self.scale_image(img,scalar)
+            shape=(img.shape[0]+150,img.shape[1])
+            blankimg = np.zeros(shape, np.float64)
+            blankimg[:img.shape[0],:img.shape[1]]=img
+          
+            try:
+                ys=norm_trace_oh[(i-299):(i+1)]+img.shape[1]
+                xs=range(300)
+            except:
+                ys=norm_trace_oh[:(i+1)]+img.shape[1]
+                xs=range(i+1)
+
+            if len(xs)>1:
+                for x,y in zip(xs,ys):
+                    x+=10
+                    blankimg[blankimg.shape[0]-int(round(y)),x]=255
+           
+            #img = cv2.resize(img, (600, 600)) 
+            #img = ((img-img.min())/(img.max()-img.min()))*255
+            cv2.imshow('image',blankimg)
+            #cv2.waitKey()
+
+            key = cv2.waitKey(1)#pauses for 3 seconds before fetching next image
+            if key == 27:#if ESC is pressed, exit loop
+                cv2.destroyAllWindows()
+                break
+        
+        cv2.destroyAllWindows()
+
+
+        ipdb.set_trace()
+           # ipdb.set_trace()
+            # for ROI in self.stat:
+            #     x1,x2=ROI['xpix'].min(),ROI['xpix'].max()
+            #     y1,y2=ROI['ypix'].min(),ROI['ypix'].max()
+            #     cv2.rectangle(img, (x1, y1), (x2, y2), color=(255,0,0), thickness=2)
+            #img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
+            #video.write(img)
+
+        # Seperate video based on neuron on hand and save
+
+
+    def evaluate_neurons(self):
+        ipdb.set_trace()
+
+if __name__=='__main__':
+    ev_obj=manual_classification(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\24-3-18\24-3-18_C4620083_M3_R1-052')
+    ev_obj()
