@@ -249,6 +249,7 @@ class corralative_activity(parse_s2p):
         # Look at each of above correlations with respect to functional classification of neurons 
 
         a=1
+    
 
 class funcational_classification(parse_s2p):
     def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
@@ -258,10 +259,97 @@ class funcational_classification(parse_s2p):
     def __call__(self):
         super().__call__()
         #Create Peths per trial type
-        self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[0],15,[-10,-5],[0,5],'Vanilla')
-        self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[1],15,[-10,-5],[0,5],'PeanutButter')
-        self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[2],15,[-10,-5],[0,5],'Water')
-        self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[3],15,[-10,-5],[0,5],'FoxUrine')
+        trial_list = ['Vanilla','PeanutButter','Water','FoxUrine']
+        self.plot_all_neurons_with_trials('Frames','Z-Score DF',trial_list)
+        self.get_baseline_AUCs()
+        for i,trial_name in enumerate(trial_list):
+            self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[i],15,[-10,-5],[0,5],trial_name)
+
+    def plot_all_neurons_with_trials(self,x_label,y_label,trial_list):
+        # Create a plot of all neurons with vertical lines per trial type
+        color = ['Blue','Green','Black','Red']
+        min_trial=self.so.all_evts_imagetime[0][0]
+        max_trial=self.so.all_evts_imagetime[0][0]
+        for trial_type,col,trial_name in zip(self.so.all_evts_imagetime,color,trial_list):
+            copied_data = np.copy(self.ztraces_copy)
+            # Create the figure
+            fig,ax=plt.subplots(dpi=1200)
+            fig.set_figheight(100)
+            fig.set_figwidth(15)
+            addit=0
+
+            #Plot each neuron's z-scored trace
+            for i,row in enumerate(copied_data):
+                row+=addit
+                plt.plot(row)
+                addit=np.nanmax(row)
+
+            #Plot all vertical lines for the current trial of interest
+            for trial in trial_type:
+                if trial<min_trial:
+                    min_trial=trial
+                if trial>max_trial:
+                    max_trial=trial
+                plt.axvline(x=trial, color=col,ls='--')
+
+            plt.title(f'All Neuronal traces with {trial_name} ticks')
+            ax.set_ylabel(x_label)
+            ax.set_ylabel(y_label)
+            ax = plt.gca()
+            ax.set_ylim([-5, addit])
+            #ax.set_xlim([min_trial, max_trial])
+
+            file_string=os.path.join(self.resultpath_neur,f'all_neurons_with_{trial_name}trials.pdf')
+            plt.savefig(file_string)
+            plt.close()
+        
+        #Save the first and last trial times
+        self.first_trial_time=min_trial
+        self.last_trial_time=max_trial
+
+    def get_baseline_AUCs(self,zeroed=False):
+        """ Calculate and graph the Area Under the Curve of periods of interest
+        Inputs:
+        zeroed -- boolean (default: False) This will zeror the AUC data with respect to the baseline period. 
+
+        Outputs:
+        Creates a new attribute containing AUC data across periods
+        Plots AUC data and saves into subject's folder
+        """
+        dataoh = np.copy(self.ztraces_copy)
+        self.baselineAUCs=[]
+        plt.figure()
+        for trace in dataoh:
+            #Parse out data and integrate
+            pre_period=trace[:int(self.first_trial_time)]
+            preauc=np.trapz(pre_period)/len(pre_period)
+            during_period=trace[int(self.first_trial_time):int(self.last_trial_time)]
+            duringauc=np.trapz(during_period)/len(during_period)
+            post_period=trace[int(self.last_trial_time):]
+            postauc=np.trapz(post_period)/len(post_period)
+
+            if zeroed:
+                #Zero all of the data with respect to baseline
+                postauc=postauc-preauc
+                duringauc=duringauc-preauc
+                preauc=preauc-preauc
+
+            self.baselineAUCs.append([preauc,duringauc,postauc])
+
+            #Add data to graph
+            x=['Pre Behavior','During Behavior','Post Behavior baseline']
+            plt.plot(x,[preauc,duringauc,postauc],alpha=0.3,color="black")
+
+        #Plot average +/- SEM
+        self.baselineAUCs=np.asarray(self.baselineAUCs)
+        averages = self.baselineAUCs.mean(axis=0)
+        stds = self.baselineAUCs.std(axis=0)
+        sems = stds/self.baselineAUCs.shape[0]
+        plt.errorbar(x,averages,sems,fmt='-o',color='red',markersize='3')
+
+        file_string=os.path.join(self.resultpath_neur,f'preTMT_postTMT_AUCs.pdf')
+        plt.savefig(file_string)
+        plt.close()
 
     def parse_behavior_df(self,ColumnName):
         #Convert from Pandas dataframe back to numpy
@@ -356,6 +444,9 @@ def main(serialoutput_search, twophoton_search):
 
     recordings=[]
     for i,(imagepath,behpath) in enumerate(final_list):
+        if i<4:
+            continue
+
         #Get behavior data object
         so_obj = load_serial_output(behpath)
         so_obj()
