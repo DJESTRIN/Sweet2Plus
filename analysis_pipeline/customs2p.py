@@ -8,6 +8,7 @@ import ipdb
 import numpy as np
 import cv2
 import tqdm
+# import PySimpleGUI as psg
 sns.set_style('whitegrid')
 
 class get_s2p():
@@ -103,8 +104,9 @@ class manual_classification(get_s2p):
     def __call__(self):
         self.get_s2p_outputs()
         self.threshold_neurons()
-        self.create_vids()
-        self.evaluate_neurons()
+        self.stat=np.load(self.stat_files[0],allow_pickle=True)
+        search_path = os.path.join(self.datapath,'*.tif*')
+        self.images = glob.glob(search_path)
     
     def scale_image(self,image,scalar):
         image=np.copy(image)
@@ -114,12 +116,7 @@ class manual_classification(get_s2p):
             image_new = self.scale_image(image,scalar)
         return image_new,scalar
 
-    def create_vids(self):
-        # Plot all neuron masks on video across frames
-        self.stat=np.load(self.stat_files[0],allow_pickle=True)
-        search_path = os.path.join(self.datapath,'*.tif*')
-        images = glob.glob(search_path)
-
+    def create_vids(self,neuron_id,image_number):
         # Get min and max values of all ROIs
         for i in range(len(self.stat)):
             cellx,celly=self.stat[i]['xpix'],self.stat[i]['ypix']
@@ -137,88 +134,103 @@ class manual_classification(get_s2p):
                     fry1=celly.min()
         fullcrop=[frx0,frx1,fry0,fry1]
 
+        # Get trace and morphology data for current trace on hand
         dataoh = np.copy(self.traces)
-        trace_oh = dataoh[50]
-        cellx,celly=self.stat[50]['xpix'],self.stat[21]['ypix']
+        trace_oh = dataoh[neuron_id]
+        cellx,celly=self.stat[neuron_id]['xpix'],self.stat[neuron_id]['ypix']
         frx0,frx1=cellx.min()-10,cellx.max()+10
         fry0,fry1=celly.min()-10,celly.max()+10
         norm_trace_oh = (trace_oh-trace_oh.min())/(trace_oh.max()-trace_oh.min())*100
 
-        scalar=40
-        for i,image in enumerate(images):
-            img = cv2.imread(image,cv2.IMREAD_GRAYSCALE)
-            inith,initw=img.shape[0],img.shape[1]
-            img_crop=img[fullcrop[0]:fullcrop[1],fullcrop[2]:fullcrop[3]]
-            img_crop=cv2.resize(img_crop,(inith,initw))
+        scalar=40 #similar to setting intensity
+        image=self.images[image_number] 
+        img = cv2.imread(image,cv2.IMREAD_GRAYSCALE)
+        inith,initw=img.shape[0],img.shape[1]
+        img_crop = img
 
-            #Cut out the specific cell
-            cut_image=img[frx0:frx1,fry0:fry1]
-            cut_image=cv2.resize(cut_image,(inith,initw))
+        #Cut out the specific cell
+        cut_image=img[frx0:frx1,fry0:fry1]
+        cut_image=cv2.resize(cut_image,(inith,initw))
 
-            shape=(inith*3,initw*2)
-            blankimg = np.zeros(shape, np.float64)
-            blankimg[-(inith*2):-(inith),initw:initw*2]=img_crop
-            blankimg[-(inith*2):-(inith),:initw]=cut_image
-            blankimg=blankimg/255
-            blankimg,scalar=self.scale_image(blankimg,scalar)
-          
-            ys=norm_trace_oh[(i-299):(i+1)]+inith*2
-            if ys.size==0:
-                ys=norm_trace_oh[:(i+1)]+inith*2
-                xs=range(i)
-            else:
-                xs=range(300)
 
-            if len(xs)>1:
-                for x,y in zip(xs,ys):
-                    x+=10
-                    blankimg[blankimg.shape[0]-int(round(y)),x]=255
-
-            draw_x,draw_y=[],[]
-            for xs,ys in zip(range(len(norm_trace_oh)),norm_trace_oh):
-                draw_x.append(xs)
-                draw_y.append(ys)
-                
-            draw_points = (np.asarray([draw_x, draw_y]).T).astype(np.int32)
-            blankimg = cv2.polylines(blankimg, [draw_points], False, (255,255,255),2)
-           
-            #img = cv2.resize(img, (600, 600)) 
-            #img = ((img-img.min())/(img.max()-img.min()))*255
-           
-            blankimg = np.float32(blankimg)
-            colorimg = cv2.cvtColor(blankimg,cv2.COLOR_GRAY2RGB)
-            
-            #Add in mask data
-            for xc,yc in zip(cellx,celly):
-                b,g,r=colorimg[yc,xc,:]
-                colorimg[yc,xc,:]=[b,g,r+10]
-
-            colorimg=cv2.resize(colorimg,(800,800))
-            cv2.imshow('image',colorimg)
-            #cv2.waitKey()
-
-            key = cv2.waitKey(1)#pauses for 3 seconds before fetching next image
-            if key == 27:#if ESC is pressed, exit loop
-                cv2.destroyAllWindows()
-                break
+        #Set up shape of window
+        shape=(inith*2,initw*2)
+        blankimg = np.zeros(shape, np.float64)
+        blankimg[:-(inith),initw:initw*2]=img_crop 
+        blankimg[:-(inith),:initw]=cut_image
+        blankimg=blankimg/255
+        blankimg,scalar=self.scale_image(blankimg,scalar)
         
-        cv2.destroyAllWindows()
+        # Zoom in on trace data currently displayed
+        ys=norm_trace_oh[(image_number-49):(image_number+1)]+(inith-300)
+        if ys.size==0:
+            ys=norm_trace_oh[:(image_number+1)]+(inith-300)
+            xs=range(0,image_number*5,5)
+        else:
+            xs=range(0,(image_number+1)*5,5)
 
+        if len(xs)>1:
+            xs = [(image_number*5 + 350) for image_number in range(len(ys))]
+            self.b2start,self.b2stop=min(xs),max(xs)
+            # Set up shape for box for later
+            if len(xs)==50:
+                self.bstartreal+=(1/self.skip_factor)
+                self.bstopreal+=(1/self.skip_factor)
+                self.bstart=round(self.bstartreal)
+                self.bstop=round(self.bstopreal)
+            else:
+                self.bstart=0
+                self.bstopreal+=(1/self.skip_factor)
+                self.bstop=round(self.bstopreal)
 
-        ipdb.set_trace()
-           # ipdb.set_trace()
-            # for ROI in self.stat:
-            #     x1,x2=ROI['xpix'].min(),ROI['xpix'].max()
-            #     y1,y2=ROI['ypix'].min(),ROI['ypix'].max()
-            #     cv2.rectangle(img, (x1, y1), (x2, y2), color=(255,0,0), thickness=2)
-            #img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB)
-            #video.write(img)
+            ys = blankimg.shape[0]-ys-50
+            draw_points = (np.asarray([xs, ys]).T).astype(np.int32)
+            blankimg = cv2.polylines(blankimg, [draw_points], False, (255,255,255),2)
+        else:
+            self.b2start,self.b2stop=350,355
+            self.bstartreal=0
+            self.bstart=0
+            self.bstop=1
+            self.bstopreal=(1/5)
 
-        # Seperate video based on neuron on hand and save
+        # Plot the entire trace
+        draw_x,draw_y=[],[]
+        self.skip_factor = round(len(norm_trace_oh)/blankimg.shape[1])
+        down_sampel_trace=norm_trace_oh[::self.skip_factor]
+        for xs,ys in zip(range(len(down_sampel_trace)),down_sampel_trace):
+            ys=blankimg.shape[0]-ys-75
+            draw_x.append(xs)
+            draw_y.append(ys)
+            
+        draw_points = (np.asarray([draw_x, draw_y]).T).astype(np.int32)
+        blankimg = cv2.polylines(blankimg, [draw_points], False, (255,255,255),2)
 
+        blankimg = np.float32(blankimg)
+        colorimg = cv2.cvtColor(blankimg,cv2.COLOR_GRAY2RGB)
+        
+        # #Add in mask data
+        for xc,yc in zip(cellx,celly):
+            xc+=initw
+            b,g,r=colorimg[xc,yc,:]
+            colorimg[yc,xc,:]=[b,g,r+10]
+        
 
-    def evaluate_neurons(self):
-        ipdb.set_trace()
+        # Plot a box around current data
+        boxbottom=colorimg.shape[0]-75
+        boxtop=colorimg.shape[0]-180
+        colorimg = cv2.rectangle(colorimg, (self.bstart, boxtop), (self.bstop, boxbottom), color=(255,0,0), thickness=2)
+
+        # Plot a box around zoom data
+        box2bottom=colorimg.shape[0]-260
+        box2top=colorimg.shape[0]-366
+        colorimg = cv2.rectangle(colorimg, (self.b2start, box2top), (self.b2stop, box2bottom), color=(255,0,0), thickness=2)
+
+        #Draw lines
+        colorimg = cv2.line(colorimg, (self.bstart, boxtop), (self.b2start, box2bottom), color=(255,0,0), thickness=2)
+        colorimg = cv2.line(colorimg, (self.bstop, boxtop), (self.b2stop, box2bottom), color=(255,0,0), thickness=2)
+
+        colorimg=cv2.resize(colorimg,(1000,1000))
+        return colorimg
 
 if __name__=='__main__':
     ev_obj=manual_classification(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\24-3-18\24-3-18_C4620083_M3_R1-052')

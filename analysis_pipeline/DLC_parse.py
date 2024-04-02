@@ -12,8 +12,9 @@ from math import dist as dist
 
 """ TO DO LIST:
 (1) Get average distance traveled after each trial.
-(2) Get average velocity after each trial
-(3) Plot distances and velocity across time and include 
+(2) Get average velocity after each trial. 
+(2) Get instananeous velocity and binned velocity
+(3) Plot distances and velocity across time and including 
 
 """
 
