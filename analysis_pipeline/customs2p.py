@@ -120,33 +120,81 @@ class manual_classification(get_s2p):
         search_path = os.path.join(self.datapath,'*.tif*')
         images = glob.glob(search_path)
 
+        # Get min and max values of all ROIs
+        for i in range(len(self.stat)):
+            cellx,celly=self.stat[i]['xpix'],self.stat[i]['ypix']
+            if i==0:
+                frx0,frx1=cellx.min()-10,cellx.max()+10
+                fry0,fry1=celly.min()-10,celly.max()+10
+            else: 
+                if (cellx.min())<frx0:
+                    frx0=cellx.min()
+                if (cellx.max())>frx1:
+                    frx1=cellx.min()
+                if (celly.min())<fry0:
+                    fry0=celly.min()
+                if (celly.max())>fry1:
+                    fry1=celly.min()
+        fullcrop=[frx0,frx1,fry0,fry1]
+
         dataoh = np.copy(self.traces)
-        trace_oh = dataoh[0]
+        trace_oh = dataoh[50]
+        cellx,celly=self.stat[50]['xpix'],self.stat[21]['ypix']
+        frx0,frx1=cellx.min()-10,cellx.max()+10
+        fry0,fry1=celly.min()-10,celly.max()+10
         norm_trace_oh = (trace_oh-trace_oh.min())/(trace_oh.max()-trace_oh.min())*100
 
         scalar=40
         for i,image in enumerate(images):
             img = cv2.imread(image,cv2.IMREAD_GRAYSCALE)
-            #img,scalar=self.scale_image(img,scalar)
-            shape=(img.shape[0]+150,img.shape[1])
+            inith,initw=img.shape[0],img.shape[1]
+            img_crop=img[fullcrop[0]:fullcrop[1],fullcrop[2]:fullcrop[3]]
+            img_crop=cv2.resize(img_crop,(inith,initw))
+
+            #Cut out the specific cell
+            cut_image=img[frx0:frx1,fry0:fry1]
+            cut_image=cv2.resize(cut_image,(inith,initw))
+
+            shape=(inith*3,initw*2)
             blankimg = np.zeros(shape, np.float64)
-            blankimg[:img.shape[0],:img.shape[1]]=img
+            blankimg[-(inith*2):-(inith),initw:initw*2]=img_crop
+            blankimg[-(inith*2):-(inith),:initw]=cut_image
+            blankimg=blankimg/255
+            blankimg,scalar=self.scale_image(blankimg,scalar)
           
-            try:
-                ys=norm_trace_oh[(i-299):(i+1)]+img.shape[1]
+            ys=norm_trace_oh[(i-299):(i+1)]+inith*2
+            if ys.size==0:
+                ys=norm_trace_oh[:(i+1)]+inith*2
+                xs=range(i)
+            else:
                 xs=range(300)
-            except:
-                ys=norm_trace_oh[:(i+1)]+img.shape[1]
-                xs=range(i+1)
 
             if len(xs)>1:
                 for x,y in zip(xs,ys):
                     x+=10
                     blankimg[blankimg.shape[0]-int(round(y)),x]=255
+
+            draw_x,draw_y=[],[]
+            for xs,ys in zip(range(len(norm_trace_oh)),norm_trace_oh):
+                draw_x.append(xs)
+                draw_y.append(ys)
+                
+            draw_points = (np.asarray([draw_x, draw_y]).T).astype(np.int32)
+            blankimg = cv2.polylines(blankimg, [draw_points], False, (255,255,255),2)
            
             #img = cv2.resize(img, (600, 600)) 
             #img = ((img-img.min())/(img.max()-img.min()))*255
-            cv2.imshow('image',blankimg)
+           
+            blankimg = np.float32(blankimg)
+            colorimg = cv2.cvtColor(blankimg,cv2.COLOR_GRAY2RGB)
+            
+            #Add in mask data
+            for xc,yc in zip(cellx,celly):
+                b,g,r=colorimg[yc,xc,:]
+                colorimg[yc,xc,:]=[b,g,r+10]
+
+            colorimg=cv2.resize(colorimg,(800,800))
+            cv2.imshow('image',colorimg)
             #cv2.waitKey()
 
             key = cv2.waitKey(1)#pauses for 3 seconds before fetching next image
