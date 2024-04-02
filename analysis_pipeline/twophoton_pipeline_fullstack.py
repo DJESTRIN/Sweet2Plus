@@ -9,6 +9,8 @@ import seaborn as sns
 from behavior import load_serial_output
 from radargraphs import radar_plot
 from customs2p import get_s2p
+from sklearn.metrics import silhouette_score
+from sklearn.cluster import KMeans
 sns.set_style('whitegrid')
 
 """ To do list
@@ -204,6 +206,7 @@ class funcational_classification(parse_s2p):
         self.plot_all_neurons_with_trials('Frames','Z-Score DF',trial_list)
         self.get_baseline_AUCs()
         self.get_event_aucs(30)
+        self.kmeans_clustering()
         for i,trial_name in enumerate(trial_list):
             self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[i],15,[-10,-5],[0,5],trial_name)
 
@@ -213,37 +216,40 @@ class funcational_classification(parse_s2p):
         min_trial=self.so.all_evts_imagetime[0][0]
         max_trial=self.so.all_evts_imagetime[0][0]
         for trial_type,col,trial_name in zip(self.so.all_evts_imagetime,color,trial_list):
-            copied_data = np.copy(self.ztraces_copy)
-            # Create the figure
-            fig,ax=plt.subplots(dpi=1200)
-            fig.set_figheight(100)
-            fig.set_figwidth(15)
-            addit=0
+            try:
+                copied_data = np.copy(self.ztraces_copy)
+                # Create the figure
+                fig,ax=plt.subplots(dpi=1200)
+                fig.set_figheight(100)
+                fig.set_figwidth(15)
+                addit=0
 
-            #Plot each neuron's z-scored trace
-            for i,row in enumerate(copied_data):
-                row+=addit
-                plt.plot(row)
-                addit=np.nanmax(row)
+                #Plot each neuron's z-scored trace
+                for i,row in enumerate(copied_data):
+                    row+=addit
+                    plt.plot(row)
+                    addit=np.nanmax(row)
 
-            #Plot all vertical lines for the current trial of interest
-            for trial in trial_type:
-                if trial<min_trial:
-                    min_trial=trial
-                if trial>max_trial:
-                    max_trial=trial
-                plt.axvline(x=trial, color=col,ls='--')
+                #Plot all vertical lines for the current trial of interest
+                for trial in trial_type:
+                    if trial<min_trial:
+                        min_trial=trial
+                    if trial>max_trial:
+                        max_trial=trial
+                    plt.axvline(x=trial, color=col,ls='--')
 
-            plt.title(f'All Neuronal traces with {trial_name} ticks')
-            ax.set_ylabel(x_label)
-            ax.set_ylabel(y_label)
-            ax = plt.gca()
-            ax.set_ylim([-5, addit])
-            #ax.set_xlim([min_trial, max_trial])
+                plt.title(f'All Neuronal traces with {trial_name} ticks')
+                ax.set_ylabel(x_label)
+                ax.set_ylabel(y_label)
+                ax = plt.gca()
+                ax.set_ylim([-5, addit])
+                #ax.set_xlim([min_trial, max_trial])
 
-            file_string=os.path.join(self.resultpath_neur,f'all_neurons_with_{trial_name}trials.pdf')
-            plt.savefig(file_string)
-            plt.close()
+                file_string=os.path.join(self.resultpath_neur,f'all_neurons_with_{trial_name}trials.pdf')
+                plt.savefig(file_string)
+                plt.close()
+            except:
+                print('skipped')
         
         #Save the first and last trial times
         self.first_trial_time=min_trial
@@ -329,8 +335,35 @@ class funcational_classification(parse_s2p):
         
         filename = os.path.join(self.resultpath_neur,f'AllNeuronsRadar.pdf')
         radar_plot(labels,all_values,'All Neurons',filename,single_neuron=False)
-        ipdb.set_trace()
+        self.auc_vals = all_values
+    
+    def kmeans_clustering(self):
+        def get_silhouette_score(data,kmax):
+            """ Citation: https://medium.com/analytics-vidhya/how-to-determine-the-optimal-k-for-k-means-708505d204eb """
+            sil=[]
+            kmax=10
+            for k in range(2,kmax+1):
+                kmeans = KMeans(n_clusters=k).fit(data)
+                labels=kmeans.labels_
+                sil.append(silhouette_score(data,labels,metric='euclidean'))
+            
+            sil = np.asarray(sil)
+            final_k = np.where(sil ==sil.max())[0][0]
+            return final_k + 2
 
+        auc_array = np.asarray(self.auc_vals)
+        auc_array=auc_array[:,:-1]
+        auc_array=auc_array[~np.isnan(auc_array).any(axis=1)]
+        final_k = get_silhouette_score(auc_array,10)
+        print('This is the current K value:')
+        print(f'Final K value: {final_k}')
+        kmeans = KMeans(n_clusters=final_k).fit(auc_array)
+
+        # Generate Radar plot with Kmeans
+        labels=['Vanilla','Peanut Butter', 'Water', 'Fox Urine']
+        radar_plot(labels,auc_array,'All Neurons Kmeans','kmeans_radar.pdf',single_neuron=False,Grouping=[kmeans.labels_])
+        ipdb.set_trace()
+        
     def parse_behavior_df(self,ColumnName):
         #Convert from Pandas dataframe back to numpy
         Event=self.so[ColumnName]
@@ -424,7 +457,7 @@ def main(serialoutput_search, twophoton_search):
 
     recordings=[]
     for i,(imagepath,behpath) in enumerate(final_list):
-        if i<7:
+        if i<3:
             continue
 
         #Get behavior data object

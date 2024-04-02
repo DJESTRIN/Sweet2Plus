@@ -7,11 +7,12 @@ from threading import Thread
 import ipdb
 import matplotlib.pyplot as plt
 import cv2
+import os
 
 ctk.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
 
 class quickGUI(manual_classification):
-    def __init__(self,datapath):
+    def __init__(self,datapath,redogui=False):
         super().__init__(datapath)
         self.root=ctk.CTk()
         self.root.geometry("700x750+500+100")
@@ -20,6 +21,7 @@ class quickGUI(manual_classification):
         self.i=0
         self.interval=20
         self.neuron_number=0
+        self.redogui=redogui
         self.set_up_buttons()
 
     def show_vid(self): 
@@ -71,14 +73,31 @@ class quickGUI(manual_classification):
     def __call__(self):
         super().__call__()
         self.true_classification=np.zeros(shape=(len(self.traces),1))
-        self.show_vid()
-        self.root.mainloop()
-        self.save_data()
+        self.skip_gui()
+        
+        if self.skipgui:
+            print('App for manually classifying ROIs as neurons was skipped.')
+            print(f'Please see: {self.true_class_filename}')
+        else:
+            self.show_vid()
+            self.root.mainloop()
+            self.save_data()
     
     def save_data(self):
-        ipdb.set_trace()
-        np.save(self.true_classification)
+        np.save(self.true_class_filename ,self.true_classification)
+
+    def skip_gui(self):
+        drop_path,_=self.probability_files[0].split('iscell')
+        self.true_class_filename = os.path.join(drop_path,'iscell_manualcut.npy')
+        #Skip the gui if file exists
+        if os.path.isfile(self.true_class_filename):
+            self.skipgui=True
+        else:
+            self.skipgui=False
+
+        if self.redogui:
+            self.skipgui=False
 
 if __name__=='__main__':
-    ev_obj=quickGUI(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\24-3-18\24-3-18_C4620083_M4_R1-054')
+    ev_obj=quickGUI(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\24-3-18\24-3-18_C4620083_M4_R1-054',redogui=True)
     ev_obj()

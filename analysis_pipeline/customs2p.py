@@ -8,7 +8,6 @@ import ipdb
 import numpy as np
 import cv2
 import tqdm
-# import PySimpleGUI as psg
 sns.set_style('whitegrid')
 
 class get_s2p():
@@ -136,6 +135,7 @@ class manual_classification(get_s2p):
 
         # Get trace and morphology data for current trace on hand
         dataoh = np.copy(self.traces)
+        population_activity = dataoh.mean(axis=0)
         trace_oh = dataoh[neuron_id]
         cellx,celly=self.stat[neuron_id]['xpix'],self.stat[neuron_id]['ypix']
         frx0,frx1=cellx.min()-10,cellx.max()+10
@@ -149,7 +149,7 @@ class manual_classification(get_s2p):
         img_crop = img
 
         #Cut out the specific cell
-        cut_image=img[frx0:frx1,fry0:fry1]
+        cut_image=img[fry0:fry1,frx0:frx1]
         cut_image=cv2.resize(cut_image,(inith,initw))
 
 
@@ -208,6 +208,20 @@ class manual_classification(get_s2p):
         blankimg = np.float32(blankimg)
         colorimg = cv2.cvtColor(blankimg,cv2.COLOR_GRAY2RGB)
         
+        # Plot Population Acitivty
+        draw_x,draw_y=[],[]
+        self.skip_factor = round(len(population_activity)/blankimg.shape[1])
+        population_activity=population_activity[::self.skip_factor]
+        for xs,ys in zip(range(len(population_activity)),population_activity):
+            ys=blankimg.shape[0]-ys+50
+            draw_x.append(xs)
+            draw_y.append(ys)
+            
+        draw_points = (np.asarray([draw_x, draw_y]).T).astype(np.int32)
+        colorimg = cv2.polylines(colorimg, [draw_points], False, (0,255,0),2)
+        colorimg=cv2.putText(colorimg, 'Normalized ROI Activity', (10,inith+50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,thickness=1,color=(255,255,255))
+        colorimg=cv2.putText(colorimg, 'Population Activity', (10,inith+100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,thickness=1,color=(0,255,0))
+
         # #Add in mask data
         for xc,yc in zip(cellx,celly):
             xc+=initw
