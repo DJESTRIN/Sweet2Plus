@@ -11,6 +11,7 @@ from radargraphs import radar_plot
 from customs2p import get_s2p
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans
+import json
 sns.set_style('whitegrid')
 
 """ To do list
@@ -24,6 +25,15 @@ class parse_s2p(get_s2p):
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.9):
         super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1) #Use initialization from previous class
         self.cellthreshold=cellthreshold # Threshold to determine whether a cell is a cell. 0.7 means only the top 30% of ROIS make it to real dataset as neurons.
+
+    def __del__(self):
+        super().__del__
+
+        #Save object to json
+        import json
+
+with open('filename.json', 'w') as file:
+    json.dump(your_object, file)
 
     def get_s2p_outputs(self):
         #Find planes and get recording/probability files

@@ -8,6 +8,7 @@ import ipdb
 import numpy as np
 import cv2
 import tqdm
+from PIL import Image
 sns.set_style('whitegrid')
 
 class get_s2p():
@@ -50,6 +51,7 @@ class get_s2p():
         if not res:
             self.auto_run()
             self.get_reference_image()
+        self.convert_motion_corrected_images()
 
     def auto_run(self):
         self.output_all=s2p.run_s2p(ops=self.ops,db=self.db)
@@ -74,6 +76,64 @@ class get_s2p():
         plt.imshow(self.output_all['meanImgE'], cmap='gray')
         plt.title("High-pass filtered Mean registered image")
         plt.savefig(filename_ref)
+
+    def stack_sort(self,path):
+        path,_=path.split('_chan')
+        _,path=path.split('file')
+        path=int(path)
+        return path
+
+    def convert_motion_corrected_images(self):
+        searchstring=os.path.join(self.datapath,'**/reg_tif/*.tif')
+        drop_path = os.path.join(self.datapath,'motion_corrected_tif_seq/')
+
+        if not os.path.exists(drop_path):
+            os.mkdir(drop_path)
+            convert=True
+        else:
+            convert=False
+
+        if convert:
+            tifstacks = glob.glob(searchstring,recursive=True)
+            tifstacks.sort(key=self.stack_sort)
+            slicecount=0
+            stacks=[]
+            
+            #Collect all data to numpy array
+            for image in tifstacks:
+                dataset = Image.open(image)
+                stack=[]
+                for i in range(dataset.n_frames):
+                    dataset.seek(i)
+                    stack.append(np.array(dataset))
+                stack=np.asarray(stack)
+                stacks.append(stack)
+
+            # Merge all stacks
+            for i,stack in enumerate(stacks):
+                if i==0:
+                    Stack = stack
+                else:
+                    Stack = np.concatenate((Stack,stack),axis=0)
+
+            Stack = ((Stack-Stack.min())/(Stack.max()-Stack.min()))*255
+            Stack = Stack.astype(np.uint64)
+
+            #Loop through frames and save to image
+            for frame in Stack:
+                filenameoh = os.path.join(drop_path,f'slice{slicecount}.tif')
+                cv2.imwrite(filenameoh, frame)
+                slicecount+=1
+        
+        corrected_imagesearch = os.path.join(drop_path,'*slice*.tif*')
+        self.corrected_images = glob.glob(corrected_imagesearch)
+
+        def sort_images(x):
+            _,x=x.split('slice')
+            x,_=x.split('.ti')
+            return int(x)
+        
+        self.corrected_images.sort(key=sort_images)
 
 class manual_classification(get_s2p):
     def get_s2p_outputs(self):
@@ -101,6 +161,7 @@ class manual_classification(get_s2p):
         return
 
     def __call__(self):
+        super().__call__()
         self.get_s2p_outputs()
         self.threshold_neurons()
         self.stat=np.load(self.stat_files[0],allow_pickle=True)
@@ -115,7 +176,7 @@ class manual_classification(get_s2p):
             image_new = self.scale_image(image,scalar)
         return image_new,scalar
 
-    def create_vids(self,neuron_id,image_number):
+    def create_vids(self,neuron_id,image_number,intensity=5):
         # Get min and max values of all ROIs
         for i in range(len(self.stat)):
             cellx,celly=self.stat[i]['xpix'],self.stat[i]['ypix']
@@ -142,16 +203,19 @@ class manual_classification(get_s2p):
         fry0,fry1=celly.min()-10,celly.max()+10
         norm_trace_oh = (trace_oh-trace_oh.min())/(trace_oh.max()-trace_oh.min())*100
 
-        scalar=40 #similar to setting intensity
-        image=self.images[image_number] 
-        img = cv2.imread(image,cv2.IMREAD_GRAYSCALE)
+        scalar=intensity #similar to setting intensity
+        image=self.corrected_images[image_number] 
+        img = Image.open(image)
+        img = np.asarray(img)
+        img = img.astype(np.uint8)
+        #img = cv2.imread(image,cv2.IMREAD_GRAYSCALE)
         inith,initw=img.shape[0],img.shape[1]
         img_crop = img
 
         #Cut out the specific cell
         cut_image=img[fry0:fry1,frx0:frx1]
+        #cut_image = (cut_image-cut_image.min())/(cut_image.max()-cut_image.min())*255
         cut_image=cv2.resize(cut_image,(inith,initw))
-
 
         #Set up shape of window
         shape=(inith*2,initw*2)
@@ -247,5 +311,5 @@ class manual_classification(get_s2p):
         return colorimg
 
 if __name__=='__main__':
-    ev_obj=manual_classification(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\24-3-18\24-3-18_C4620083_M3_R1-052')
+    ev_obj=manual_classification(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\24-3-18\24-3-18_C4620081_M1_R1-058')
     ev_obj()

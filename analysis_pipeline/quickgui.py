@@ -15,22 +15,23 @@ class quickGUI(manual_classification):
     def __init__(self,datapath,redogui=False):
         super().__init__(datapath)
         self.root=ctk.CTk()
-        self.root.geometry("700x750+500+100")
+        self.root.geometry("800x800+500+100")
         self.canvas = tk.Canvas(self.root,width=1000,height=1000)
         self.canvas.pack()
         self.i=0
         self.interval=20
         self.neuron_number=0
+        self.intensity=1
         self.redogui=redogui
         self.set_up_buttons()
 
     def show_vid(self): 
-        im_oh = self.create_vids(self.neuron_number,self.i)
+        im_oh = self.create_vids(self.neuron_number,self.i,self.intensity)
         im_oh *= 100
         im_oh[np.where(im_oh>255)]=255
         im_oh = Image.fromarray(im_oh.astype(np.uint8))
         self.i+=1
-        if self.i>len(self.images):
+        if self.i>len(self.corrected_images):
             self.i=0
         self.img =  ImageTk.PhotoImage(image=im_oh,size=(800,800))
         self.canvas.create_image(500,500, anchor="c", image=self.img)
@@ -49,18 +50,24 @@ class quickGUI(manual_classification):
         self.main_button_4 = ctk.CTkButton(master=self.root,  text="Is Not A Neuron",border_width=2, text_color=("gray10", "#DCE4EE"),command=self.is_not_neuron)
         self.main_button_4.place(relx=0.7,rely=0.9)
         self.root.bind('s',self.is_not_neuron)
+        self.main_button_4 = ctk.CTkButton(master=self.root,  text="Increase Intensity",border_width=2, text_color=("gray10", "#DCE4EE"),command=self.increase_intensity)
+        self.main_button_4.place(relx=0.8,rely=0.9)
+        self.root.bind('+',self.is_not_neuron)
+        self.main_button_4 = ctk.CTkButton(master=self.root,  text="Decrease Intensity",border_width=2, text_color=("gray10", "#DCE4EE"),command=self.decrease_intensity)
+        self.main_button_4.place(relx=0.9,rely=0.9)
+        self.root.bind('-',self.is_not_neuron)
 
     def next_neuron(self,_event=None):
         self.neuron_number+=1
         self.i=0
-        if self.neuron_number+1>len(self.images):
+        if self.neuron_number+1>len(self.traces):
             self.neuron_number=0
     
     def previous_neuron(self,_event=None):
         self.neuron_number-=1
         self.i=0
         if self.neuron_number-1<0:
-            self.neuron_number=len(self.images)
+            self.neuron_number=len(self.traces)-1
     
     def is_neuron(self,_event=None):
         self.true_classification[self.neuron_number]=1
@@ -69,7 +76,15 @@ class quickGUI(manual_classification):
     def is_not_neuron(self,_event=None):
         self.true_classification[self.neuron_number]=0
         print('BOOO!')
-    
+
+    def increase_intensity(self):
+        self.intensity+=1
+
+    def decrease_intensity(self):
+        self.intensity-=1
+        if self.intensity<1:
+            self.intensity=1
+
     def __call__(self):
         super().__call__()
         self.true_classification=np.zeros(shape=(len(self.traces),1))
@@ -99,5 +114,5 @@ class quickGUI(manual_classification):
             self.skipgui=False
 
 if __name__=='__main__':
-    ev_obj=quickGUI(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\24-3-18\24-3-18_C4620083_M4_R1-054',redogui=True)
+    ev_obj=quickGUI(r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\24-3-18\24-3-18_C4620081_M1_R1-058',redogui=True)
     ev_obj()
