@@ -11,7 +11,7 @@ from radargraphs import radar_plot
 from customs2p import get_s2p
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans
-import json
+from SaveLoadObj import SaveObj,LoadObj
 sns.set_style('whitegrid')
 
 """ To do list
@@ -25,15 +25,6 @@ class parse_s2p(get_s2p):
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.9):
         super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1) #Use initialization from previous class
         self.cellthreshold=cellthreshold # Threshold to determine whether a cell is a cell. 0.7 means only the top 30% of ROIS make it to real dataset as neurons.
-
-    def __del__(self):
-        super().__del__
-
-        #Save object to json
-        import json
-
-with open('filename.json', 'w') as file:
-    json.dump(your_object, file)
 
     def get_s2p_outputs(self):
         #Find planes and get recording/probability files
@@ -51,10 +42,8 @@ with open('filename.json', 'w') as file:
         self.neuron_prob=np.load(self.probability_file)
         self.neuron_prob=self.neuron_prob[:,1]
         self.traces=np.load(self.recording_file)
-       
-    
-    def __call__(self):
-        super().__call__()
+
+    def __call2__(self):
         self.get_s2p_outputs()
         self.threshold_neurons()
         self.parallel_zscore()
@@ -438,15 +427,6 @@ class funcational_classification(parse_s2p):
 
         # Get Raster-PETH for each neuron's activity across conditions. (10 second before and after)
         # Plot raster-PETHS across trials 
-
-    def classify_neuron(self):
-        ipdb.set_trace()
-        # Vanilla Event, Peanut Butter Event
-        # Trial 1 , 2 , 3 ,4, 5, .. N, 
-        # delta AUC1 (Baseline-Event), delta AUC2
-    # Classify neurons into sections (Water, TMT, Vanilla, Peanut Butter)
-        # Based on change in activity from baseline and fidelity?
-    #
         
     def create_labeled_movie(self):
         #Take motion corrected images and overlay mask based on functional classification in python
@@ -476,24 +456,11 @@ def main(serialoutput_search, twophoton_search):
 
         s2p_obj = funcational_classification(imagepath,so_obj)
         s2p_obj()
-        #s2p_obj.get_activity_heatmap(s2p_obj.ztraces_copy) #Get the heatmap for whole session
-        #s2p_obj.get_activity_correlation(s2p_obj.ztraces_copy) #Get the correlation matrix plot for all neurons
+        ipdb.set_trace()
+        SaveObj(s2p_obj)
         recordings.append(s2p_obj)
 
     return recordings
 
 if __name__=='__main__':
-    #Set up command line argument parser
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--headless', action='store_true') #Folder containing two photon's TIFF images
-    # parser.add_argument('--subject_two_photon_data',type=str,required=False) #Folder containing two photon's TIFF images
-    # parser.add_argument('--serial_output_data',type=str,required=False) #Folder containing the serial outputs from the sync and sens aurduinos
-    # parser.add_argument('--deep_lab_cut_data',type=str,required=False) #Folder continaing deeplabcut output data for video.
-    # args=parser.parse_args()
-
-    # # Run headless or run main function.
-    # if args.headless:
-    #     print('headless mode')
-    # else:
     recordings=main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
-        # ipdb.set_trace()
