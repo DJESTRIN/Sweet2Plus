@@ -14,13 +14,6 @@ from sklearn.cluster import KMeans
 from SaveLoadObj import SaveObj,LoadObj
 sns.set_style('whitegrid')
 
-""" To do list
-Add pickling method to load and save objects easily. 
-Normalize trace via z-score
-High res output for heatmaps =
-Have masks imported back into movie to show which neurons are called neurons. 
-"""
-
 class parse_s2p(get_s2p):
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.9):
         super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1) #Use initialization from previous class
@@ -138,60 +131,6 @@ class parse_s2p(get_s2p):
             ax.set_ylabel(y_label)
             plt.savefig(file_string)
             plt.close()
-
-class corralative_activity(parse_s2p):
-    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
-        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
-
-    def get_activity_heatmap(self,data):
-        plt.figure(figsize=(30,30),dpi=300)
-        ax = sns.heatmap(data)
-        plt.ylabel('Neurons')
-        plt.xlabel('Frames')
-        plt.savefig(os.path.join(self.resultpath_neur,'general_heatmap.pdf'))
-
-        plt.figure(figsize=(30,30),dpi=300)
-        dataav=np.copy(data)
-        dataav=np.nanmean(dataav,axis=0)
-        plt.plot(dataav,linewidth=3)
-        plt.ylabel('Average Z-score(F)', fontsize=15)
-        plt.xlabel('Frames', fontsize=15)
-        plt.title('Neuronal Population Activity')
-        plt.savefig(os.path.join(self.resultpath_neur,'population_activity.pdf'))
-
-    def get_activity_correlation(self,data):
-        data=np.asarray(data)
-        data=data.T
-        data=pd.DataFrame(data)
-        correlations=data.corr(method='pearson')
-
-        # Rank order the neurons based on highest to lowest correlations
-        cor_rankings=correlations.sum(axis=1)
-        order = np.argsort(cor_rankings)
-        order = order[::-1] # We want the highest correlations at the top of graph. 
-        data_sorted=data[order]
-        correlations=data_sorted.corr(method='pearson')
-
-        palleteoh=sns.color_palette("coolwarm", as_cmap=True)
-        plt.figure(figsize=(15,15),dpi=300)
-        ax = sns.heatmap(correlations,vmin=-0.2,vmax=0.8)
-        plt.ylabel('Neuron #')
-        plt.xlabel('Neuron #')
-        plt.savefig(os.path.join(self.resultpath_neur,'correlation_analysis.pdf'))
-
-        # Get correlation values other than 1. 
-        corr_ed=correlations
-        corr_ed[corr_ed==1]=np.nan
-
-    def general_pipeline(self):
-        # Look at correlation of activity during baseline
-        # Look at correlation of activity during US
-        # Look at correlation of activity during post-TMT
-        # Get PETHS and classify neurons by activity
-        # Look at each of above correlations with respect to functional classification of neurons 
-
-        a=1
-    
 
 class funcational_classification(parse_s2p):
     def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
@@ -432,35 +371,86 @@ class funcational_classification(parse_s2p):
         #Take motion corrected images and overlay mask based on functional classification in python
         a=1
 
+
+class corralative_activity(funcational_classification):
+    def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
+        super().__init__(datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
+
+    def get_activity_heatmap(self,data):
+        plt.figure(figsize=(30,30),dpi=300)
+        ax = sns.heatmap(data)
+        plt.ylabel('Neurons')
+        plt.xlabel('Frames')
+        plt.savefig(os.path.join(self.resultpath_neur,'general_heatmap.pdf'))
+
+        plt.figure(figsize=(30,30),dpi=300)
+        dataav=np.copy(data)
+        dataav=np.nanmean(dataav,axis=0)
+        plt.plot(dataav,linewidth=3)
+        plt.ylabel('Average Z-score(F)', fontsize=15)
+        plt.xlabel('Frames', fontsize=15)
+        plt.title('Neuronal Population Activity')
+        plt.savefig(os.path.join(self.resultpath_neur,'population_activity.pdf'))
+
+    def get_activity_correlation(self,data):
+        data=np.asarray(data)
+        data=data.T
+        data=pd.DataFrame(data)
+        correlations=data.corr(method='pearson')
+
+        # Rank order the neurons based on highest to lowest correlations
+        cor_rankings=correlations.sum(axis=1)
+        order = np.argsort(cor_rankings)
+        order = order[::-1] # We want the highest correlations at the top of graph. 
+        data_sorted=data[order]
+        correlations=data_sorted.corr(method='pearson')
+
+        palleteoh=sns.color_palette("coolwarm", as_cmap=True)
+        plt.figure(figsize=(15,15),dpi=300)
+        ax = sns.heatmap(correlations,vmin=-0.2,vmax=0.8)
+        plt.ylabel('Neuron #')
+        plt.xlabel('Neuron #')
+        plt.savefig(os.path.join(self.resultpath_neur,'correlation_analysis.pdf'))
+
+        # Get correlation values other than 1. 
+        corr_ed=correlations
+        corr_ed[corr_ed==1]=np.nan
         
-def main(serialoutput_search, twophoton_search):
-    # Find and match all 2P image folders with corresponding serial output folders
-    behdirs = glob.glob(serialoutput_search)
-    twoPdirs = glob.glob(twophoton_search)
-    final_list=[]
-    for diroh in twoPdirs:
-        _,cage,mouse,_=diroh.upper().split('_')
-        for bdiroh in behdirs:
-            _,cageb,mouseb = bdiroh.upper().split('_')
-            if cage==cageb and mouse==mouseb:
-                final_list.append([diroh,bdiroh])
+class pipeline():
+    """ A general pipeline which pulls data through corralative activity nested class
+        The purpose of this class is to allow for user (myself) to quickly pull and analyze all previously calculated data
+        in downstream scripts. See Correlative Acitivity Analysis python script. 
+    """
+    def __init__(self,serialoutput_search,twophoton_search): 
+        self.serialoutput_search=serialoutput_search
+        self.twophoton_search=twophoton_search
 
-    recordings=[]
-    for i,(imagepath,behpath) in enumerate(final_list):
-        if i<3:
-            continue
+    def main(self):
+        # Find and match all 2P image folders with corresponding serial output folders
+        behdirs = glob.glob(self.serialoutput_search)
+        twoPdirs = glob.glob(self.twophoton_search)
+        final_list=[]
+        for diroh in twoPdirs:
+            _,cage,mouse,_=diroh.upper().split('_')
+            for bdiroh in behdirs:
+                _,cageb,mouseb = bdiroh.upper().split('_')
+                if cage==cageb and mouse==mouseb:
+                    final_list.append([diroh,bdiroh])
 
-        #Get behavior data object
-        so_obj = load_serial_output(behpath)
-        so_obj()
+        recordings=[]
+        for i,(imagepath,behpath) in enumerate(final_list):
+            #Get behavior data object
+            so_obj = load_serial_output(behpath)
+            so_obj()
 
-        s2p_obj = funcational_classification(imagepath,so_obj)
-        s2p_obj()
-        ipdb.set_trace()
-        SaveObj(s2p_obj)
-        recordings.append(s2p_obj)
+            s2p_obj = corralative_activity(imagepath,so_obj)
+            s2p_obj()
+            SaveObj(s2p_obj)
+            ipdb.set_trace()
+            recordings.append(s2p_obj)
 
-    return recordings
+        return recordings
 
 if __name__=='__main__':
-    recordings=main(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
+    recordings=pipeline(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
+    recordings.main()

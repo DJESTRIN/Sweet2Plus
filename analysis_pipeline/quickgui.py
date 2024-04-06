@@ -21,12 +21,12 @@ class quickGUI(manual_classification):
         self.i=0
         self.interval=20
         self.neuron_number=0
-        self.intensity=1
+        self.intensity=10
         self.redogui=redogui
         self.set_up_buttons()
 
     def show_vid(self): 
-        im_oh = self.create_vids(self.neuron_number,self.i,self.intensity)
+        im_oh = self.create_vid_for_gui(self.neuron_number,self.i,self.intensity)
         im_oh *= 100
         im_oh[np.where(im_oh>255)]=255
         im_oh = Image.fromarray(im_oh.astype(np.uint8))

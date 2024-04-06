@@ -173,62 +173,100 @@ class manual_classification(get_s2p):
         image_new=image*scalar
         if image_new.max()>255:
             scalar=scalar-1
-            image_new = self.scale_image(image,scalar)
+            image_new, scalar = self.scale_image(image,scalar)
         return image_new,scalar
+    
+    def gen_masked_image(self,image,mask_colors=[],alpha=0.4,scalar=1):
+        """
+        Inputs 
+        mask_colors (numpy array or list) -- numbers [0,1,2...9] that is the same length of number of cells. 
+        Each number will be associated with a color mask.
 
-    def create_vids(self,neuron_id,image_number,intensity=5):
-        # Get min and max values of all ROIs
+        Outputs
+        masked_image 
+        """
+        # Grab coordinates for all ROIs
+        self.coordinates=[]
         for i in range(len(self.stat)):
             cellx,celly=self.stat[i]['xpix'],self.stat[i]['ypix']
-            if i==0:
-                frx0,frx1=cellx.min()-10,cellx.max()+10
-                fry0,fry1=celly.min()-10,celly.max()+10
-            else: 
-                if (cellx.min())<frx0:
-                    frx0=cellx.min()
-                if (cellx.max())>frx1:
-                    frx1=cellx.min()
-                if (celly.min())<fry0:
-                    fry0=celly.min()
-                if (celly.max())>fry1:
-                    fry1=celly.min()
-        fullcrop=[frx0,frx1,fry0,fry1]
+            self.coordinates.append([cellx,celly])
+
+        if mask_colors.any():
+            # Assign color to cells
+            mask_colors = np.asarray(mask_colors)
+            if len(np.unique(mask_colors))>=9:
+                raise Exception('There can only be 10 total groups for masked images. If you need greater you must edit gen_masked_image method')
+            
+            # Generate list of colors for each cell based on group
+            colors =[(255,0,0),(0,255,0),(0,0,255),(255,255,0),(255,0,255),(0,0,255),(128,0,0),(0,128,0),(0,0,128),(128,128,0),(128,0,128),(0,128,128)]
+            colorlist=[]
+            for group in mask_colors:
+                for color in range(len(np.unique(mask_colors))):
+                    if group==color:
+                        colorlist.append(colors[color])
+
+            # Open the image
+            img = Image.open(image)
+            img = np.asarray(img)
+            img, scalar = self.scale_image(img,scalar)
+            img = np.float32(img) #Convert again
+            img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB) #Convert gray scale image to color
+            shapeor = img.shape
+
+            # Add mask using colors from colorlist to image
+            blank = np.zeros(shape=shapeor).astype(np.float32)
+            for (cellx,celly),coloroh in zip(self.coordinates,colorlist):
+                blank[celly,cellx,:]=np.divide(coloroh,10) # Set the cell's coordinates to the corresponding color
+
+            mergedimg = cv2.addWeighted(img, alpha , blank, 1-alpha, 0) # Overlay blank image with an alpha of 0.4
+        else:
+            # Run if we do not want any masks to be over data
+            img = Image.open(image)
+            img = np.asarray(img)
+            img = img.astype(np.uint8)
+            img = cv2.imread(image,cv2.IMREAD_GRAYSCALE) # Read the image
+            img = np.float32(img) #Convert again
+            mergedimg = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB) #Convert gray scale image to color
+
+        return mergedimg 
+
+    def get_image_zoomed(self,image,neuron_id,pixel_pad=3):
+        for i,(cellx,celly) in enumerate(self.coordinates):
+            if i==neuron_id:
+                ourx,oury=cellx,celly
+        
+        zoomed_image = image[(oury.min()-pixel_pad):(oury.max()+pixel_pad),(ourx.min()-pixel_pad):(ourx.max()+pixel_pad)]
+        return zoomed_image    
+
+    def create_vid_for_gui(self,neuron_id,image_number,intensity=10):
+        ipdb.set_trace()
+        # Apply read and optionally apply mask to current image
+        masking = np.zeros(len(self.traces))
+        masking[neuron_id]=1 #Set current cell to different color
+        image=self.gen_masked_image(self.corrected_images[image_number],mask_colors=masking,scalar=intensity,alpha=0.01)
+        imshape=image.shape # Get height and width of image
+
+        # Zoom in on image
+        cut_image = self.get_image_zoomed(image,neuron_id=neuron_id)
+        cut_image=cv2.resize(cut_image,(imshape[0],imshape[1])) # Rezie the image to make bigger
 
         # Get trace and morphology data for current trace on hand
         dataoh = np.copy(self.traces)
         population_activity = dataoh.mean(axis=0)
         trace_oh = dataoh[neuron_id]
-        cellx,celly=self.stat[neuron_id]['xpix'],self.stat[neuron_id]['ypix']
-        frx0,frx1=cellx.min()-10,cellx.max()+10
-        fry0,fry1=celly.min()-10,celly.max()+10
-        norm_trace_oh = (trace_oh-trace_oh.min())/(trace_oh.max()-trace_oh.min())*100
-
-        scalar=intensity #similar to setting intensity
-        image=self.corrected_images[image_number] 
-        img = Image.open(image)
-        img = np.asarray(img)
-        img = img.astype(np.uint8)
-        #img = cv2.imread(image,cv2.IMREAD_GRAYSCALE)
-        inith,initw=img.shape[0],img.shape[1]
-        img_crop = img
-
-        #Cut out the specific cell
-        cut_image=img[fry0:fry1,frx0:frx1]
-        #cut_image = (cut_image-cut_image.min())/(cut_image.max()-cut_image.min())*255
-        cut_image=cv2.resize(cut_image,(inith,initw))
+        norm_trace_oh = (trace_oh-trace_oh.min())/(trace_oh.max()-trace_oh.min())*100 # Force the trace to fall between 0 and 100
 
         #Set up shape of window
-        shape=(inith*2,initw*2)
-        blankimg = np.zeros(shape, np.float64)
-        blankimg[:-(inith),initw:initw*2]=img_crop 
-        blankimg[:-(inith),:initw]=cut_image
-        blankimg=blankimg/255
-        blankimg,scalar=self.scale_image(blankimg,scalar)
+        shape=(imshape[0]*2,imshape[1]*2,3) # Get Shape of new image
+        blankimg = np.zeros(shape, np.float32) #Create background for new image
+        blankimg[:-(imshape[0]),imshape[1]:imshape[1]*2]=image #Put our current masked image in
+        blankimg[:-(imshape[0]),:imshape[1]]=cut_image #Put the zoomed cell image in
+        #blankimg,scalar=self.scale_image(blankimg,scalar) # Change the image intensity
         
         # Zoom in on trace data currently displayed
-        ys=norm_trace_oh[(image_number-49):(image_number+1)]+(inith-300)
+        ys=norm_trace_oh[(image_number-49):(image_number+1)]+(imshape[0]-300)
         if ys.size==0:
-            ys=norm_trace_oh[:(image_number+1)]+(inith-300)
+            ys=norm_trace_oh[:(image_number+1)]+(imshape[0]-300)
             xs=range(0,image_number*5,5)
         else:
             xs=range(0,(image_number+1)*5,5)
@@ -268,9 +306,7 @@ class manual_classification(get_s2p):
             
         draw_points = (np.asarray([draw_x, draw_y]).T).astype(np.int32)
         blankimg = cv2.polylines(blankimg, [draw_points], False, (255,255,255),2)
-
-        blankimg = np.float32(blankimg)
-        colorimg = cv2.cvtColor(blankimg,cv2.COLOR_GRAY2RGB)
+        colorimg = np.float32(blankimg)
         
         # Plot Population Acitivty
         draw_x,draw_y=[],[]
@@ -283,15 +319,8 @@ class manual_classification(get_s2p):
             
         draw_points = (np.asarray([draw_x, draw_y]).T).astype(np.int32)
         colorimg = cv2.polylines(colorimg, [draw_points], False, (0,255,0),2)
-        colorimg=cv2.putText(colorimg, 'Normalized ROI Activity', (10,inith+50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,thickness=1,color=(255,255,255))
-        colorimg=cv2.putText(colorimg, 'Population Activity', (10,inith+100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,thickness=1,color=(0,255,0))
-
-        # #Add in mask data
-        for xc,yc in zip(cellx,celly):
-            xc+=initw
-            b,g,r=colorimg[xc,yc,:]
-            colorimg[yc,xc,:]=[b,g,r+10]
-        
+        colorimg=cv2.putText(colorimg, 'Normalized ROI Activity', (10,imshape[0]+50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,thickness=1,color=(255,255,255))
+        colorimg=cv2.putText(colorimg, 'Population Activity', (10,imshape[0]+100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,thickness=1,color=(0,255,0))   
 
         # Plot a box around current data
         boxbottom=colorimg.shape[0]-75
