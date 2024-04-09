@@ -9,10 +9,11 @@ Compare correlation of acitivty:
     N dimensions for N neurons where each dimension is average AUC. 
     Does the state change differ with respect to stress (Day 1 vs Day 14)
 """
-from twophoton_pipeline_fullstack import pipeline 
+from twophoton_fullstack import pipeline 
 import numpy as np
-
-alldata=pipeline(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
+import ipdb
+import warnings
+warnings.filterwarnings("ignore")
 
 def baseline_correlations(primary_obj):
     """ Compare correlation across each neuron in each mouse across times """
@@ -29,6 +30,7 @@ def baseline_correlations(primary_obj):
         #Append all data to lists
         parse_info.append(info)
         correlation_data.append([corr_ed,correlations])
+    ipdb.set_trace()
 
  # Look at correlation of activity during baseline
         # Look at correlation of activity during US
@@ -36,3 +38,7 @@ def baseline_correlations(primary_obj):
         # Get PETHS and classify neurons by activity
         # Look at each of above correlations with respect to functional classification of neurons 
 
+if __name__=='__main__':
+    alldata=pipeline(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\serialoutputdata\Day*\**\*24*' , r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day*\**\*24*')
+    alldata()
+    baseline_correlations(alldata)

@@ -12,6 +12,7 @@ from customs2p import get_s2p
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans
 from SaveLoadObj import SaveObj,LoadObj
+import tqdm
 sns.set_style('whitegrid')
 
 class parse_s2p(get_s2p):
@@ -36,7 +37,8 @@ class parse_s2p(get_s2p):
         self.neuron_prob=self.neuron_prob[:,1]
         self.traces=np.load(self.recording_file)
 
-    def __call2__(self):
+    def __call__(self):
+        super().__call__()
         self.get_s2p_outputs()
         self.threshold_neurons()
         self.parallel_zscore()
@@ -144,9 +146,12 @@ class funcational_classification(parse_s2p):
         self.plot_all_neurons_with_trials('Frames','Z-Score DF',trial_list)
         self.get_baseline_AUCs()
         self.get_event_aucs(30)
-        self.kmeans_clustering()
+        #self.kmeans_clustering()
         for i,trial_name in enumerate(trial_list):
-            self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[i],15,[-10,-5],[0,5],trial_name)
+            if not self.so.all_evts_imagetime[i]:
+                print(f'There are no {trial_name} trials for this subject: Cage {self.cage} mouse {self.mouse}')
+            else:
+                self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[i],15,[-10,-5],[0,5],trial_name)
 
     def plot_all_neurons_with_trials(self,x_label,y_label,trial_list):
         # Create a plot of all neurons with vertical lines per trial type
@@ -187,7 +192,8 @@ class funcational_classification(parse_s2p):
                 plt.savefig(file_string)
                 plt.close()
             except:
-                print('skipped')
+                continue
+                #print('skipped')
         
         #Save the first and last trial times
         self.first_trial_time=min_trial
@@ -202,7 +208,7 @@ class funcational_classification(parse_s2p):
         Creates a new attribute containing AUC data across periods
         Plots AUC data and saves into subject's folder
         """
-        dataoh = np.copy(self.ztraces_copy)
+        dataoh = np.copy(self.ztraces)
         self.baselineAUCs=[]
         plt.figure()
         for trace in dataoh:
@@ -350,8 +356,12 @@ class funcational_classification(parse_s2p):
                 ev_trace=neuron_trace[int(time+round(event_period[0]*sampling_frequency)):int(time+round(event_period[1]*sampling_frequency))]
                 EV_AUC.append(np.trapz(ev_trace))
 
-            mean_trace=np.asarray(heatmap_data).mean(axis=0) # Get Average trace across events for Neuron
-
+            try:
+                mean_trace=np.asarray(heatmap_data).mean(axis=0) # Get Average trace across events for Neuron
+            except:
+                heatmap_data=heatmap_data[:-1] #The last element is too close to end of session. Best to delete data.
+                mean_trace=np.asarray(heatmap_data).mean(axis=0) 
+           
             # Plot PETH
             plt.figure(figsize=(15,15),dpi=1200)
             f, axes = plt.subplots(2, 1, sharex='col')
@@ -407,6 +417,7 @@ class corralative_activity(funcational_classification):
         # Get correlation values other than 1. 
         corr_ed=correlations
         corr_ed[corr_ed==1]=np.nan
+        return corr_ed, correlations
         
 class pipeline():
     """ A general pipeline which pulls data through corralative activity nested class
@@ -419,30 +430,45 @@ class pipeline():
 
     def match_directories(self):
         # Find and match all 2P image folders with corresponding serial output folders
-        ipdb.set_trace()
         behdirs = glob.glob(self.serialoutput_search)
         twoPdirs = glob.glob(self.twophoton_search)
         self.final_list=[]
         for diroh in twoPdirs:
-            _,cage,mouse,_=diroh.upper().split('_')
+            if 'DAY1' in diroh.upper():
+                dday=1
+            if 'DAY7' in diroh.upper():
+                dday=7
+            if 'DAY14' in diroh.upper():
+                dday=14
+            _,_,_,_,_,_,cage,mouse,_=diroh.upper().split('_')
             for bdiroh in behdirs:
-                _,cageb,mouseb = bdiroh.upper().split('_')
-                if cage==cageb and mouse==mouseb:
+                if 'DAY1' in bdiroh.upper():
+                    bday=1
+                if 'DAY7' in bdiroh.upper():
+                    bday=7
+                if 'DAY14' in bdiroh.upper():
+                    bday=14
+                _,_,_,_,_,_,cageb,mouseb = bdiroh.upper().split('_')
+                if cage==cageb and mouse==mouseb and dday==bday:
                     self.final_list.append([diroh,bdiroh])
-        ipdb.set_trace()
     
     def main(self):
         self.recordings=[]
-        for i,(imagepath,behpath) in enumerate(self.final_list):
+        for i,(imagepath,behpath) in tqdm.tqdm(enumerate(self.final_list), total=len(self.final_list), desc='Current Recording: '):
             #Get behavior data object
-            so_obj = load_serial_output(behpath)
-            so_obj()
+            self.so_obj = load_serial_output(behpath)
+            self.so_obj()
 
-            s2p_obj = corralative_activity(imagepath,so_obj)
-            s2p_obj()
-            SaveObj(s2p_obj)
-            ipdb.set_trace()
-            self.recordings.append(s2p_obj)
+            # Get twophon data object
+            self.s2p_obj = corralative_activity(imagepath,self.so_obj)
+            self.s2p_obj()
+  
+            #Save two photon object
+            #outfile=os.path.join(imagepath,'twop_obj.json') !!!! Need to make objects serializable
+            #SaveObj(outfile,self.s2p_obj)
+
+            #Append object as attribute to list
+            self.recordings.append(self.s2p_obj)
         return self.recordings
     
     def __call__(self):

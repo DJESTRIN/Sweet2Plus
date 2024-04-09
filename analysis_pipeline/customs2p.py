@@ -53,7 +53,7 @@ class get_s2p():
         self.convert_motion_corrected_images()
 
     def animal_information(self):
-        _,self.cage,self.mouse,_ = self.datapath.split('_')
+        _,_,_,_,_,_,self.cage,self.mouse,_ = self.datapath.split('_')
         if 'Day1' in self.datapath:
             self.day=1
         if 'Day7' in self.datapath:

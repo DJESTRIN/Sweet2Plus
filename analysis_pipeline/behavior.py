@@ -119,7 +119,7 @@ class load_serial_output():
                     count+=1
                     all_ts.append(LoopNumber)
             all_evts.append(all_ts)
-            print(f'There were {count} {trial} trials')
+            #print(f'There were {count} {trial} trials')
         self.all_evts=all_evts
 
         # Convert list of loop numbers to 2P Image Numbers
