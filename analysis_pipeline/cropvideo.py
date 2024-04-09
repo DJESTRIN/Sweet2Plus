@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Mar 26 10:07:59 2024
-
-@author: Kenneth Johnosn
+Crop Behavioral Video
 """
 import tqdm
 import cv2

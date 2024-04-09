@@ -12,9 +12,7 @@ from PIL import Image
 sns.set_style('whitegrid')
 
 class get_s2p():
-    """ get suite 2P:
-    This class is meant to run suite2P without the gui. 
-    """
+    """ get suite 2P: This class is meant to run suite2P without the gui. """
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1):
         #Set input and output directories
         self.datapath=datapath
@@ -46,12 +44,22 @@ class get_s2p():
         self.db = {'data_path': [self.datapath],}
     
     def __call__(self):
+        self.animal_information()
         searchstring=os.path.join(self.datapath,'**/F.npy')
         res = glob.glob(searchstring,recursive=True)
         if not res:
             self.auto_run()
             self.get_reference_image()
         self.convert_motion_corrected_images()
+
+    def animal_information(self):
+        _,self.cage,self.mouse,_ = self.datapath.split('_')
+        if 'Day1' in self.datapath:
+            self.day=1
+        if 'Day7' in self.datapath:
+            self.day=7
+        if 'Day14' in self.datapath:
+            self.day=14
 
     def auto_run(self):
         self.output_all=s2p.run_s2p(ops=self.ops,db=self.db)
@@ -176,7 +184,7 @@ class manual_classification(get_s2p):
             image_new, scalar = self.scale_image(image,scalar)
         return image_new,scalar
     
-    def gen_masked_image(self,image,mask_colors=[],alpha=0.4,scalar=1):
+    def gen_masked_image(self,image,mask_colors=[],alpha=0.2,scalar=1):
         """
         Inputs 
         mask_colors (numpy array or list) -- numbers [0,1,2...9] that is the same length of number of cells. 
@@ -216,9 +224,14 @@ class manual_classification(get_s2p):
             # Add mask using colors from colorlist to image
             blank = np.zeros(shape=shapeor).astype(np.float32)
             for (cellx,celly),coloroh in zip(self.coordinates,colorlist):
-                blank[celly,cellx,:]=np.divide(coloroh,10) # Set the cell's coordinates to the corresponding color
+                blank[celly,cellx,:]=coloroh # Set the cell's coordinates to the corresponding color
 
-            mergedimg = cv2.addWeighted(img, alpha , blank, 1-alpha, 0) # Overlay blank image with an alpha of 0.4
+            blank= blank*alpha
+            img+=np.round(blank)
+            img = (img-img.min())/(img.max()-img.min())*255
+            img = img.astype(np.uint8)
+            mergedimg=img
+            #mergedimg = cv2.addWeighted(img, alpha , blank, 1-alpha, 0) # Overlay blank image with an alpha of 0.4
         else:
             # Run if we do not want any masks to be over data
             img = Image.open(image)
@@ -239,11 +252,10 @@ class manual_classification(get_s2p):
         return zoomed_image    
 
     def create_vid_for_gui(self,neuron_id,image_number,intensity=10):
-        ipdb.set_trace()
         # Apply read and optionally apply mask to current image
         masking = np.zeros(len(self.traces))
         masking[neuron_id]=1 #Set current cell to different color
-        image=self.gen_masked_image(self.corrected_images[image_number],mask_colors=masking,scalar=intensity,alpha=0.01)
+        image=self.gen_masked_image(self.corrected_images[image_number],mask_colors=masking,scalar=intensity)
         imshape=image.shape # Get height and width of image
 
         # Zoom in on image

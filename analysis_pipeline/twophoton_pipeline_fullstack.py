@@ -364,14 +364,6 @@ class funcational_classification(parse_s2p):
             plt.savefig(os.path.join(self.resultpath_neur,f'{event_name}PETH_Neuron{i}.pdf'))
             plt.close()
 
-        # Get Raster-PETH for each neuron's activity across conditions. (10 second before and after)
-        # Plot raster-PETHS across trials 
-        
-    def create_labeled_movie(self):
-        #Take motion corrected images and overlay mask based on functional classification in python
-        a=1
-
-
 class corralative_activity(funcational_classification):
     def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
         super().__init__(datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
@@ -425,20 +417,23 @@ class pipeline():
         self.serialoutput_search=serialoutput_search
         self.twophoton_search=twophoton_search
 
-    def main(self):
+    def match_directories(self):
         # Find and match all 2P image folders with corresponding serial output folders
+        ipdb.set_trace()
         behdirs = glob.glob(self.serialoutput_search)
         twoPdirs = glob.glob(self.twophoton_search)
-        final_list=[]
+        self.final_list=[]
         for diroh in twoPdirs:
             _,cage,mouse,_=diroh.upper().split('_')
             for bdiroh in behdirs:
                 _,cageb,mouseb = bdiroh.upper().split('_')
                 if cage==cageb and mouse==mouseb:
-                    final_list.append([diroh,bdiroh])
-
-        recordings=[]
-        for i,(imagepath,behpath) in enumerate(final_list):
+                    self.final_list.append([diroh,bdiroh])
+        ipdb.set_trace()
+    
+    def main(self):
+        self.recordings=[]
+        for i,(imagepath,behpath) in enumerate(self.final_list):
             #Get behavior data object
             so_obj = load_serial_output(behpath)
             so_obj()
@@ -447,10 +442,13 @@ class pipeline():
             s2p_obj()
             SaveObj(s2p_obj)
             ipdb.set_trace()
-            recordings.append(s2p_obj)
-
-        return recordings
+            self.recordings.append(s2p_obj)
+        return self.recordings
+    
+    def __call__(self):
+        self.match_directories()
+        self.main()
 
 if __name__=='__main__':
     recordings=pipeline(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*',r'C:\Users\listo\tmtassay\TMTAssay\Day1\twophoton\**\*24*')
-    recordings.main()
+    recordings()
