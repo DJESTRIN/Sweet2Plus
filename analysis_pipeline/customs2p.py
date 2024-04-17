@@ -13,12 +13,14 @@ sns.set_style('whitegrid')
 
 class get_s2p():
     """ get suite 2P: This class is meant to run suite2P without the gui. """
-    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1):
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
         #Set input and output directories
         self.datapath=datapath
         self.resultpath=os.path.join(self.datapath,'figures/')
         self.resultpath_so=os.path.join(self.datapath,'figures/serialoutput/')
         self.resultpath_neur=os.path.join(self.datapath,'figures/neuronal/')
+        self.include_mask=True
+        self.cellthreshold=cellthreshold
 
         if not os.path.exists(self.resultpath): #Make the figure directory
             os.mkdir(self.resultpath)
@@ -34,7 +36,7 @@ class get_s2p():
         self.ops['threshold_scaling'] = threshold_scaling # we are increasing the threshold for finding ROIs to limit the number of non-cell ROIs found (sometimes useful in gcamp injections)
         self.ops['fs'] = fs # sampling rate of recording, determines binning for cell detection
         self.ops['tau'] = tau # timescale of gcamp to use for deconvolution
-        self.ops['input_format']="bruker"
+        #self.ops['input_format']="bruker"
         self.ops['blocksize']=blocksize
         self.ops['reg_tif']=reg_tif
         self.ops['reg_tif_chan2']=reg_tif_chan2
@@ -144,6 +146,10 @@ class get_s2p():
         self.corrected_images.sort(key=sort_images)
 
 class manual_classification(get_s2p):
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
+        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold)
+        return 
+    
     def get_s2p_outputs(self):
         #Find planes and get recording/probability files
         search_path = os.path.join(self.datapath,'suite2p/plane*/')
@@ -164,15 +170,16 @@ class manual_classification(get_s2p):
         self.traces=np.load(self.recording_file)
 
     def threshold_neurons(self):
-        self.traces=self.traces[np.where(self.neuron_prob>0.9),:] #Need to add threshold as attirbute
+        self.traces=self.traces[np.where(self.neuron_prob>self.cellthreshold),:] #Need to add threshold as attirbute
         self.traces=self.traces.squeeze()
+        self.stat=np.load(self.stat_files[0],allow_pickle=True)
+        self.stat=self.stat[np.where(self.neuron_prob>self.cellthreshold)] #Need to add threshold as attirbute
         return
 
     def __call__(self):
         super().__call__()
         self.get_s2p_outputs()
         self.threshold_neurons()
-        self.stat=np.load(self.stat_files[0],allow_pickle=True)
         search_path = os.path.join(self.datapath,'*.tif*')
         self.images = glob.glob(search_path)
     
@@ -199,7 +206,18 @@ class manual_classification(get_s2p):
             cellx,celly=self.stat[i]['xpix'],self.stat[i]['ypix']
             self.coordinates.append([cellx,celly])
 
-        if mask_colors.any():
+        if len(mask_colors)==0:
+            # Run if we do not want any masks to be over data
+            img = Image.open(image)
+            img = np.asarray(img)
+            img, scalar = self.scale_image(img,scalar)
+            img = np.float32(img) #Convert again
+            img = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB) #Convert gray scale image to color
+            img = (img-img.min())/(img.max()-img.min())*255
+            img = img.astype(np.uint8)
+            mergedimg = img #Convert gray scale image to color
+
+        else:
             # Assign color to cells
             mask_colors = np.asarray(mask_colors)
             if len(np.unique(mask_colors))>=9:
@@ -232,18 +250,9 @@ class manual_classification(get_s2p):
             img = img.astype(np.uint8)
             mergedimg=img
             #mergedimg = cv2.addWeighted(img, alpha , blank, 1-alpha, 0) # Overlay blank image with an alpha of 0.4
-        else:
-            # Run if we do not want any masks to be over data
-            img = Image.open(image)
-            img = np.asarray(img)
-            img = img.astype(np.uint8)
-            img = cv2.imread(image,cv2.IMREAD_GRAYSCALE) # Read the image
-            img = np.float32(img) #Convert again
-            mergedimg = cv2.cvtColor(img,cv2.COLOR_GRAY2RGB) #Convert gray scale image to color
-
         return mergedimg 
 
-    def get_image_zoomed(self,image,neuron_id,pixel_pad=3):
+    def get_image_zoomed(self,image,neuron_id,pixel_pad=10):
         for i,(cellx,celly) in enumerate(self.coordinates):
             if i==neuron_id:
                 ourx,oury=cellx,celly
@@ -253,8 +262,18 @@ class manual_classification(get_s2p):
 
     def create_vid_for_gui(self,neuron_id,image_number,intensity=10):
         # Apply read and optionally apply mask to current image
-        masking = np.zeros(len(self.traces))
-        masking[neuron_id]=1 #Set current cell to different color
+        if self.include_mask:
+            masking = np.zeros(len(self.traces))
+            #masking[neuron_id]=1 #Set current cell to different color
+            masking[neuron_id]=(self.true_classification[:,0].max()+1) #Set current cell to different color
+            if len(masking)<len(self.true_classification):
+                masking+=1
+            elif len(masking)==len(self.true_classification):
+                masking+=self.true_classification[:,0] # Include previously accepted neurons
+            else:
+                raise Exception("shape of masking or true classification attributes are wrong")
+        else:
+            masking=[]
         image=self.gen_masked_image(self.corrected_images[image_number],mask_colors=masking,scalar=intensity)
         imshape=image.shape # Get height and width of image
 
@@ -333,6 +352,7 @@ class manual_classification(get_s2p):
         colorimg = cv2.polylines(colorimg, [draw_points], False, (0,255,0),2)
         colorimg=cv2.putText(colorimg, 'Normalized ROI Activity', (10,imshape[0]+50), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,thickness=1,color=(255,255,255))
         colorimg=cv2.putText(colorimg, 'Population Activity', (10,imshape[0]+100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,thickness=1,color=(0,255,0))   
+        colorimg=cv2.putText(colorimg, f'Neuron {neuron_id} out of {len(self.traces)}', (10,imshape[0]+150), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1,thickness=1,color=(0,0,255))   
 
         # Plot a box around current data
         boxbottom=colorimg.shape[0]-75

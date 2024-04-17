@@ -4,51 +4,29 @@ import matplotlib.pyplot as plt
 import ipdb
 import os,glob
 import pandas as pd
-from multiprocessing import Pool
+from multiprocessing.pool import ThreadPool as Pool
 import seaborn as sns
 from behavior import load_serial_output
 from radargraphs import radar_plot
 from customs2p import get_s2p
+from quickgui import quickGUI
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans
 from SaveLoadObj import SaveObj,LoadObj
 import tqdm
 sns.set_style('whitegrid')
 
-class parse_s2p(get_s2p):
-    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.9):
-        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1) #Use initialization from previous class
-        self.cellthreshold=cellthreshold # Threshold to determine whether a cell is a cell. 0.7 means only the top 30% of ROIS make it to real dataset as neurons.
-
-    def get_s2p_outputs(self):
-        #Find planes and get recording/probability files
-        search_path = os.path.join(self.datapath,'suite2p/plane*/')
-        self.recording_files=[]
-        self.probability_files=[]
-        planes = [result for result in glob.glob(search_path)]
-        self.recording_files.append(os.path.join(planes[0],'F.npy'))
-        self.probability_files.append(os.path.join(planes[0],'iscell.npy'))
-    
-        assert (len(self.recording_files)==1 and len(self.probability_files)==1) #Make sure there is only one file.
- 
-        self.recording_file=self.recording_files[0]
-        self.probability_file=self.probability_files[0]
-        self.neuron_prob=np.load(self.probability_file)
-        self.neuron_prob=self.neuron_prob[:,1]
-        self.traces=np.load(self.recording_file)
+class parse_s2p(quickGUI):
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
+        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold) #Use initialization from previous class 
+        # Threshold to determine whether a cell is a cell. 0.7 means only the top 30% of ROIS make it to real dataset as neurons.
+        self.trial_list = ['Vanilla','PeanutButter','Water','FoxUrine']
 
     def __call__(self):
         super().__call__()
-        self.get_s2p_outputs()
-        self.threshold_neurons()
         self.parallel_zscore()
         self.plot_all_neurons('Frames','Z-Score + i')
         self.plot_neurons('Frames','Z-Score')
-        
-    def threshold_neurons(self):
-        self.traces=self.traces[np.where(self.neuron_prob>self.cellthreshold),:] #Need to add threshold as attirbute
-        self.traces=self.traces.squeeze()
-        return
         
     def zscore_trace(self,trace):
         """ Using a sliding window, trace is zscored. 
@@ -94,6 +72,8 @@ class parse_s2p(get_s2p):
     def parallel_zscore(self):
         with Pool() as P:
             self.ztraces = P.map(self.zscore_trace,self.traces)
+            self.ztraces = np.asarray(self.ztraces)
+            self.ztraces = self.ztraces[~np.isnan(self.ztraces).any(axis=1)]
             self.ztraces_copy=np.copy(self.ztraces)
 
     def plot_all_neurons(self,x_label,y_label):
@@ -135,19 +115,20 @@ class parse_s2p(get_s2p):
             plt.close()
 
 class funcational_classification(parse_s2p):
-    def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
-        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
+    def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
+        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold)
         self.so=serialoutput_object #Pass in serial_output_object
+        self.auc_period=30
 
     def __call__(self):
         super().__call__()
         #Create Peths per trial type
-        trial_list = ['Vanilla','PeanutButter','Water','FoxUrine']
-        self.plot_all_neurons_with_trials('Frames','Z-Score DF',trial_list)
+        
+        self.plot_all_neurons_with_trials('Frames','Z-Score DF',self.trial_list)
         self.get_baseline_AUCs()
-        self.get_event_aucs(30)
+        self.get_event_aucs(self.auc_period)
         #self.kmeans_clustering()
-        for i,trial_name in enumerate(trial_list):
+        for i,trial_name in enumerate(self.trial_list):
             if not self.so.all_evts_imagetime[i]:
                 print(f'There are no {trial_name} trials for this subject: Cage {self.cage} mouse {self.mouse}')
             else:
@@ -273,12 +254,12 @@ class funcational_classification(parse_s2p):
             PbAUC=all_aucs[1][neuron]
             WaterAUC=all_aucs[2][neuron]
             FoxUrineAUC=all_aucs[3][neuron]
-            labels=['Vanilla','Peanut Butter', 'Water', 'Fox Urine']
+            #labels=['Vanilla','Peanut Butter', 'Water', 'Fox Urine']
             values=[VanillaAUC,PbAUC,WaterAUC,FoxUrineAUC]
             all_values.append(values)
         
         filename = os.path.join(self.resultpath_neur,f'AllNeuronsRadar.pdf')
-        radar_plot(labels,all_values,'All Neurons',filename,single_neuron=False)
+        radar_plot(self.trial_list,all_values,'All Neurons',filename,single_neuron=False)
         self.auc_vals = all_values
     
     def kmeans_clustering(self):
@@ -306,7 +287,6 @@ class funcational_classification(parse_s2p):
         # Generate Radar plot with Kmeans
         labels=['Vanilla','Peanut Butter', 'Water', 'Fox Urine']
         radar_plot(labels,auc_array,'All Neurons Kmeans','kmeans_radar.pdf',single_neuron=False,Grouping=[kmeans.labels_])
-        ipdb.set_trace()
         
     def parse_behavior_df(self,ColumnName):
         #Convert from Pandas dataframe back to numpy
@@ -375,8 +355,8 @@ class funcational_classification(parse_s2p):
             plt.close()
 
 class corralative_activity(funcational_classification):
-    def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65):
-        super().__init__(datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.65)
+    def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
+        super().__init__(datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold)
 
     def get_activity_heatmap(self,data):
         plt.figure(figsize=(30,30),dpi=300)
@@ -394,7 +374,7 @@ class corralative_activity(funcational_classification):
         plt.title('Neuronal Population Activity')
         plt.savefig(os.path.join(self.resultpath_neur,'population_activity.pdf'))
 
-    def get_activity_correlation(self,data):
+    def get_activity_correlation(self,data,output_filename='correlation_analysis.pdf'):
         data=np.asarray(data)
         data=data.T
         data=pd.DataFrame(data)
@@ -412,7 +392,8 @@ class corralative_activity(funcational_classification):
         ax = sns.heatmap(correlations,vmin=-0.2,vmax=0.8)
         plt.ylabel('Neuron #')
         plt.xlabel('Neuron #')
-        plt.savefig(os.path.join(self.resultpath_neur,'correlation_analysis.pdf'))
+        output_filename=os.path.join(self.resultpath_neur,output_filename)
+        plt.savefig(output_filename)
 
         # Get correlation values other than 1. 
         corr_ed=correlations
@@ -455,20 +436,19 @@ class pipeline():
     def main(self):
         self.recordings=[]
         for i,(imagepath,behpath) in tqdm.tqdm(enumerate(self.final_list), total=len(self.final_list), desc='Current Recording: '):
-            #Get behavior data object
-            self.so_obj = load_serial_output(behpath)
-            self.so_obj()
+            try:
+                #Get behavior data object
+                self.so_obj = load_serial_output(behpath)
+                self.so_obj()
 
-            # Get twophon data object
-            self.s2p_obj = corralative_activity(imagepath,self.so_obj)
-            self.s2p_obj()
-  
-            #Save two photon object
-            #outfile=os.path.join(imagepath,'twop_obj.json') !!!! Need to make objects serializable
-            #SaveObj(outfile,self.s2p_obj)
+                # Get twophon data object
+                self.s2p_obj = corralative_activity(imagepath,self.so_obj)
+                self.s2p_obj()
 
-            #Append object as attribute to list
-            self.recordings.append(self.s2p_obj)
+                #Append object as attribute to list
+                self.recordings.append(self.s2p_obj)
+            except:
+                print('error')
         return self.recordings
     
     def __call__(self):

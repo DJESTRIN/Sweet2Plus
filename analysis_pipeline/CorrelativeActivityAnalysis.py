@@ -38,7 +38,8 @@ def baseline_correlations(primary_obj):
         # Get PETHS and classify neurons by activity
         # Look at each of above correlations with respect to functional classification of neurons 
 
+
 if __name__=='__main__':
     alldata=pipeline(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\serialoutputdata\Day*\**\*24*' , r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day*\**\*24*')
     alldata()
-    baseline_correlations(alldata)
+    #baseline_correlations(alldata)

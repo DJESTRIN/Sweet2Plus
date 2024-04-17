@@ -182,6 +182,7 @@ class load_serial_output():
         plt.ylabel('On or Off')
         plt.legend(['Vanilla','Peanut Butter','Water', 'Fox Urine','Normalized Pressure'],loc='upper left')
         plt.savefig(filename)
+        plt.close()
 
         #Pressure
         plt.figure()
@@ -190,6 +191,7 @@ class load_serial_output():
         plt.xlabel('Loop Number')
         plt.ylabel('Temp')
         plt.savefig(filename)
+        plt.close()
  
         #Pressure
         plt.figure()
@@ -198,6 +200,7 @@ class load_serial_output():
         plt.xlabel('Loop Number')
         plt.ylabel('Humidity')
         plt.savefig(filename)  
+        plt.close()
 
     def graph_aurduino_serialoutput_rate(self):
         time = self.sens[:,4]
@@ -209,6 +212,7 @@ class load_serial_output():
         plt.figure()
         plt.scatter(x=range(len(times)),y=times)
         plt.savefig('timehist.jpg')
+        plt.close()
 
 
 
