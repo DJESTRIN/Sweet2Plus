@@ -8,6 +8,7 @@ Compare correlation of acitivty:
 (3) Analyze pre TMT and post TMT Day 1 recordings to see changes in state?
     N dimensions for N neurons where each dimension is average AUC. 
     Does the state change differ with respect to stress (Day 1 vs Day 14)
+(4) Replicate findings from CORT study
 """
 from twophoton_fullstack import pipeline 
 import numpy as np
