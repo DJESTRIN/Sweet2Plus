@@ -15,6 +15,7 @@ import ipdb
 import optuna
 import tqdm
 import matplotlib.pyplot as plt
+import argparse
 
 def downsample_array(array,new_length=1000):
     array_new=np.zeros((array.shape[0],new_length))
@@ -68,13 +69,13 @@ def expand_training_dataset(X,Y):
             if toh in random_trace_for_plot:
                 plot_data.append(new_trace)
 
-        if toh in random_trace_for_plot:
-           plt.figure()
-           for r,plottrace in enumerate(plot_data):
-               plt.subplot(3, 1, r+1)
-               plt.plot(plottrace)
-           plt.savefig(f'Noisytraces{toh}.jpg')
-           plt.close()
+        # if toh in random_trace_for_plot:
+        #    plt.figure()
+        #    for r,plottrace in enumerate(plot_data):
+        #        plt.subplot(3, 1, r+1)
+        #        plt.plot(plottrace)
+        #    plt.savefig(f'Noisytraces{toh}.jpg')
+        #    plt.close()
     expanded_trainingdata=np.asarray(expanded_trainingdata)
     expanded_labels=np.asarray(expanded_labels)
     return expanded_trainingdata,expanded_labels
@@ -182,7 +183,7 @@ def TrainTestNetwork(Network, train_loader, test_loader, learningrate, batch_siz
             learningrate*=0.1
 
         training_results.append(Average(f1_train_av))
-        testing_results.append(Average(f1_train_av))
+        testing_results.append(Average(f1_test_av))
     testing_results_np=np.asarray(testing_results)
     f1_test_average=testing_results_np.max()
     print(f'Max Testing F1: {f1_test_average}')
@@ -208,7 +209,7 @@ def main(search_string,lr,mom,wd,bs):
 
     # Run training regimine
     training_results,testing_results,f1_test_average = TrainTestNetwork(net, train_dataloader, test_dataloader, lr, bs,1000)
-    return training_results,testing_results,f1_test_average
+    return training_results,testing_results,f1_test_average, net
 
 def objective(trial):
     """ Generate Hyperparmeters """
@@ -216,14 +217,18 @@ def objective(trial):
     Learing_Rate = trial.suggest_float('Learing_Rate', 1e-6, 1, log=True) #Initial learning rate
     Batch_Size = trial.suggest_int('Batch_Size', 8, 264) #Batch Size
 
-    training_results,testing_results,f1_test_average=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*',Learing_Rate,1,1,Batch_Size)
+    training_results,testing_results,f1_test_average,model=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*',Learing_Rate,1,1,Batch_Size)
     return f1_test_average
 
 if __name__=='__main__':
-    study = optuna.create_study(study_name='SignalMLP', direction='maximize')
-    study.optimize(objective, n_trials=100)
+    # parser=argparse.ArgumentParser()
+    # parser.add_argument('--singletrial',type=bool)
+    # args=parser.parse_args()
+    # if args.singletrial:
+    #     training_results,testing_results,f1_test_average,model=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*',Learing_Rate,1,1,Batch_Size)
+    #     torch.save(model.state_dict(), 'model_weights.pth')
+    # else:
+    study = optuna.create_study(study_name='SignalMLP', direction='maximize',storage=r'C:\Users\listo\example.db')
+    study.optimize(objective, n_trials=2)
     optuna.visualization.plot_optimization_history(study)
-    #training_results,testing_results,f1_test_average=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*',1,0.9,0.0000001,64)
-    
-    #training_results,testing_results=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*')
     ipdb.set_trace()
