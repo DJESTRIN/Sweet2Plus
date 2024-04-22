@@ -20,7 +20,7 @@ import argparse
 def downsample_array(array,new_length=1000):
     array_new=np.zeros((array.shape[0],new_length))
     length=array.shape[1]
-    skip=round(length/new_length)
+    skip=int(np.ceil(length/new_length))
     array_oh=array[:,::skip]
     array_new[:array_oh.shape[0],:array_oh.shape[1]]=array_oh
     return array_new
@@ -139,6 +139,7 @@ def Average(lst):
 
 def TrainTestNetwork(Network, train_loader, test_loader, learningrate, batch_size, epochs):
     # Set up optimizers
+    best_f1=0
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(Network.parameters(), lr = learningrate)
@@ -184,6 +185,13 @@ def TrainTestNetwork(Network, train_loader, test_loader, learningrate, batch_siz
 
         training_results.append(Average(f1_train_av))
         testing_results.append(Average(f1_test_av))
+
+        current_f1=Average(f1_test_av)
+        if current_f1>best_f1:
+            best_f1=current_f1
+            torch.save(Network.state_dict(), 'best_model_weights.pth')
+            print(f'Saved best model with Test F1 score of {best_f1} and test accuracy of {Average(ac_test_av)}')
+
     testing_results_np=np.asarray(testing_results)
     f1_test_average=testing_results_np.max()
     print(f'Max Testing F1: {f1_test_average}')
@@ -214,21 +222,22 @@ def main(search_string,lr,mom,wd,bs):
 def objective(trial):
     """ Generate Hyperparmeters """
     #Optuna Derived Hyperparameters
-    Learing_Rate = trial.suggest_float('Learing_Rate', 1e-6, 1, log=True) #Initial learning rate
-    Batch_Size = trial.suggest_int('Batch_Size', 8, 264) #Batch Size
+    Learing_Rate = trial.suggest_float('Learing_Rate', 0.45, 0.47, log=True) #Initial learning rate
+    Batch_Size = trial.suggest_int('Batch_Size', 160, 170) #Batch Size
 
     training_results,testing_results,f1_test_average,model=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*',Learing_Rate,1,1,Batch_Size)
     return f1_test_average
 
 if __name__=='__main__':
-    # parser=argparse.ArgumentParser()
-    # parser.add_argument('--singletrial',type=bool)
-    # args=parser.parse_args()
-    # if args.singletrial:
-    #     training_results,testing_results,f1_test_average,model=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*',Learing_Rate,1,1,Batch_Size)
-    #     torch.save(model.state_dict(), 'model_weights.pth')
-    # else:
-    study = optuna.create_study(study_name='SignalMLP', direction='maximize',storage=r'C:\Users\listo\example.db')
-    study.optimize(objective, n_trials=2)
-    optuna.visualization.plot_optimization_history(study)
+    training_results,testing_results,f1_test_average,model=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*', 0.46859501736598963,1,1,170)
+    plt.figure(figsize=(10,10))
+    plt.plot(np.asarray(training_results),color='green')
+    plt.plot(np.asarray(testing_results),color='red')
+    plt.savefig('MLP_results.jpg')
+
     ipdb.set_trace()
+   
+    # study = optuna.create_study(study_name='SignalMLP_e1', direction='maximize')
+    # study.optimize(objective, n_trials=50)
+    # optuna.visualization.plot_optimization_history(study)
+    # ipdb.set_trace()
