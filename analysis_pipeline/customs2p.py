@@ -47,7 +47,7 @@ class get_s2p():
     
     def __call__(self):
         self.animal_information()
-        searchstring=os.path.join(self.datapath,'**/F.npy')
+        searchstring=os.path.join(self.datapath,'**/F_mlp.npy')
         res = glob.glob(searchstring,recursive=True)
         if not res:
             self.auto_run()
@@ -157,7 +157,7 @@ class manual_classification(get_s2p):
         self.probability_files=[]
         self.stat_files=[]
         planes = [result for result in glob.glob(search_path)]
-        self.recording_files.append(os.path.join(planes[0],'F.npy'))
+        self.recording_files.append(os.path.join(planes[0],'F_mlp.npy'))
         self.probability_files.append(os.path.join(planes[0],'iscell.npy'))
         self.stat_files.append(os.path.join(planes[0],'stat.npy'))
 

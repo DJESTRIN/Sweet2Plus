@@ -10,11 +10,13 @@ Compare correlation of acitivty:
     Does the state change differ with respect to stress (Day 1 vs Day 14)
 (4) Replicate findings from CORT study
 """
-from twophoton_fullstack import pipeline 
+from twophoton_fullstack import pipeline,corralative_activity 
+from behavior import load_serial_output
 import numpy as np
 import ipdb
 import warnings
-warnings.filterwarnings("ignore")
+import tqdm
+#warnings.filterwarnings("ignore")
 
 def baseline_correlations(primary_obj):
     """ Compare correlation across each neuron in each mouse across times """
@@ -39,8 +41,28 @@ def baseline_correlations(primary_obj):
         # Get PETHS and classify neurons by activity
         # Look at each of above correlations with respect to functional classification of neurons 
 
+class corralative_activity(corralative_activity):
+    def threshold_neurons(self):
+        print('MLP file loaded')
+
+class pipeline(pipeline):
+    def main(self):
+        self.recordings=[]
+        for i,(imagepath,behpath) in tqdm.tqdm(enumerate(self.final_list), total=len(self.final_list), desc='Current Recording: '):
+            #Get behavior data object
+            self.so_obj = load_serial_output(behpath)
+            last_trial = self.so_obj()
+
+            # Get twophon data object
+            self.s2p_obj = corralative_activity(imagepath,self.so_obj)
+            self.s2p_obj()
+
+            #Append object as attribute to list
+            self.recordings.append(self.s2p_obj)
+        return self.recordings
 
 if __name__=='__main__':
     alldata=pipeline(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\serialoutputdata\Day*\**\*24*' , r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day*\**\*24*')
     alldata()
+    ipdb.set_trace()
     #baseline_correlations(alldata)

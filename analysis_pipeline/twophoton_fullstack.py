@@ -8,7 +8,7 @@ from multiprocessing.pool import ThreadPool as Pool
 import seaborn as sns
 from behavior import load_serial_output
 from radargraphs import radar_plot
-from customs2p import get_s2p
+from customs2p import get_s2p,manual_classification
 from quickgui import quickGUI
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans
@@ -16,7 +16,7 @@ from SaveLoadObj import SaveObj,LoadObj
 import tqdm
 sns.set_style('whitegrid')
 
-class parse_s2p(quickGUI):
+class parse_s2p(manual_classification):
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
         super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold) #Use initialization from previous class 
         # Threshold to determine whether a cell is a cell. 0.7 means only the top 30% of ROIS make it to real dataset as neurons.
@@ -24,9 +24,13 @@ class parse_s2p(quickGUI):
 
     def __call__(self):
         super().__call__()
+        ipdb.set_trace()
         self.parallel_zscore()
+        ipdb.set_trace()
         self.plot_all_neurons('Frames','Z-Score + i')
+        ipdb.set_trace()
         self.plot_neurons('Frames','Z-Score')
+        ipdb.set_trace()
         
     def zscore_trace(self,trace):
         """ Using a sliding window, trace is zscored. 

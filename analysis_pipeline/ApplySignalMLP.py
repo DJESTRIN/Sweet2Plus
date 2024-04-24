@@ -1,21 +1,10 @@
 import torch
 import numpy as np
 import glob,os
-from torch.utils.data import Dataset
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import precision_score
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import f1_score
-from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
-from torch import nn
-from torch.utils.data import DataLoader
 import ipdb
 import tqdm
 import matplotlib.pyplot as plt
-import argparse
-from SignalMLP import downsample_array, normalize_trace,NeuralNetwork
+from SignalMLP import downsample_array, normalize_trace, NeuralNetwork
 
 class MLPapply():
     def __init__(self,model_path,data_path,plot_examples=False):
@@ -101,22 +90,66 @@ class MLPapply():
 
 class RunMLPFull():
     def __init__(self,model_path,search_string):
-        self.model
+        self.model_path=model_path
+        self.search_string=search_string
         self.all_real=[]
         self.all_noise=[]
-    main():
-    """ Run MLP on all Signals
-    Find F.npy files
-    Apply MLP
-    Save new MLP files
-    """
+
+    def find_files(self):
+        #get all the F.npy files in folder of interest
+        self.Ffiles=glob.glob(self.search_string)
+
+    def run_classification(self):
+        #run the MLP on each found file
+        for file in self.Ffiles:
+            mlpoh=MLPapply(model_path=self.model_path,data_path=file,plot_examples=False)
+            real_traces,noise=mlpoh()
+            self.all_real.append(real_traces)
+            self.all_noise.append(noise)
+    
+    def quickplot_all(self):
+        #plot all real traces and fake
+        plt.figure(figsize=(5,40),dpi=300)
+        spacer=0
+        counter=0
+        for subject in self.all_real:
+            subject=np.asarray(subject)
+            for trace in subject:
+                if counter%100==0:
+                    traceoh=((trace-np.min(trace))/(np.max(trace)-np.min(trace)))+spacer
+                    plt.plot(traceoh,color='black')
+                    spacer+=1
+                counter+=1
+        
+        plt.savefig('all_real_traces.pdf')
+        plt.close()
+
+        plt.figure(figsize=(5,40),dpi=300)
+        spacer=0
+        counter=0
+        for subject in self.all_noise:
+            subject=np.asarray(subject)
+            for trace in subject:
+                if counter%100==0:
+                    try:
+                        traceoh=((trace-np.min(trace))/(np.max(trace)-np.min(trace)))+spacer
+                    except:
+                        traceoh=trace+spacer
+                    plt.plot(traceoh,color='black')
+                    spacer+=1
+                counter+=1
+        
+        plt.savefig('all_noise_traces.pdf')
+        plt.close()
+
 
 if __name__=='__main__':
-    data=r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day14\24-4-2\24-4-2_C4620083_M3_R1-115\suite2p\plane0\F.npy'
+    data=r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\**\*24*\*24*\suite2p\*plane*\F.npy'
     model=r'C:\Users\listo\twophoton\analysis_pipeline\best_model_weights.pth'
-    mlpoh=MLPapply(model_path=model,data_path=data,plot_examples=True)
-    mlpoh()
-
+    MLPs=RunMLPFull(model_path=model,search_string=data)
+    MLPs.find_files()
+    MLPs.run_classification()
+    MLPs.quickplot_all()
 
         
 
