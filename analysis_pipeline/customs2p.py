@@ -50,6 +50,7 @@ class get_s2p():
         searchstring=os.path.join(self.datapath,'**/F_mlp.npy')
         res = glob.glob(searchstring,recursive=True)
         if not res:
+            raise ValueError('We are finished with running suite2p')
             self.auto_run()
             self.get_reference_image()
         self.convert_motion_corrected_images()

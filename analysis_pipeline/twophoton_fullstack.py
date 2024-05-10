@@ -12,8 +12,8 @@ from customs2p import get_s2p,manual_classification
 from quickgui import quickGUI
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans
-from SaveLoadObj import SaveObj,LoadObj
 import tqdm
+from math import dist as dis
 sns.set_style('whitegrid')
 
 class parse_s2p(manual_classification):
@@ -24,13 +24,9 @@ class parse_s2p(manual_classification):
 
     def __call__(self):
         super().__call__()
-        ipdb.set_trace()
         self.parallel_zscore()
-        ipdb.set_trace()
         self.plot_all_neurons('Frames','Z-Score + i')
-        ipdb.set_trace()
         self.plot_neurons('Frames','Z-Score')
-        ipdb.set_trace()
         
     def zscore_trace(self,trace):
         """ Using a sliding window, trace is zscored. 
@@ -131,7 +127,8 @@ class funcational_classification(parse_s2p):
         self.plot_all_neurons_with_trials('Frames','Z-Score DF',self.trial_list)
         self.get_baseline_AUCs()
         self.get_event_aucs(self.auc_period)
-        #self.kmeans_clustering()
+        self.kmeans_clustering()
+        self.trial_list = ['Vanilla','PeanutButter','Water','FoxUrine']
         for i,trial_name in enumerate(self.trial_list):
             if not self.so.all_evts_imagetime[i]:
                 print(f'There are no {trial_name} trials for this subject: Cage {self.cage} mouse {self.mouse}')
@@ -289,6 +286,7 @@ class funcational_classification(parse_s2p):
         kmeans = KMeans(n_clusters=final_k).fit(auc_array)
 
         # Generate Radar plot with Kmeans
+        self.classifications=kmeans.labels_
         labels=['Vanilla','Peanut Butter', 'Water', 'Fox Urine']
         radar_plot(labels,auc_array,'All Neurons Kmeans','kmeans_radar.pdf',single_neuron=False,Grouping=[kmeans.labels_])
         
@@ -385,11 +383,11 @@ class corralative_activity(funcational_classification):
         correlations=data.corr(method='pearson')
 
         # Rank order the neurons based on highest to lowest correlations
-        cor_rankings=correlations.sum(axis=1)
-        order = np.argsort(cor_rankings)
-        order = order[::-1] # We want the highest correlations at the top of graph. 
-        data_sorted=data[order]
-        correlations=data_sorted.corr(method='pearson')
+        #cor_rankings=correlations.sum(axis=1)
+        #order = np.argsort(cor_rankings)
+        #order = order[::-1] # We want the highest correlations at the top of graph. 
+        #data_sorted=data[order]
+        #correlations=data_sorted.corr(method='pearson')
 
         palleteoh=sns.color_palette("coolwarm", as_cmap=True)
         plt.figure(figsize=(15,15),dpi=300)
@@ -400,9 +398,28 @@ class corralative_activity(funcational_classification):
         plt.savefig(output_filename)
 
         # Get correlation values other than 1. 
-        corr_ed=correlations
-        corr_ed[corr_ed==1]=np.nan
+        corr_ed=np.copy(correlations)
+        corr_ed[corr_ed==1]=np.nan 
         return corr_ed, correlations
+
+    def get_euclidian_distance(self):
+        try:
+            aucsoh=np.asarray(self.auc_vals)
+            water_auc_vals=aucsoh[:,0]
+            vanilla_auc_vals=aucsoh[:,1]
+            peanut_auc_vals=aucsoh[:,2]
+            tmt_auc_vals=aucsoh[:,3]
+
+            self.water_tmt_d=dis(water_auc_vals,tmt_auc_vals)
+            self.vanilla_tmt_d=dis(vanilla_auc_vals,tmt_auc_vals)
+            self.peanut_tmt_d=dis(peanut_auc_vals,tmt_auc_vals)
+            self.water_vanilla_d=dis(water_auc_vals,vanilla_auc_vals)
+            self.water_peanut_d=dis(water_auc_vals,peanut_auc_vals)
+            self.vanilla_peanut_d=dis(vanilla_auc_vals,peanut_auc_vals)
+
+            self.state_distances=[self.water_tmt_d,self.vanilla_tmt_d,self.peanut_tmt_d,self.water_vanilla_d,self.water_peanut_d,self.vanilla_peanut_d]
+        except:
+            ipdb.set_trace()
         
 class pipeline():
     """ A general pipeline which pulls data through corralative activity nested class
@@ -425,6 +442,10 @@ class pipeline():
                 dday=7
             if 'DAY14' in diroh.upper():
                 dday=14
+            if 'DAY30' in diroh.upper():
+                dday=30
+            if 'DAY37' in diroh.upper():
+                dday=37
             _,_,_,_,_,_,cage,mouse,_=diroh.upper().split('_')
             for bdiroh in behdirs:
                 if 'DAY1' in bdiroh.upper():
@@ -433,6 +454,10 @@ class pipeline():
                     bday=7
                 if 'DAY14' in bdiroh.upper():
                     bday=14
+                if 'DAY30' in bdiroh.upper():
+                    bday=30
+                if 'DAY37' in bdiroh.upper():
+                    bday=37
                 _,_,_,_,_,_,cageb,mouseb = bdiroh.upper().split('_')
                 if cage==cageb and mouse==mouseb and dday==bday:
                     self.final_list.append([diroh,bdiroh])

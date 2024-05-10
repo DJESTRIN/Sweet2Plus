@@ -21,7 +21,7 @@ class MLPapply():
         self.dstraces=self.downsample_array(self.traces) # downsampled traces
         pseudodata=np.ones(shape=(self.dstraces.shape[0],)) #This can be ignored, acts as a place holder
         self.normtraces,_=normalize_trace(traces=self.dstraces,labels=pseudodata) #normalized data
-
+        ipdb.set_trace()
         #set up output path
         output_path=os.path.dirname(data_path)
         self.output_file=os.path.join(output_path,'F_mlp.npy')

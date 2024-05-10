@@ -15,7 +15,7 @@ class load_serial_output():
         last_trial = np.where(self.sync[:,1]==self.all_evts[3][-1]) #Sanity check to validate 2P was recording
         #self.plot_trials() 
         self.crop_data()
-        #self.graph_aurduino_serialoutput_rate()
+        self.graph_aurduino_serialoutput_rate()
         return last_trial
     
     def get_file_name(self):
@@ -82,8 +82,11 @@ class load_serial_output():
         if len(stops)<1:
             stops=imagecount[-1]-1
             stops=np.where(imagecount==stops)
-            stops=[int(stops[0][-1])]
-
+            try:
+                stops=[int(stops[0][-1])]
+            except:
+                raise Exception("Sync File has no stops, suggesting recording error")
+    
         if len(stops)>1:
             stops=[stops[-1]]
 
@@ -169,9 +172,10 @@ class load_serial_output():
                 finish=len(fav)-i
                 break
 
+        colorsoh=['#deb441','#d649fa','#21a1e9','#fa4b4b']
         plt.figure()
         for i in range(5,9):
-            plt.plot(self.sens[start:finish,i]+(i*1.5-5))
+            plt.plot(self.sens[start:finish,i]+(i*1.5-5),colorsoh[i-5])
         filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'.jpg')
         pres=self.sens[start:finish,1]
         pres=(pres-pres.min())/(pres.max()-pres.min())+1
@@ -180,7 +184,7 @@ class load_serial_output():
         filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'pressure.jpg')
         plt.xlabel('Loop Number')
         plt.ylabel('On or Off')
-        plt.legend(['Vanilla','Peanut Butter','Water', 'Fox Urine','Normalized Pressure'],loc='upper left')
+        #plt.legend(['Vanilla','Peanut Butter','Water', 'Fox Urine','Normalized Pressure'],loc='upper left')
         plt.savefig(filename)
         plt.close()
 
@@ -217,11 +221,15 @@ class load_serial_output():
 
 
 if __name__=='__main__':
-    behdirs = glob.glob(r'C:\Users\listo\tmtassay\TMTAssay\Day1\serialoutput\**\*24*')
+    behdirs = glob.glob(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\serialoutputdata\Day1\**\*24*')
+
+    ipdb.set_trace()
     #behdirs=behdirs[1:]
     working=[]
     for pathoh in behdirs:
+        print(pathoh)
         so_obj = load_serial_output(pathoh)
         last_trial = so_obj()
         working.append(last_trial)
+        break
 
