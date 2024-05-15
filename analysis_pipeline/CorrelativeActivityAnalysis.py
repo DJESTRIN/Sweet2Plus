@@ -18,6 +18,7 @@ import warnings
 import tqdm
 import pickle
 from SaveLoadObjs import SaveObj
+import matplotlib.pyplot as plt
 #warnings.filterwarnings("ignore")
 
 """ NEED TO PLOT CORRELATIONS..
@@ -124,28 +125,43 @@ class corralative_activity(corralative_activity):
 class pipeline(pipeline):
     def main(self):
         self.recordings=[]
+        self.state_distances=[]
         for i,(imagepath,behpath) in tqdm.tqdm(enumerate(self.final_list), total=len(self.final_list), desc='Current Recording: '):
-            # try:
-            if i==0:
-                continue
-            #Get behavior data object
-            self.so_obj = load_serial_output(behpath)
-            last_trial = self.so_obj()
+            try:
+                if i==0:
+                    continue
+                #Get behavior data object
+                self.so_obj = load_serial_output(behpath)
+                last_trial = self.so_obj()
 
-            # Get twophon data object
-            self.s2p_obj = corralative_activity(datapath=imagepath,serialoutput_object=self.so_obj)
-            self.s2p_obj()
-            self.s2p_obj.get_euclidian_distance()
+                # Get twophon data object
+                self.s2p_obj = corralative_activity(datapath=imagepath,serialoutput_object=self.so_obj)
+                self.s2p_obj()
+                self.s2p_obj.get_euclidian_distance()
+                
+                ipdb.set_trace()
+                SaveObj(FullPath='C:\tmt_assay\object.json', CurrentObject=self.s2p_obj)
+                self.state_distances.append(self.s2p_obj.state_distances)
 
-            #Append object as attribute to list
-            self.recordings.append(self.s2p_obj)
-            # except:
-            #     ipdb.set_trace()
-            #     string = f'Error with loop {i}, see {imagepath} or {behpath}'
-            #     print(string)
+                #Append object as attribute to list
+                self.recordings.append(self.s2p_obj)
+            except:
+                string = f'Error with loop {i}, see {imagepath} or {behpath}'
+                print(string)
+                
         return self.recordings
+    
+    def plot_state_distances(self):
+        plt.figure(figsize=(10,10),dpi=300)
+        for moh in self.state_distances:
+            plt.plot(np.asarray(moh))
+
+        plt.savefig('State_distances.jpg')
+        aroh = np.asarray(self.state_distances)
+        np.save('state_distances.npy',aroh)
 
 if __name__=='__main__':
     alldata=pipeline(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\serialoutputdata\Day**\**\*24*' , r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day**\**\*24*')
     alldata()
+    alldata.plot_state_distances()
     correlations(alldata)
