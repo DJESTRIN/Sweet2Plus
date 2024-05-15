@@ -19,6 +19,8 @@ import tqdm
 import pickle
 from SaveLoadObjs import SaveObj
 import matplotlib.pyplot as plt
+import os
+import pandas as pd
 #warnings.filterwarnings("ignore")
 
 """ NEED TO PLOT CORRELATIONS..
@@ -138,9 +140,8 @@ class pipeline(pipeline):
                 self.s2p_obj = corralative_activity(datapath=imagepath,serialoutput_object=self.so_obj)
                 self.s2p_obj()
                 self.s2p_obj.get_euclidian_distance()
-                
-                ipdb.set_trace()
-                SaveObj(FullPath='C:\tmt_assay\object.json', CurrentObject=self.s2p_obj)
+
+                SaveObj(FullPath=os.path.join(self.s2p_obj.datapath,'objfile.json'), CurrentObject=self.s2p_obj)
                 self.state_distances.append(self.s2p_obj.state_distances)
 
                 #Append object as attribute to list

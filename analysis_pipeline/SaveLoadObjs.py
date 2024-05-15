@@ -49,10 +49,17 @@ def LoadObj(FullPath: str):
     Outputs:
     The object you saved in that json file
     """
+    import json
+    import numpy as np
+
     with open(FullPath, 'r') as file:
         big_list = json.load(file)
+
     
-    CurrentObject = corralative_activity()
+    class dataholder:
+        def __init__(self):
+            return     
+    CurrentObject = dataholder
 
     #Append everything of interest
     CurrentObject.datapath=big_list[0]
@@ -66,7 +73,7 @@ def LoadObj(FullPath: str):
     CurrentObject.ztraces_copy=np.asarray(big_list[8])
     CurrentObject.ztraces=np.asarray(big_list[9])
     CurrentObject.resultpath_neur_traces=big_list[10]
-    CurrentObject.so.all_evts_imagetime=big_list[11]
+    CurrentObject.all_evts_imagetime=big_list[11]
     CurrentObject.trial_list=big_list[12]
     CurrentObject.resultpath_neur=big_list[13]
     CurrentObject.first_trial_time=big_list[14]
@@ -78,3 +85,4 @@ def LoadObj(FullPath: str):
     return CurrentObject
 
 
+ooh = LoadObj(r'C:\Users\listo\twophoton\summary_data\example_obj.json')
