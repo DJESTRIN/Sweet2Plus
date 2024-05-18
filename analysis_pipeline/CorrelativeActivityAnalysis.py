@@ -24,11 +24,16 @@ import pandas as pd
 #warnings.filterwarnings("ignore")
 
 """ NEED TO PLOT CORRELATIONS..
-NEED TO ALSO PLOT AUC values across trial types for each neuron to get averages """
+NEED TO ALSO PLOT AUC values across trial types for each neuron to get averages 
+
+excel sheet needs classification column...
+state distances needs to be parsable by day
+need auc values across trial types
+
+"""
 
 def correlations(primary_obj):
     """ Compare correlation across each neuron in each mouse across times """
-    ipdb.set_trace()
     #Analyze baseline correlations across sessions
     parse_info=[] # Empty list to put animal info data (cage #, mouse # etc)
     correlation_data=[] #Empty list to put correlation data into
@@ -92,6 +97,7 @@ def correlations(primary_obj):
 
     #Build tall dataset
     counter=0
+    ipdb.set_trace() # why was classifications not added?
     for info,data in zip(parse_info,av_corrs_data):
         (bl,rew,tmt,post,neuron_labels)=data
         try:
@@ -117,8 +123,6 @@ def correlations(primary_obj):
 
     DF.to_csv('repeatedmeasures_correlations_all.csv', index=False)  
     ipdb.set_trace()
-    # Get PETHS and classify neurons by activity
-    # Look at each of above correlations with respect to functional classification of neurons 
 
 class corralative_activity(corralative_activity):
     def threshold_neurons(self):
