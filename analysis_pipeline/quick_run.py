@@ -98,41 +98,41 @@ def sep_correlations(objoh):
 
         neuron_labels=np.asarray(neuron_labels)
 
-        ipdb.set_trace()
         tmt_start = objoh.all_evts_imagetime[3][0] #Get the first trial time. Baseline activity is everything preceding
         tmt_end = objoh.all_evts_imagetime[3][4] 
 
         # Parse traces
         ztracesoh=np.copy(objoh.ztraces) #Make a copy of the trace data
 
+        # Threat activated neurons
+        threat_neurons=ztracesoh[np.where(neuron_labels==0)[0],:]
+        baselineztracesoh=threat_neurons[:,:int(start_time)] #Crop trace data 0 --> start time
+        rewardztracesoh=threat_neurons[:,int(start_time):int(tmt_start)] 
+        tmtztracesoh=threat_neurons[:,int(tmt_start):int(tmt_end)] 
+        posttmttracesoh=threat_neurons[:,int(tmt_end):] 
+        threat_blcorr, correlations = get_activity_correlation(baselineztracesoh) #Calculate correlation data
+        threat_rewcorr, correlations = get_activity_correlation(rewardztracesoh) #Calculate correlation data
+        threat_tmtcorr, correlations = get_activity_correlation(tmtztracesoh) #Calculate correlation data
+        threat_posttmtcorr, correlations = get_activity_correlation(posttmttracesoh) #Calculate correlation data
+
+        # Non-hreat activated neurons
+        nonthreat_neurons=ztracesoh[np.where(neuron_labels==1)[0],:]
+        baselineztracesoh=nonthreat_neurons[:,:int(start_time)] #Crop trace data 0 --> start time
+        rewardztracesoh=nonthreat_neurons[:,int(start_time):int(tmt_start)] 
+        tmtztracesoh=nonthreat_neurons[:,int(tmt_start):int(tmt_end)] 
+        posttmttracesoh=nonthreat_neurons[:,int(tmt_end):] 
+        nonthreat_blcorr, correlations = get_activity_correlation(baselineztracesoh) #Calculate correlation data
+        nonthreat_rewcorr, correlations = get_activity_correlation(rewardztracesoh) #Calculate correlation data
+        nonthreat_tmtcorr, correlations = get_activity_correlation(tmtztracesoh) #Calculate correlation data
+        nonthreat_posttmtcorr, correlations = get_activity_correlation(posttmttracesoh) #Calculate correlation data
 
 
-        baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time
-        rewardztracesoh=ztracesoh[:,int(start_time):int(tmt_start)] 
-        tmtztracesoh=ztracesoh[:,int(tmt_start):int(tmt_end)] 
-        posttmttracesoh=ztracesoh[:,int(tmt_end):] 
-
-        # Get correlations
-        blcorr, correlations = get_activity_correlation(baselineztracesoh) #Calculate correlation data
-        rewcorr, correlations = get_activity_correlation(rewardztracesoh) #Calculate correlation data
-        tmtcorr, correlations = get_activity_correlation(tmtztracesoh) #Calculate correlation data
-        posttmtcorr, correlations = get_activity_correlation(posttmttracesoh) #Calculate correlation data
         day,cage,mouse=stripinfo(objoh.datapath)
         info = [day,cage,mouse] #Get info data
-    
-       
     except:
-        # Parse traces
-        ztracesoh=np.copy(objoh.ztraces) #Make a copy of the trace data
-        baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time
-
-        # Get correlations
-        blcorr, correlations = get_activity_correlation(baselineztracesoh) #Calculate correlation data
-        rewcorr,tmtcorr,posttmtcorr,neuron_labels=np.nan,np.nan,np.nan,'NA'
-        day,cage,mouse=stripinfo(objoh.datapath)
-        info = [day,cage,mouse] #Get info data
-
-    return info,blcorr,rewcorr,tmtcorr,posttmtcorr,neuron_labels
+        ipdb.set_trace()
+    
+    return info,threat_blcorr,threat_rewcorr,threat_tmtcorr,threat_posttmtcorr,nonthreat_blcorr,nonthreat_rewcorr,nonthreat_tmtcorr,nonthreat_posttmtcorr,neuron_labels
 
 def build_tall(big_list):
     for i,uid in enumerate(big_list):
@@ -223,15 +223,51 @@ def build_auc_tall(listoh):
     
     return DFall
 
+def build_tall_sep(listoh):
+    count=0
+    for uid in listoh:
+        info,threat_blcorr,threat_rewcorr,threat_tmtcorr,threat_posttmtcorr,nonthreat_blcorr,nonthreat_rewcorr,nonthreat_tmtcorr,nonthreat_posttmtcorr,neuron_labels=uid
+        day,cage,mouse=info
+
+        # Get average pearson correlation 
+        threat_blcorr=np.nanmean(threat_blcorr,axis=1)
+        threat_rewcorr=np.nanmean(threat_rewcorr,axis=1)
+        threat_tmtcorr=np.nanmean(threat_tmtcorr,axis=1)
+        threat_posttmtcorr=np.nanmean(threat_posttmtcorr,axis=1)
+        nonthreat_blcorr=np.nanmean(nonthreat_blcorr,axis=1)
+        nonthreat_rewcorr=np.nanmean(nonthreat_rewcorr,axis=1)
+        nonthreat_tmtcorr=np.nanmean(nonthreat_tmtcorr,axis=1)
+        nonthreat_posttmtcorr=np.nanmean(nonthreat_posttmtcorr,axis=1)
+
+        for neuron_id, (bl,rew,tmt,post) in enumerate(zip(threat_blcorr,threat_rewcorr,threat_tmtcorr,threat_posttmtcorr)):
+            if count==0:
+                DFall=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'ThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0])
+            else:
+                DFoh=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'ThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0])
+                DFall=pd.concat([DFall,DFoh])
+            count+=1
+
+        for neuron_id, (bl,rew,tmt,post) in enumerate(zip(nonthreat_blcorr,nonthreat_rewcorr,nonthreat_tmtcorr,nonthreat_posttmtcorr)):
+            if count==0:
+                DFall=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'NonThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0])
+            else:
+                DFoh=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'NonThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0])
+                DFall=pd.concat([DFall,DFoh])
+            count+=1
+        
+    return DFall
 
 if __name__=='__main__':
     objs = glob.glob(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\**\**\**\*objfile.json*')
     auc_list=[]
+    parsed_list=[]
     for ln,ooh_str in enumerate(objs):
         ooh=LoadObj(ooh_str)
         info,aucsoh,neuron_labels = get_auc_data(ooh)
         auc_list.append([info,aucsoh,neuron_labels])
-        # info,blcorr,rewcorr,tmtcorr,posttmtcorr,neuron_labels = sep_correlations(ooh)
+        info,threat_blcorr,threat_rewcorr,threat_tmtcorr,threat_posttmtcorr,nonthreat_blcorr,nonthreat_rewcorr,nonthreat_tmtcorr,nonthreat_posttmtcorr,neuron_labels = sep_correlations(ooh)
+        parsed_list.append([info,threat_blcorr,threat_rewcorr,threat_tmtcorr,threat_posttmtcorr,nonthreat_blcorr,nonthreat_rewcorr,nonthreat_tmtcorr,nonthreat_posttmtcorr,neuron_labels])
+        
         # Big_list.append([info,blcorr,rewcorr,tmtcorr,posttmtcorr,neuron_labels])
         # if ln==0:
         #     DFinal=vector_angle(ooh)
@@ -239,10 +275,11 @@ if __name__=='__main__':
         #     dfoh=vector_angle(ooh)
         #     DFinal=pd.concat([DFinal,dfoh])
     
-    DFaucfinal=build_auc_tall(auc_list)
-    DFaucfinal.to_csv('auc_tall.csv',index=False)
+    #DFaucfinal=build_auc_tall(auc_list)
+    #DFaucfinal.to_csv('auc_tall.csv',index=False)
     #DFinal.to_csv('vector_statedata.csv',index=False)
     #DFinal2=build_tall(Big_list)
     #DFinal2.to_csv('correlation_by_group.csv',index=False)
+    DFinal_sep=build_tall_sep(parsed_list)
     ipdb.set_trace()
 

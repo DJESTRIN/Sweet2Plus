@@ -4,6 +4,9 @@ import ipdb
 from itertools import combinations
 import numpy as np
 import pandas as pd
+from sklearn import svm
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 def build_svm_data(obj,max_neurons):
     # For each trial type, get auc of activity for X frames after. 
@@ -45,4 +48,14 @@ if __name__=='__main__':
                 X=np.vstack((X,auc))
             count+=1
     y=np.asarray(y)
+    np.save('X.npy',X)
+    np.save('y.npy',y)
+    ipdb.set_trace()
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2,shuffle=True,stratifpy=y)
+    # clf = svm.SVC()
+    # clf.fit(X_train, y_train)
+    # predicted = clf.predict(X_train)
+    # accuracy_score(y_train,predicted)
+    # predicted = clf.predict(X_test)
+    # accuracy_score(y_test,predicted)
     ipdb.set_trace()
