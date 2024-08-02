@@ -281,5 +281,6 @@ if __name__=='__main__':
     #DFinal2=build_tall(Big_list)
     #DFinal2.to_csv('correlation_by_group.csv',index=False)
     DFinal_sep=build_tall_sep(parsed_list)
+    DFinal_sep.to_csv('correlation_by_group_sep.csv',index=False)
     ipdb.set_trace()
 
