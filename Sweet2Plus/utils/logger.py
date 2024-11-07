@@ -1,103 +1,59 @@
-from rich.console import Console
-from rich.table import Table
-from rich.live import Live
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Module name: logger.py
+Description: Write and read logs to text files for logger to monitor. 
+Author: David Estrin
+Version: 1.0
+Date: 10-15-2024
+"""
+import os
 import time
+from projectmanager.CLIlogger import Logger
 
-console = Console()
+# Function to write a log message to a text file
+def write_log(log_dir, message):
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, f"e_log.txt")
+    with open(log_file, "a") as f:
+        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {message}\n")
 
-class Logger:
-    def __init__(self, data):
-        self.data = data
-        self.step_column = 4
-        self.progress_column = 5
-        self.live = None  # Placeholder for the Live object
-
-    def generate_table(self):
-        """Generate and return a table"""
-        table = Table(title="Sweet 2 Plus Status:")
-
-        table.add_column("Cage", justify="left", style="bold cyan", no_wrap=True)
-        table.add_column("Subject", justify="left", style="bold green", no_wrap=True)
-        table.add_column("Group", justify="left", style="italic magenta ", no_wrap=True)
-        table.add_column("Day", justify="left", style="italic yellow", no_wrap=True)
-        table.add_column("Step", justify="center", style="bold red", no_wrap=True)
-        table.add_column("Progress", justify="right", style="bright_magenta", no_wrap=True)
-
-        if self.data:
-            for cage, subject, group, day, step, progress in self.data:
-                table.add_row(cage, subject, group, day, step, f"{progress}%")
-
-        return table
-
-    def start_live(self):
-        """Start the live display"""
-        self.live = Live(self.generate_table(), console=console, refresh_per_second=4)
-        self.live.start()
-
-    def stop_live(self):
-        """Stop the live display"""
-        if self.live:
-            self.live.stop()
-
-    def update_table(self, cage, subject, group, day, step, progress):
-        """Update the table for Sweet 2 Plus and refresh"""
-        # Get matches based on cage, subject, group and date
-        matching_indices = [
-            index for index, row in enumerate(self.data)
-            if row[0] == cage and row[1] == subject and row[2] == group and row[3] == day
-        ]
-
-        matching_index = matching_indices[0] if matching_indices else None
-
-        if matching_index is not None:
-            # Update that row with new information
-            self.data[matching_index][self.step_column] = step
-            self.data[matching_index][self.progress_column] = progress
-
-            # Refresh the table with the updated data
-            if self.live:
-                self.live.update(self.generate_table())
-        
-        else:
-            
+# Function to read the latest log message from a text file
+def read_latest_log(log_dir):
+    log_file = os.path.join(log_dir, f"e_log.txt")
+    try:
+        with open(log_file, "r") as f:
+            lines = f.readlines()
+            return lines[-1].strip() if lines else "No logs yet"
+    except FileNotFoundError:
+        return "Log file not found"
+    
+def update_log(log_dir, message):
+    log_file = os.path.join(log_dir, f"e_log.txt")
+    try:
+        with open(log_file, "r+") as f:
+            lines = f.readlines()
+            if lines:
+                # Overwrite the last line with the new message
+                lines[-1] = f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {message}\n"
+            else:
+                # If file is empty, write the message as the first line
+                lines.append(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {message}\n")
+            f.seek(0)  # Go back to the start of the file
+            f.writelines(lines)  # Write the updated content
+            f.truncate()  # Remove any leftover lines if file was longer
+    except FileNotFoundError:
+        # If the file doesn't exist, write the new message as the first line
+        write_log(log_dir, message)
 
 if __name__ == '__main__':
-    data = [
-        ["122", "233", "Group1", "2024-10-15", "Active", "1"],
-        ["123", "234", "Group1", "2024-10-14", "Inactive", "2"],
-        ["124", "235", "Group2", "2024-10-13", "Active", "3"],
-        ["122", "233", "Group1", "2024-10-14", "Active", "4"],
-        ["125", "236", "Group2", "2024-10-12", "Inactive", "5"],
-        ["126", "237", "Group2", "2024-10-11", "Active", "6"],
-        ["122", "238", "Group3", "2024-10-10", "Active", "7"],
-        ["127", "239", "Group3", "2024-10-09", "Inactive", "8"],
-        ["128", "240", "Group4", "2024-10-08", "Active", "9"],
-        ["123", "234", "Group1", "2024-10-07", "Inactive", "10"],
-        ["122", "233", "Group1", "2024-10-06", "Active", "11"],
-        ["125", "236", "Group2", "2024-10-05", "Inactive", "12"],
-        ["126", "237", "Group2", "2024-10-04", "Active", "13"],
-        ["124", "235", "Group2", "2024-10-03", "Inactive", "14"],
-        ["122", "233", "Group1", "2024-10-02", "Active", "15"]
-    ]
-
-    cli_log = Logger(data)
-    cli_log.start_live()
-
+    # Build an example table
+    cli_log = Logger('Example Table:')
     try:
-        # Simulate some updates
-        time.sleep(2)
-        cli_log.update_table("122", "233", "Group1", "2024-10-14", "Dave", "100")
-        time.sleep(2)
-        cli_log.update_table("124", "235", "Group2", "2024-10-13", "Processing", "75")
-        time.sleep(2)
-
-        for i in range(100):
+        cli_log.start_live()
+        for i in range(1000):
             time.sleep(0.1)
-            cli_log.update_table("122", "233", "Group1", "2024-10-02", "TheDaveStep", str(i))
-            cli_log.update_table("123", "234", "Group1", "2024-10-02", "TheDaveStep", str(i))
-            cli_log.update_table("122", "233", "Group1", "2024-10-02", "TheDaveStep", str(i))
-            cli_log.update_table("122", "233", "Group1", "2024-10-02", "TheDaveStep", str(i))
-
+            cli_log.update_table("124", "235", "Group24", "2024-10-13", "Processing", str(i))
     finally:
-        # Ensure the live display stops properly
         cli_log.stop_live()
+
