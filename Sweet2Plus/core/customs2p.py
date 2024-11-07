@@ -1,5 +1,13 @@
-""" Custom S2P by David James Estrin
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
+Module name: customs2p.py
+Description: 
+Author: David Estrin
+Version: 1.0
+Date: 10-15-2024
+"""
+# Load dependencies
 import suite2p as s2p
 import matplotlib.pyplot as plt 
 import os,glob
@@ -9,6 +17,8 @@ import numpy as np
 import cv2
 import tqdm
 from PIL import Image
+import re
+from Sweet2Plus.signalclassifier.ApplySignalMLP import MLPapply as mlpa
 sns.set_style('whitegrid')
 
 class get_s2p():
@@ -29,7 +39,6 @@ class get_s2p():
         if not os.path.exists(self.resultpath_neur): #Make subfolder for neural data
             os.mkdir(self.resultpath_neur)
 
-
         #Set suite2P ops
         self.ops = s2p.default_ops()
         self.ops['batch_size'] = batch_size # we will decrease the batch_size in case low RAM on computer
@@ -47,22 +56,38 @@ class get_s2p():
     
     def __call__(self):
         self.animal_information()
-        searchstring=os.path.join(self.datapath,'**/F_mlp.npy')
-        res = glob.glob(searchstring,recursive=True)
-        if not res:
-            raise ValueError('We are finished with running suite2p')
+
+        # Search for previous F files 
+        searchstring=os.path.join(self.datapath,'**/F.npy')
+        F_file = glob.glob(searchstring,recursive=True)
+        if not F_file:
+            # Run suite2p pipeline
             self.auto_run()
             self.get_reference_image()
-        self.convert_motion_corrected_images()
+            self.convert_motion_corrected_images()
 
-    def animal_information(self):
-        _,_,_,_,_,_,self.cage,self.mouse,_ = self.datapath.split('_')
-        if 'Day1' in self.datapath:
-            self.day=1
-        if 'Day7' in self.datapath:
-            self.day=7
-        if 'Day14' in self.datapath:
-            self.day=14
+        # Search for previous Fmlp files
+        searchstring=os.path.join(self.datapath,'**/F.npy') # Check F file was created
+        F_file = glob.glob(searchstring,recursive=True)
+
+        searchstring=os.path.join(self.datapath,'**/F_mlp.npy')
+        Fmlp_file = glob.glob(searchstring,recursive=True)
+        if F_file:
+            if not Fmlp_file:
+                # Apply mlp to F file
+                model=r'C:\Users\listo\twophoton\analysis_pipeline\best_model_weights.pth'
+                mlp_obj=mlpa(data_path=F_file[0],model_path=model)
+                mlp_obj()
+            else:
+                print("Fmlp file was already previously calculated. Skipping this step...")
+        else:
+            raise("F file was not created. Unable to calculate F_mlp file")
+
+    def animal_information(self,default_pattern = r'day-(\d+)_C(\d+)_M(\d+)_R(\d+)'):
+        # Pull animal information from data path
+        string=os.path.basename(self.datapath)
+        _,self.day,self.cage,self.mouse,self.recording=string.split('_')
+        _,self.day=self.day.split('-')
 
     def auto_run(self):
         self.output_all=s2p.run_s2p(ops=self.ops,db=self.db)

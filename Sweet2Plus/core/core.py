@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Module name: core.py
+Description: Takes serial output data (sync and sens) and creates an object
+Author: David Estrin
+Version: 1.0
+Date: 10-15-2024
+"""
+# Load dependencies
 import numpy as np
 import suite2p as s2p
 import matplotlib.pyplot as plt 
@@ -7,15 +17,16 @@ import pandas as pd
 from multiprocessing.pool import ThreadPool as Pool
 import seaborn as sns
 from behavior import load_serial_output
-from radargraphs import radar_plot
-from customs2p import get_s2p,manual_classification
-from quickgui import quickGUI
+from Sweet2Plus.graphics.radargraphs import radar_plot
+from Sweet2Plus.core.customs2p import get_s2p,manual_classification
+#from Sweet2Plus.core.quickgui import quickGUI
 from sklearn.metrics import silhouette_score
 from sklearn.cluster import KMeans
 import tqdm
 from math import dist as dis
 sns.set_style('whitegrid')
 
+# Build custom classes for parsing suite2p
 class parse_s2p(manual_classification):
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
         super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold) #Use initialization from previous class 
@@ -80,7 +91,7 @@ class parse_s2p(manual_classification):
         # Plot neuron traces and save them without opening
         dataoh = np.copy(self.ztraces)
         fig,ax=plt.subplots(dpi=1200)
-        fig.set_figheight(100)
+        fig.set_figheight(50)
         fig.set_figwidth(15)
         addit=0
         for i,row in enumerate(dataoh):

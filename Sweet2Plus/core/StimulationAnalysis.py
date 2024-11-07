@@ -10,10 +10,10 @@ DRN analysis
     pre, during, between and post.
 """
 from behavior import load_serial_output
-from twophoton_fullstack import pipeline,corralative_activity
+from Sweet2Plus.core.core import pipeline,corralative_activity
 import glob,os
 import numpy as np
-from quickgui import quickGUI
+from Sweet2Plus.core.quickgui import quickGUI
 import ipdb
 import tqdm
 import matplotlib.pyplot as plt

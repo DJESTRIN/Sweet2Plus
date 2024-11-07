@@ -11,17 +11,18 @@ Compare correlation of acitivty:
 (4) Replicate findings from CORT study
 """
 import ipdb
-from twophoton_fullstack import pipeline,corralative_activity 
+from Sweet2Plus.core.core import pipeline,corralative_activity 
 from behavior import load_serial_output
 import numpy as np
 import warnings
 import tqdm
 import pickle
-from SaveLoadObjs import SaveObj
+from Sweet2Plus.core.SaveLoadObjs import SaveObj
 import matplotlib.pyplot as plt
-import os
+import os, glob, re
 import pandas as pd
-#warnings.filterwarnings("ignore")
+import argparse
+warnings.filterwarnings("ignore")
 
 """ NEED TO PLOT CORRELATIONS..
 NEED TO ALSO PLOT AUC values across trial types for each neuron to get averages 
@@ -151,6 +152,7 @@ class pipeline(pipeline):
                 #Append object as attribute to list
                 self.recordings.append(self.s2p_obj)
             except:
+                ipdb.set_trace()
                 string = f'Error with loop {i}, see {imagepath} or {behpath}'
                 print(string)
                 
@@ -165,8 +167,57 @@ class pipeline(pipeline):
         aroh = np.asarray(self.state_distances)
         np.save('state_distances.npy',aroh)
 
+class alternative_pipeline(pipeline):
+    """ Similar pipeline as above, however, written for reorganized file structure on cluster """
+    def __init__(self,base_directory): 
+        self.base_directory=base_directory
+
+    def find_folders_and_files(self,base_directory):
+        # Get all 2P directories
+        pattern = re.compile(r'R\d+')
+        twop_folders = []
+
+        for root, dirs, files in os.walk(base_directory):
+            for dir_name in dirs:
+                if pattern.search(dir_name):
+                    twop_folders.append(os.path.join(root, dir_name))
+
+        # Get all sync and sens files full paths
+        sync_files = glob.glob(os.path.join(base_directory,r'**\*sync*'),recursive=True)
+        sens_files = glob.glob(os.path.join(base_directory,r'**\*sens*'),recursive=True)
+
+        # Get all videos and seperate into different behaviors
+        all_vids = [glob.glob(os.path.join(base_directory,pat),recursive=True) for pat in (r'**\*.mp4',r'**\*.avi')]
+        all_vids = [item for sublist in all_vids for item in sublist]
+        head_fixed_front_vids = [vid for vid in all_vids if 'front' in vid]
+        head_fixed_side_vids = [vid for vid in all_vids if 'side' in vid]
+        tst_vids = [vid for vid in all_vids if 'TST' in vid]
+        openfield_vids = [vid for vid in all_vids if 'openfield' in vid]
+
+        return twop_folders, sync_files, sens_files, head_fixed_front_vids, head_fixed_side_vids, tst_vids, openfield_vids
+
+    def match_directories(self,twop_folders):
+        # Find and match all 2P image folders with corresponding serial output folders
+        self.final_list=[]
+        for diroh in twop_folders:
+            serialoutput_oh = os.path.dirname(diroh)
+            self.final_list.append([diroh,serialoutput_oh])
+    
+    def __call__(self):
+        self.all_dirs = self.find_folders_and_files(self.base_directory)
+        self.match_directories(self.all_dirs[0])
+        self.main()
+
 if __name__=='__main__':
-    alldata=pipeline(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\serialoutputdata\Day**\**\*24*' , r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day**\**\*24*')
+    # Set up command line argument parser
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--root_data_directory',type=str,required=True,help='A parent path containing all of the two-data of interest')
+    args=parser.parse_args()
+
+    # Create all data object containing correlative activity data + other attributres
+    alldata=alternative_pipeline(base_directory=args.root_data_directory)
     alldata()
     alldata.plot_state_distances()
+
+    # Run and graph statistics for all correlation data. 
     correlations(alldata)

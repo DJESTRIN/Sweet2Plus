@@ -1,4 +1,4 @@
-from SaveLoadObjs import LoadObj
+from Sweet2Plus.core.SaveLoadObjs import LoadObj
 import glob,os
 import ipdb
 from itertools import combinations

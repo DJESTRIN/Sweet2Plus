@@ -1,0 +1,12 @@
+numpy
+matplotlib
+pandas
+ipdb
+suite2p
+seaborn
+scikit-learn
+tqdm
+opencv-python
+pillow
+tiffile
+customtkinter

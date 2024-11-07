@@ -1,6 +1,6 @@
 import json
 import numpy as np
-from twophoton_fullstack import corralative_activity
+from Sweet2Plus.core.core import corralative_activity
 
 def SaveObj(FullPath: str, CurrentObject):
     """ Saves custom objects to json file

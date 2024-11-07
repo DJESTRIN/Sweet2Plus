@@ -4,11 +4,11 @@ import glob,os
 import ipdb
 import tqdm
 import matplotlib.pyplot as plt
-from SignalMLP import downsample_array, normalize_trace, NeuralNetwork
+from Sweet2Plus.signalclassifier.SignalMLP import downsample_array, normalize_trace, NeuralNetwork
 
 class MLPapply():
     def __init__(self,model_path,data_path,plot_examples=False):
-        self.model=torch.load(model_path) #Load model as attribute
+        self.model=torch.load(model_path,map_location=torch.device('cpu')) #Load model as attribute
         self.open_data(data_path=data_path)
         self.plot_examples=plot_examples
 
@@ -21,7 +21,7 @@ class MLPapply():
         self.dstraces=self.downsample_array(self.traces) # downsampled traces
         pseudodata=np.ones(shape=(self.dstraces.shape[0],)) #This can be ignored, acts as a place holder
         self.normtraces,_=normalize_trace(traces=self.dstraces,labels=pseudodata) #normalized data
-        ipdb.set_trace()
+    
         #set up output path
         output_path=os.path.dirname(data_path)
         self.output_file=os.path.join(output_path,'F_mlp.npy')
@@ -141,7 +141,6 @@ class RunMLPFull():
         
         plt.savefig('all_noise_traces.pdf')
         plt.close()
-
 
 if __name__=='__main__':
     data=r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\**\*24*\*24*\suite2p\*plane*\F.npy'

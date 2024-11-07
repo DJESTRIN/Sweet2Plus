@@ -1,9 +1,20 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Module name: behavior.py
+Description: Takes serial output data (sync and sens) and creates an object
+Author: David Estrin
+Version: 1.0
+Date: 10-15-2024
+"""
+# Load dependencies
 import matplotlib.pyplot as plt
 import numpy as np
 import os,glob
 import pandas as pd
 import ipdb
 
+# Create custom functions and classes
 class load_serial_output():
     def __init__(self,path):
         self.path = path 
@@ -13,7 +24,7 @@ class load_serial_output():
         self.load_data()
         self.quick_timestamps()
         last_trial = np.where(self.sync[:,1]==self.all_evts[3][-1]) #Sanity check to validate 2P was recording
-        #self.plot_trials() 
+        self.plot_trials() 
         self.crop_data()
         self.graph_aurduino_serialoutput_rate()
         return last_trial
@@ -28,6 +39,9 @@ class load_serial_output():
         files = glob.glob(search_string)
         #Loop through all files in the path and grab data
         for j,file in enumerate(files):
+            if 'sync' not in files[j].lower() and 'sens' not in files[j].lower():
+                continue
+
             file = open(file, "r") # Read file
             content = file.read().splitlines() #Separate into correct shape
             alldata=[] #Generate empty list
@@ -152,10 +166,11 @@ class load_serial_output():
             self.posttrial_period=[alltimestamps[-1], self.sync[:,0].max()]
         else:
             self.posttrial_period=None
-        
-        
 
     def plot_trials(self):
+        if not os.path.isdir(os.path.join(self.path,'figures')):
+            os.mkdir(os.path.join(self.path,'figures'))
+
         # Get start and end
         av=np.sum(self.sens[:,5:],axis=1)
         for i,val in enumerate(av[:-1]):
@@ -168,7 +183,7 @@ class load_serial_output():
         for i,val in enumerate(fav):
             val2=fav[i+1]
             if val==0 and val2==1:
-                print(val2)
+                # print(val2)
                 finish=len(fav)-i
                 break
 
@@ -176,12 +191,12 @@ class load_serial_output():
         plt.figure()
         for i in range(5,9):
             plt.plot(self.sens[start:finish,i]+(i*1.5-5),colorsoh[i-5])
-        filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'.jpg')
+        filename=os.path.join(self.path,'figures',self.outputfilename+'.jpg')
         pres=self.sens[start:finish,1]
         pres=(pres-pres.min())/(pres.max()-pres.min())+1
-        print(pres.min())
+        # print(pres.min())
         plt.plot(pres)
-        filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'pressure.jpg')
+        filename=os.path.join(self.path,'figures',self.outputfilename+'pressure.jpg')
         plt.xlabel('Loop Number')
         plt.ylabel('On or Off')
         #plt.legend(['Vanilla','Peanut Butter','Water', 'Fox Urine','Normalized Pressure'],loc='upper left')
@@ -191,7 +206,9 @@ class load_serial_output():
         #Pressure
         plt.figure()
         plt.plot(self.sens[start:finish,2])
-        filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'temp.jpg')
+
+        filename=os.path.join(self.path,'figures',self.outputfilename+'temp.jpg')
+
         plt.xlabel('Loop Number')
         plt.ylabel('Temp')
         plt.savefig(filename)
@@ -200,7 +217,7 @@ class load_serial_output():
         #Pressure
         plt.figure()
         plt.plot(self.sens[start:finish,3])
-        filename=os.path.join(os.getcwd(),'figures',self.outputfilename+'humidity.jpg')
+        filename=os.path.join(self.path,'figures',self.outputfilename+'humidity.jpg')
         plt.xlabel('Loop Number')
         plt.ylabel('Humidity')
         plt.savefig(filename)  
@@ -218,18 +235,21 @@ class load_serial_output():
         plt.savefig('timehist.jpg')
         plt.close()
 
-
-
 if __name__=='__main__':
-    behdirs = glob.glob(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\serialoutputdata\Day1\**\*24*')
+    # behdirs = glob.glob(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\serialoutputdata\Day1\**\*24*')
 
+    # ipdb.set_trace()
+    # #behdirs=behdirs[1:]
+    # working=[]
+    # for pathoh in behdirs:
+    #     print(pathoh)
+    #     so_obj = load_serial_output(pathoh)
+    #     last_trial = so_obj()
+    #     working.append(last_trial)
+    #     break
+
+    pathoh = r'C:\Users\listo\tmt_experiment_2024_working_file\C4749356_cohort-2_M2_cort\day_0'
+    objoh = load_serial_output(path=pathoh)
+    objoh()
     ipdb.set_trace()
-    #behdirs=behdirs[1:]
-    working=[]
-    for pathoh in behdirs:
-        print(pathoh)
-        so_obj = load_serial_output(pathoh)
-        last_trial = so_obj()
-        working.append(last_trial)
-        break
 
