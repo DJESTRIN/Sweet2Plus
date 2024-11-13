@@ -58,7 +58,7 @@ class get_s2p():
 
         # Log boolean
         self.log_created=False
-        self.log_dir=r'C:\Users\listo\tmt_experiment_2024_working_file\logs'
+        self.log_dir=r'.\logs'
     
     def __call__(self):
         self.animal_information()

@@ -13,6 +13,7 @@ from projectmanager.CLIlogger import Logger
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import ipdb
+import argparse
 
 """ Custom Functions
 Meant for writing, reading and updating 'e_log.txt' files.
@@ -107,7 +108,7 @@ def delete_all_files(directory):
         if os.path.isfile(file_path):
             os.remove(file_path)
 
-def watch_directory(table_name='Example Table:',directory=r"C:\Users\listo\tmt_experiment_2024_working_file\logs",test_mode=False,force_delete_logs=False):
+def watch_directory(table_name='Example Table:',directory=r".\logs",test_mode=False,force_delete_logs=False):
     mylogger=s2p_logger(table_name,directory)
     mylogger.start_live()
 
@@ -149,6 +150,9 @@ def watch_directory(table_name='Example Table:',directory=r"C:\Users\listo\tmt_e
     observer.join()
 
 if __name__ == '__main__':
-    watch_directory(table_name='EstrinJohnson_2P_Experiment',force_delete_logs=True)
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--log_folder',required=True,type=str)
+    args=parser.parse_args()
+    watch_directory(table_name='EstrinJohnson_2P_Experiment',directory=args.log_folder,force_delete_logs=True)
 
 
