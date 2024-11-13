@@ -84,5 +84,5 @@ def LoadObj(FullPath: str):
 
     return CurrentObject
 
-
-ooh = LoadObj(r'C:\Users\listo\twophoton\summary_data\example_obj.json')
+if __name__=='__main__':
+    ooh = LoadObj(r'C:\Users\listo\twophoton\summary_data\example_obj.json')
