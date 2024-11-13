@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import os, glob, re
 import pandas as pd
 import argparse
+from joblib import Parallel, delayed
 warnings.filterwarnings("ignore")
 
 """ NEED TO PLOT CORRELATIONS..
@@ -130,6 +131,27 @@ class corralative_activity(corralative_activity):
         print('MLP file loaded')
 
 class pipeline(pipeline):
+
+    def create_object_from_path(self,paths):
+        imagepath,behpath=paths
+        so_obj = load_serial_output(behpath)
+        last_trial = so_obj()
+
+        # Get twophon data object
+        s2p_obj = corralative_activity(datapath=imagepath,serialoutput_object=so_obj)
+        s2p_obj()
+        s2p_obj.get_euclidian_distance()
+
+        SaveObj(FullPath=os.path.join(s2p_obj.datapath,'objfile.json'), CurrentObject=s2p_obj)
+        return s2p_obj
+
+    def run_parrallel_creation(self):
+        # Run process_directory in parallel across directories
+        self.recordings = Parallel(n_jobs=self.njobs)(delayed(self.create_object_from_path)(paths) for paths in self.final_list)
+
+            # Collect the results back into the list in the main process
+            # self.state_distances.extend(results.state_distances)
+
     def main(self):
         self.recordings=[]
         self.state_distances=[]
@@ -169,8 +191,11 @@ class pipeline(pipeline):
 
 class alternative_pipeline(pipeline):
     """ Similar pipeline as above, however, written for reorganized file structure on cluster """
-    def __init__(self,base_directory): 
+    def __init__(self,base_directory,njobs): 
         self.base_directory=base_directory
+        self.recordings=[]
+        self.state_distances=[]
+        self.njobs=njobs
 
     def find_folders_and_files(self,base_directory):
         # Get all 2P directories
@@ -206,16 +231,18 @@ class alternative_pipeline(pipeline):
     def __call__(self):
         self.all_dirs = self.find_folders_and_files(self.base_directory)
         self.match_directories(self.all_dirs[0])
-        self.main()
+        # self.main()
+        self.run_parrallel_creation()
 
 if __name__=='__main__':
     # Set up command line argument parser
     parser=argparse.ArgumentParser()
     parser.add_argument('--root_data_directory',type=str,required=True,help='A parent path containing all of the two-data of interest')
+    parser.add_argument('--njobs',type=int,required=True,help='A parent path containing all of the two-data of interest')
     args=parser.parse_args()
 
     # Create all data object containing correlative activity data + other attributres
-    alldata=alternative_pipeline(base_directory=args.root_data_directory)
+    alldata=alternative_pipeline(base_directory=args.root_data_directory,njobs=args.njobs)
     alldata()
     alldata.plot_state_distances()
 

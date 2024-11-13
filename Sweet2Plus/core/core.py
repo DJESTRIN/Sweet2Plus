@@ -35,10 +35,15 @@ class parse_s2p(manual_classification):
 
     def __call__(self):
         super().__call__()
+        self.update_log(message_oh='Beginning Z score Neuronal Activity%0') # Update logs
         self.parallel_zscore()
+        self.update_log(message_oh='Finished Z score Neuronal Activity%0') # Update logs
+
+        self.update_log(message_oh='Beginning Plotting Z score Activity%0') # Update logs
         self.plot_all_neurons('Frames','Z-Score + i')
         self.plot_neurons('Frames','Z-Score')
-        
+        self.update_log(message_oh='Finished Plotting Z score Activity%0') # Update logs
+
     def zscore_trace(self,trace):
         """ Using a sliding window, trace is zscored. 
         The sliding window is offset each iteration of the loop
@@ -134,10 +139,15 @@ class funcational_classification(parse_s2p):
     def __call__(self):
         super().__call__()
         #Create Peths per trial type
-        
+        self.update_log(message_oh='Beginning Plotting all Neurons across trials%0') # Update logs
         self.plot_all_neurons_with_trials('Frames','Z-Score DF',self.trial_list)
+
+        self.update_log(message_oh='Getting AUC data%0') # Update logs
         self.get_baseline_AUCs()
+
         self.get_event_aucs(self.auc_period)
+
+        self.update_log(message_oh='Beginning Kmeans clustering%0') # Update logs
         self.kmeans_clustering()
         self.trial_list = ['Vanilla','PeanutButter','Water','FoxUrine']
         for i,trial_name in enumerate(self.trial_list):
@@ -145,6 +155,7 @@ class funcational_classification(parse_s2p):
                 print(f'There are no {trial_name} trials for this subject: Cage {self.cage} mouse {self.mouse}')
             else:
                 self.PETH(self.ztraces_copy,self.so.all_evts_imagetime[i],15,[-10,-5],[0,5],trial_name)
+        self.update_log(message_oh='Finished Kmeans clustering%0') # Update logs
 
     def plot_all_neurons_with_trials(self,x_label,y_label,trial_list):
         # Create a plot of all neurons with vertical lines per trial type

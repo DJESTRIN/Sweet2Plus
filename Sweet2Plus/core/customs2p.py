@@ -19,6 +19,8 @@ import tqdm
 from PIL import Image
 import re
 from Sweet2Plus.signalclassifier.ApplySignalMLP import MLPapply as mlpa
+from Sweet2Plus.utils.logger import write_log, update_log # Custom logger code
+
 sns.set_style('whitegrid')
 
 class get_s2p():
@@ -53,6 +55,10 @@ class get_s2p():
 
         #Set up datapath
         self.db = {'data_path': [self.datapath],}
+
+        # Log boolean
+        self.log_created=False
+        self.log_dir=r'C:\Users\listo\tmt_experiment_2024_working_file\logs'
     
     def __call__(self):
         self.animal_information()
@@ -74,6 +80,10 @@ class get_s2p():
         Fmlp_file = glob.glob(searchstring,recursive=True)
         if F_file:
             if not Fmlp_file:
+                # Update logs
+                message='Beginning applying MLP to F%0'
+                self.update_log(message_oh=message)
+
                 # Apply mlp to F file
                 model=r'C:\Users\listo\twophoton\analysis_pipeline\best_model_weights.pth'
                 mlp_obj=mlpa(data_path=F_file[0],model_path=model)
@@ -89,8 +99,23 @@ class get_s2p():
         _,self.day,self.cage,self.mouse,self.recording=string.split('_')
         _,self.day=self.day.split('-')
 
+        # Write first log entry
+        message='Grabbed Animal Info%0'
+        self.update_log(message_oh=message)
+
+    def update_log(self,message_oh):
+        #### Note: please update this path as a set attribute/init variable
+        if not self.log_created:
+            write_log(log_dir=self.log_dir,cage=self.cage,mouse=self.mouse,group='NA', day=self.day, message=message_oh)
+        else:
+            update_log(log_dir=self.log_dir,cage=self.cage,mouse=self.mouse,group='NA', day=self.day, message=message_oh)
+
     def auto_run(self):
         self.output_all=s2p.run_s2p(ops=self.ops,db=self.db)
+                
+        # Update logs
+        message='Finished s2p autorun%0'
+        self.update_log(message_oh=message)
 
     def get_reference_image(self):
         filename=os.path.basename(self.datapath)
@@ -115,7 +140,7 @@ class get_s2p():
 
     def stack_sort(self,path):
         path,_=path.split('_chan')
-        _,path=path.split('file')
+        _,_,path=path.split('file')
         path=int(path)
         return path
 
@@ -205,9 +230,14 @@ class manual_classification(get_s2p):
     def __call__(self):
         super().__call__()
         self.get_s2p_outputs()
+        self.update_log(message_oh='Getting s2p outputs%0') # Update logs
+
         self.threshold_neurons()
+        self.update_log(message_oh='Thresholding Neurons%0') # Update logs
+
         search_path = os.path.join(self.datapath,'*.tif*')
         self.images = glob.glob(search_path)
+        self.update_log(message_oh='Got all 2P images%0') # Update logs
     
     def scale_image(self,image,scalar):
         image=np.copy(image)
