@@ -85,7 +85,7 @@ class get_s2p():
                 self.update_log(message_oh=message)
 
                 # Apply mlp to F file
-                model=r'C:\Users\listo\twophoton\analysis_pipeline\best_model_weights.pth'
+                model=r'/home/dje4001/Sweet2Plus/best_model_weights.pth'
                 mlp_obj=mlpa(data_path=F_file[0],model_path=model)
                 mlp_obj()
             else:
