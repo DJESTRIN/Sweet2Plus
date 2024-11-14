@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=sweet2p                              # Job name
-#SBATCH --output=%x.out         # Output file name
-#SBATCH --error= %x.err       # Error file name
+#SBATCH --output=./%j.out         # Output file name
+#SBATCH --error=./%j.err       # Error file name
 #SBATCH --ntasks=1                                      # Number of tasks
 #SBATCH --cpus-per-task=4                               # Number of CPUs per task
 #SBATCH --mem=20G                                       # Total memory for the job
