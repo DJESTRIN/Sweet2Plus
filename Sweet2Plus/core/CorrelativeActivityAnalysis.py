@@ -17,7 +17,7 @@ import numpy as np
 import warnings
 import tqdm
 import pickle
-from Sweet2Plus.core.SaveLoadObjs import SaveObj
+from Sweet2Plus.core.SaveLoadObjs import SaveObj, LoadObj
 import matplotlib.pyplot as plt
 import os, glob, re
 import pandas as pd
@@ -133,6 +133,7 @@ class corralative_activity(corralative_activity):
 class pipeline(pipeline):
 
     def create_object_from_path(self,paths):
+        # check and see if obj file already exists
         imagepath,behpath=paths
         so_obj = load_serial_output(behpath)
         last_trial = so_obj()
@@ -237,14 +238,21 @@ class alternative_pipeline(pipeline):
 if __name__=='__main__':
     # Set up command line argument parser
     parser=argparse.ArgumentParser()
-    parser.add_argument('--root_data_directory',type=str,required=True,help='A parent path containing all of the two-data of interest')
-    parser.add_argument('--njobs',type=int,required=True,help='A parent path containing all of the two-data of interest')
+    parser.add_argument('--data_directory',type=str,required=False,help='A parent path containing all of the two-data of interest')
+    parser.add_argument('--njobs',type=int,required=False,help='A parent path containing all of the two-data of interest')
+    parser.add_argument('--single_subject_flag',action='store_true',help='run a single folder containing subject data')
     args=parser.parse_args()
 
-    # Create all data object containing correlative activity data + other attributres
-    alldata=alternative_pipeline(base_directory=args.root_data_directory,njobs=args.njobs)
-    alldata()
-    alldata.plot_state_distances()
+    # Run a single subject's data through pipeline 
+    if args.single_subject_flag:
+        a=1
 
-    # Run and graph statistics for all correlation data. 
-    correlations(alldata)
+    # Run all subjects through pipeline
+    else:
+        # Create all data object containing correlative activity data + other attributres
+        alldata=alternative_pipeline(base_directory=args.data_directory,njobs=args.njobs)
+        alldata()
+        alldata.plot_state_distances()
+
+        # Run and graph statistics for all correlation data. 
+        correlations(alldata)
