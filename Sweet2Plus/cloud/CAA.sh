@@ -4,7 +4,7 @@
 #SBATCH --error=./%j.err       # Error file name
 #SBATCH --ntasks=1                                      # Number of tasks
 #SBATCH --cpus-per-task=4                               # Number of CPUs per task
-#SBATCH --mem=20G                                       # Total memory for the job
+#SBATCH --mem=60G                                       # Total memory for the job
 #SBATCH --time=06:00:00                                 # Time limit (e.g., 1 hour)
 
 # Get inputs from command line
