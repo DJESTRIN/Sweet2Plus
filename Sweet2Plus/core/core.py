@@ -16,7 +16,7 @@ import os,glob
 import pandas as pd
 from multiprocessing.pool import ThreadPool as Pool
 import seaborn as sns
-from behavior import load_serial_output
+from Sweet2Plus.core.behavior import load_serial_output
 from Sweet2Plus.graphics.radargraphs import radar_plot
 from Sweet2Plus.core.customs2p import get_s2p,manual_classification
 #from Sweet2Plus.core.quickgui import quickGUI
