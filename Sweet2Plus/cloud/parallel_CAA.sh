@@ -11,7 +11,7 @@ echo -e "Searching in $root_data_folder \
 
 # Use find to locate folders matching the pattern and submit them to sbatch
 for beh_folder in $(find "$root_data_folder" -type d -name "$folder_name_pattern"); do
-    image_folder=$(find "$beh_folder" -type d -name '*R*')
+    image_folder=$(find "$beh_folder" -type d -name '*_R*')
     #sbatch "$sbatch_script" "$beh_folder" "$image_folder"
     echo "Submitted $beh_folder and $image_folder to sbatch."
 done
