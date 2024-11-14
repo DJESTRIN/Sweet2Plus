@@ -5,9 +5,7 @@ folder_name_pattern=${2:-"*day_*"}
 sbatch_script=${3:-"~/Sweet2Plus/Sweet2Plus/cloud/CCA.sh"}
 
 # Print out info about upcoming run
-echo -e "Searching in $root_data_folder \
-    using pattern $folder_name_pattern \
-    and will run sbatch script $sbatch_script"
+echo -e "Searching in $root_data_folder \nusing pattern $folder_name_pattern \nand will run sbatch script $sbatch_script"
 
 # Use find to locate folders matching the pattern and submit them to sbatch
 counter=0
@@ -16,9 +14,9 @@ for beh_folder in $(find "$root_data_folder" -type d -name "$folder_name_pattern
 
     if [ -n "$image_folder" ]; then
         echo "Submitted $beh_folder and $image_folder to sbatch."
+        sbatch "$sbatch_script" "$beh_folder" "$image_folder"
         counter=$((counter + 1)) 
     fi
-    #sbatch "$sbatch_script" "$beh_folder" "$image_folder"
 done
 
 echo "Submitted a total of $counter jobs for $sbatch_script"
