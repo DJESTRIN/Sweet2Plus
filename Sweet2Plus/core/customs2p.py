@@ -58,7 +58,7 @@ class get_s2p():
 
         # Log boolean
         self.log_created=False
-        self.log_dir=r'.\logs'
+        self.log_dir=r'/home/dje4001/Sweet2Plus/Sweet2Plus/core/logs'
     
     def __call__(self):
         self.animal_information()
