@@ -2,7 +2,7 @@
 # Get Inputs from command line
 root_data_folder=${1:-"/athena/listonlab/scratch/dje4001/mdt02/tmt_experiment_2024_working_file/Animals"}
 folder_name_pattern=${2:-"*day_*"}
-sbatch_script=${3:-"/home/dje4001/Sweet2Plus/Sweet2Plus/cloud/CCA.sh"}
+sbatch_script=${3:-"/home/dje4001/Sweet2Plus/Sweet2Plus/cloud/CAA.sh"}
 
 # Print out info about upcoming run
 echo -e "Searching in $root_data_folder \nusing pattern $folder_name_pattern \nand will run sbatch script $sbatch_script"
