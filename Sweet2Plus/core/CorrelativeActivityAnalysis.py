@@ -239,13 +239,24 @@ if __name__=='__main__':
     # Set up command line argument parser
     parser=argparse.ArgumentParser()
     parser.add_argument('--data_directory',type=str,required=False,help='A parent path containing all of the two-data of interest')
+    parser.add_argument('--beh_directory',type=str,required=False,help='A parent path containing all of the two-data of interest')
     parser.add_argument('--njobs',type=int,required=False,help='A parent path containing all of the two-data of interest')
     parser.add_argument('--single_subject_flag',action='store_true',help='run a single folder containing subject data')
     args=parser.parse_args()
 
     # Run a single subject's data through pipeline 
     if args.single_subject_flag:
-        a=1
+        # Create a serial output object using provided behavior directory
+        so_obj = load_serial_output(args.beh_directory)
+        last_trial = so_obj()
+
+        # Get twophon data object
+        s2p_obj = corralative_activity(datapath=args.data_directory,serialoutput_object=so_obj)
+        s2p_obj()
+        s2p_obj.get_euclidian_distance()
+
+        # Save data to json file for quick loading in future. 
+        SaveObj(FullPath=os.path.join(s2p_obj.datapath,'objfile.json'), CurrentObject=s2p_obj)
 
     # Run all subjects through pipeline
     else:
