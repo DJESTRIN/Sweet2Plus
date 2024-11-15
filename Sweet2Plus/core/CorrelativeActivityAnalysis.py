@@ -50,58 +50,59 @@ def correlations(primary_obj):
     parse_info=[] # Empty list to put animal info data (cage #, mouse # etc)
     correlation_data=[] #Empty list to put correlation data into
     for subjectnumber in range(len(primary_obj.recordings)):    #Loop over subjects
-        # Get important times
-        start_time = primary_obj.recordings[subjectnumber].all_evts_imagetime[2][0] #Get the first trial time. Baseline activity is everything preceding
-        try:
-            tmt_start = primary_obj.recordings[subjectnumber].all_evts_imagetime[3][0] #Get the first trial time. Baseline activity is everything preceding
-            tmt_end = primary_obj.recordings[subjectnumber].all_evts_imagetime[3][4] 
+        if subjectnumber is not None:
+            # Get important times
+            start_time = primary_obj.recordings[subjectnumber].all_evts_imagetime[2][0] #Get the first trial time. Baseline activity is everything preceding
+            try:
+                tmt_start = primary_obj.recordings[subjectnumber].all_evts_imagetime[3][0] #Get the first trial time. Baseline activity is everything preceding
+                tmt_end = primary_obj.recordings[subjectnumber].all_evts_imagetime[3][4] 
 
-            # Parse traces
-            ztracesoh=np.copy(primary_obj.recordings[subjectnumber].ztraces) #Make a copy of the trace data
-            baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time
-            rewardztracesoh=ztracesoh[:,int(start_time):int(tmt_start)] 
-            tmtztracesoh=ztracesoh[:,int(tmt_start):int(tmt_end)] 
-            posttmttracesoh=ztracesoh[:,int(tmt_end):] 
+                # Parse traces
+                ztracesoh=np.copy(primary_obj.recordings[subjectnumber].ztraces) #Make a copy of the trace data
+                baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time
+                rewardztracesoh=ztracesoh[:,int(start_time):int(tmt_start)] 
+                tmtztracesoh=ztracesoh[:,int(tmt_start):int(tmt_end)] 
+                posttmttracesoh=ztracesoh[:,int(tmt_end):] 
 
-            # Get correlations
-            blcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(baselineztracesoh,output_filename='baseline_correlation.pdf') #Calculate correlation data
-            rewcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(rewardztracesoh,output_filename='reward_correlation.pdf') #Calculate correlation data
-            tmtcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(tmtztracesoh,output_filename='tmt_correlation.pdf') #Calculate correlation data
-            posttmtcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(posttmttracesoh,output_filename='posttmt_correlation.pdf') #Calculate correlation data
-            info = [primary_obj.recordings[subjectnumber].day,primary_obj.recordings[subjectnumber].cage,primary_obj.recordings[subjectnumber].mouse] #Get info data
-        
-            ## Classify whether group one or two is TMT activated
-            aucsoh=np.asarray(primary_obj.recordings[subjectnumber].auc_vals)
-            firstzero=aucsoh[np.where(primary_obj.recordings[subjectnumber].classifications==0)[0][0]]
-            firstone=aucsoh[np.where(primary_obj.recordings[subjectnumber].classifications==1)[0][0]]
+                # Get correlations
+                blcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(baselineztracesoh,output_filename='baseline_correlation.pdf') #Calculate correlation data
+                rewcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(rewardztracesoh,output_filename='reward_correlation.pdf') #Calculate correlation data
+                tmtcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(tmtztracesoh,output_filename='tmt_correlation.pdf') #Calculate correlation data
+                posttmtcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(posttmttracesoh,output_filename='posttmt_correlation.pdf') #Calculate correlation data
+                info = [primary_obj.recordings[subjectnumber].day,primary_obj.recordings[subjectnumber].cage,primary_obj.recordings[subjectnumber].mouse] #Get info data
+            
+                ## Classify whether group one or two is TMT activated
+                aucsoh=np.asarray(primary_obj.recordings[subjectnumber].auc_vals)
+                firstzero=aucsoh[np.where(primary_obj.recordings[subjectnumber].classifications==0)[0][0]]
+                firstone=aucsoh[np.where(primary_obj.recordings[subjectnumber].classifications==1)[0][0]]
 
-            if firstzero[3]>firstone[3]:
-                zerolabels='TMT_activated'
-                onelabels='NonTMT_activated'
-            else:
-                zerolabels='NonTMT_activated'
-                onelabels='TMT_activated'
-
-            neuron_labels=[]
-            for noh in primary_obj.recordings[subjectnumber].classifications:
-                if noh ==1:
-                    neuron_labels.append(onelabels)
+                if firstzero[3]>firstone[3]:
+                    zerolabels='TMT_activated'
+                    onelabels='NonTMT_activated'
                 else:
-                    neuron_labels.append(zerolabels)
+                    zerolabels='NonTMT_activated'
+                    onelabels='TMT_activated'
 
-        except:
-            # Parse traces
-            ztracesoh=np.copy(primary_obj.recordings[subjectnumber].ztraces) #Make a copy of the trace data
-            baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time
+                neuron_labels=[]
+                for noh in primary_obj.recordings[subjectnumber].classifications:
+                    if noh ==1:
+                        neuron_labels.append(onelabels)
+                    else:
+                        neuron_labels.append(zerolabels)
 
-            # Get correlations
-            blcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(baselineztracesoh) #Calculate correlation data
-            rewcorr,tmtcorr,posttmtcorr=np.nan,np.nan,np.nan
-            info = [primary_obj.recordings[subjectnumber].day,primary_obj.recordings[subjectnumber].cage,primary_obj.recordings[subjectnumber].mouse] #Get info data
+            except:
+                # Parse traces
+                ztracesoh=np.copy(primary_obj.recordings[subjectnumber].ztraces) #Make a copy of the trace data
+                baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time
 
-        #Append all data to lists
-        parse_info.append(info)
-        correlation_data.append([blcorr,rewcorr,tmtcorr,posttmtcorr,neuron_labels])
+                # Get correlations
+                blcorr, correlations = primary_obj.recordings[subjectnumber].get_activity_correlation(baselineztracesoh) #Calculate correlation data
+                rewcorr,tmtcorr,posttmtcorr=np.nan,np.nan,np.nan
+                info = [primary_obj.recordings[subjectnumber].day,primary_obj.recordings[subjectnumber].cage,primary_obj.recordings[subjectnumber].mouse] #Get info data
+
+            #Append all data to lists
+            parse_info.append(info)
+            correlation_data.append([blcorr,rewcorr,tmtcorr,posttmtcorr,neuron_labels])
 
     av_corrs_data=[]
     for uid in correlation_data:
