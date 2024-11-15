@@ -51,10 +51,11 @@ def correlations(primary_obj):
     correlation_data=[] #Empty list to put correlation data into
     for subjectnumber in range(len(primary_obj.recordings)):    #Loop over subjects
         # Get important times
-        start_time = primary_obj.recordings[subjectnumber].so.all_evts_imagetime[2][0] #Get the first trial time. Baseline activity is everything preceding
+        ipdb.set_trace()
+        start_time = primary_obj.recordings[subjectnumber].all_evts_imagetime[2][0] #Get the first trial time. Baseline activity is everything preceding
         try:
-            tmt_start = primary_obj.recordings[subjectnumber].so.all_evts_imagetime[3][0] #Get the first trial time. Baseline activity is everything preceding
-            tmt_end = primary_obj.recordings[subjectnumber].so.all_evts_imagetime[3][4] 
+            tmt_start = primary_obj.recordings[subjectnumber].all_evts_imagetime[3][0] #Get the first trial time. Baseline activity is everything preceding
+            tmt_end = primary_obj.recordings[subjectnumber].all_evts_imagetime[3][4] 
 
             # Parse traces
             ztracesoh=np.copy(primary_obj.recordings[subjectnumber].ztraces) #Make a copy of the trace data
@@ -164,7 +165,7 @@ class pipeline(pipeline):
             s2p_obj()
             s2p_obj.get_euclidian_distance()
 
-            SaveObj(FullPath=os.path.join(s2p_obj.datapath,'objfile.json'), CurrentObject=s2p_obj)
+            SaveObj(FullPath=os.path.join(s2p_obj.datapath,'objfile.json'), s2p_obj_input=s2p_obj)
 
         return s2p_obj
 
@@ -191,7 +192,7 @@ class pipeline(pipeline):
                 self.s2p_obj()
                 self.s2p_obj.get_euclidian_distance()
 
-                SaveObj(FullPath=os.path.join(self.s2p_obj.datapath,'objfile.json'), CurrentObject=self.s2p_obj)
+                SaveObj(FullPath=os.path.join(self.s2p_obj.datapath,'objfile.json'), s2p_obj_input=self.s2p_obj)
                 self.state_distances.append(self.s2p_obj.state_distances)
 
                 #Append object as attribute to list
@@ -264,21 +265,42 @@ if __name__=='__main__':
     parser.add_argument('--beh_directory',type=str,required=False,help='A parent path containing all of the two-data of interest')
     parser.add_argument('--njobs',type=int,required=False,help='A parent path containing all of the two-data of interest')
     parser.add_argument('--single_subject_flag',action='store_true',help='run a single folder containing subject data')
+    parser.add_argument('--force_redo',action='store_true',help='run a single folder containing subject data')
     args=parser.parse_args()
 
     # Run a single subject's data through pipeline 
     if args.single_subject_flag:
-        # Create a serial output object using provided behavior directory
-        so_obj = load_serial_output(args.beh_directory)
-        last_trial = so_obj()
+        if args.force_redo: #If True, automatically re-create the objects and save
+            # Create a serial output object using provided behavior directory
+            so_obj = load_serial_output(args.beh_directory)
+            last_trial = so_obj()
 
-        # Get twophon data object
-        s2p_obj = corralative_activity(datapath=args.data_directory,serialoutput_object=so_obj)
-        s2p_obj()
-        s2p_obj.get_euclidian_distance()
+            # Get twophon data object
+            s2p_obj = corralative_activity(datapath=args.data_directory,serialoutput_object=so_obj)
+            s2p_obj()
+            s2p_obj.get_euclidian_distance()
 
-        # Save data to json file for quick loading in future. 
-        SaveObj(FullPath=os.path.join(s2p_obj.datapath,'objfile.json'), CurrentObject=s2p_obj)
+            # Save data to json file for quick loading in future. 
+            SaveObj(FullPath=os.path.join(s2p_obj.datapath,'objfile.json'), s2p_obj_input=s2p_obj)
+
+        else:  # Otherwise, check and see if the obj file exists. 
+            if os.path.isfile(os.path.join(args.data_directory,'objfile.json')):
+                # Load previously made object
+                s2p_obj=LoadObj(os.path.join(args.data_directory,'objfile.json'))
+                print('Quick loaded object')
+            
+            else:
+                # Create a serial output object using provided behavior directory
+                so_obj = load_serial_output(args.beh_directory)
+                last_trial = so_obj()
+
+                # Get twophon data object
+                s2p_obj = corralative_activity(datapath=args.data_directory,serialoutput_object=so_obj)
+                s2p_obj()
+                s2p_obj.get_euclidian_distance()
+
+                # Save data to json file for quick loading in future. 
+                SaveObj(FullPath=os.path.join(s2p_obj.datapath,'objfile.json'), s2p_obj_input=s2p_obj)
 
     # Run all subjects through pipeline
     else:

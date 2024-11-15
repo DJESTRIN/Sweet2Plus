@@ -12,7 +12,7 @@ import json
 import numpy as np
 from Sweet2Plus.core.core import corralative_activity
 
-def SaveObj(FullPath: str, CurrentObject):
+def SaveObj(FullPath: str, s2p_obj_input):
     """ Saves custom objects to json file
     Inputs:
     FullPath -- A string containing the entire directory and filename.json where the object will be saved. 
@@ -27,27 +27,27 @@ def SaveObj(FullPath: str, CurrentObject):
     #Concatenate large list
     big_list=[]
 
-    #Append everything of interest
-    big_list.append(CurrentObject.datapath)
-    big_list.append(CurrentObject.resultpath)
-    big_list.append(CurrentObject.recording_files)
-    big_list.append(CurrentObject.probability_files)
-    big_list.append(CurrentObject.stat_files)
-    big_list.append(CurrentObject.neuron_prob.tolist())
-    big_list.append(CurrentObject.traces.tolist())
-    big_list.append(CurrentObject.images)
-    big_list.append(CurrentObject.ztraces_copy.tolist())
-    big_list.append(CurrentObject.ztraces.tolist())
-    big_list.append(CurrentObject.resultpath_neur_traces)
-    big_list.append(CurrentObject.so.all_evts_imagetime)
-    big_list.append(CurrentObject.trial_list)
-    big_list.append(CurrentObject.resultpath_neur)
-    big_list.append(CurrentObject.first_trial_time)
-    big_list.append(CurrentObject.last_trial_time)
-    big_list.append(CurrentObject.baselineAUCs.tolist())
-    big_list.append(np.asarray(CurrentObject.auc_vals).tolist())
-    big_list.append(CurrentObject.classifications.tolist())
-        
+    #Append s2p data of interest
+    big_list.append(s2p_obj_input.datapath)
+    big_list.append(s2p_obj_input.resultpath)
+    big_list.append(s2p_obj_input.recording_files)
+    big_list.append(s2p_obj_input.probability_files)
+    big_list.append(s2p_obj_input.stat_files)
+    big_list.append(s2p_obj_input.neuron_prob.tolist())
+    big_list.append(s2p_obj_input.traces.tolist())
+    big_list.append(s2p_obj_input.images)
+    big_list.append(s2p_obj_input.ztraces_copy.tolist())
+    big_list.append(s2p_obj_input.ztraces.tolist())
+    big_list.append(s2p_obj_input.resultpath_neur_traces)
+    big_list.append(s2p_obj_input.so.all_evts_imagetime)
+    big_list.append(s2p_obj_input.trial_list)
+    big_list.append(s2p_obj_input.resultpath_neur)
+    big_list.append(s2p_obj_input.first_trial_time)
+    big_list.append(s2p_obj_input.last_trial_time)
+    big_list.append(s2p_obj_input.baselineAUCs.tolist())
+    big_list.append(np.asarray(s2p_obj_input.auc_vals).tolist())
+    big_list.append(s2p_obj_input.classifications.tolist())
+
     with open(FullPath, 'w') as file:
         json.dump(big_list, file)
 
