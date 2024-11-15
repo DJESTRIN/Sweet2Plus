@@ -49,7 +49,7 @@ def correlations(primary_obj):
     #Analyze baseline correlations across sessions
     parse_info=[] # Empty list to put animal info data (cage #, mouse # etc)
     correlation_data=[] #Empty list to put correlation data into
-    for subjectnumber in range(len(primary_obj.recordings)):    #Loop over subjects
+    for subjectnumber in tqdm.tqdm(range(len(primary_obj.recordings)),total=len(primary_obj.recordings)):    #Loop over subjects
         if primary_obj.recordings[subjectnumber] is not None:
             # Get important times
             start_time = primary_obj.recordings[subjectnumber].all_evts_imagetime[2][0] #Get the first trial time. Baseline activity is everything preceding
