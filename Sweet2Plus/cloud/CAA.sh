@@ -22,4 +22,4 @@ source ~/.bashrc
 conda activate sweet2p
 
 # Run the Python script
-python /home/dje4001/Sweet2Plus/Sweet2Plus/core/CorrelativeActivityAnalysis.py --data_directory $image_folder --beh_directory $beh_folder --single_subject_flag
+python /home/dje4001/Sweet2Plus/Sweet2Plus/core/CorrelativeActivityAnalysis.py --data_directory $image_folder --beh_directory $beh_folder --single_subject_flag --force_redo
