@@ -47,6 +47,9 @@ def SaveObj(FullPath: str, s2p_obj_input):
     big_list.append(s2p_obj_input.baselineAUCs.tolist())
     big_list.append(np.asarray(s2p_obj_input.auc_vals).tolist())
     big_list.append(s2p_obj_input.classifications.tolist())
+    big_list.append(s2p_obj_input.day.tolist())
+    big_list.append(s2p_obj_input.cage.tolist())
+    big_list.append(s2p_obj_input.mouse.tolist())
 
     with open(FullPath, 'w') as file:
         json.dump(big_list, file)
@@ -88,6 +91,9 @@ def LoadObj(FullPath: str):
     CurrentObject.baselineAUCs=np.asarray(big_list[16])
     CurrentObject.auc_vals=np.asarray(big_list[17])
     CurrentObject.classifications=np.asarray(big_list[18])
+    CurrentObject.day=big_list[19]
+    CurrentObject.cage=big_list[20]
+    CurrentObject.mouse=big_list[21]
 
     return CurrentObject
 
