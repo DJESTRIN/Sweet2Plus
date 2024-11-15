@@ -10,7 +10,7 @@ Date: 11-14-2024
 
 import json
 import numpy as np
-from Sweet2Plus.core.core import corralative_activity
+from Sweet2Plus.core.core import corralative_activity 
 
 def SaveObj(FullPath: str, s2p_obj_input):
     """ Saves custom objects to json file
@@ -65,11 +65,8 @@ def LoadObj(FullPath: str):
     with open(FullPath, 'r') as file:
         big_list = json.load(file)
 
-    
-    class dataholder:
-        def __init__(self):
-            return     
-    CurrentObject = dataholder
+   
+    CurrentObject = corralative_activity(datapath=big_list[0],serialoutput_object=None)
 
     #Append everything of interest
     CurrentObject.datapath=big_list[0]
