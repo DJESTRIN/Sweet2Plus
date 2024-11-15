@@ -50,7 +50,7 @@ def correlations(primary_obj):
     parse_info=[] # Empty list to put animal info data (cage #, mouse # etc)
     correlation_data=[] #Empty list to put correlation data into
     for subjectnumber in range(len(primary_obj.recordings)):    #Loop over subjects
-        if subjectnumber is not None:
+        if primary_obj.recordings[subjectnumber] is not None:
             # Get important times
             start_time = primary_obj.recordings[subjectnumber].all_evts_imagetime[2][0] #Get the first trial time. Baseline activity is everything preceding
             try:
