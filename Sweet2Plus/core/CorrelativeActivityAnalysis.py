@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Module name: CorrelativeActivityAnalysis.py
+Description: Primary script for analyzing 
+Author: David James Estrin
+Version: 1.0
+Date: 11-14-2024
+"""
+
 """ Written by David James Estrin 
 Compare correlation of acitivty:
 (1) whole dataset for all animals across time (1,7,14)
@@ -135,15 +145,26 @@ class pipeline(pipeline):
     def create_object_from_path(self,paths):
         # check and see if obj file already exists
         imagepath,behpath=paths
-        so_obj = load_serial_output(behpath)
-        last_trial = so_obj()
 
-        # Get twophon data object
-        s2p_obj = corralative_activity(datapath=imagepath,serialoutput_object=so_obj)
-        s2p_obj()
-        s2p_obj.get_euclidian_distance()
+        if os.path.isfile(os.path.join(imagepath,'objfile.json')):
+            # Load previously made object
+            s2p_obj=LoadObj(os.path.join(imagepath,'objfile.json'))
 
-        SaveObj(FullPath=os.path.join(s2p_obj.datapath,'objfile.json'), CurrentObject=s2p_obj)
+        elif self.skip_new_dirs:
+            s2p_obj=None
+
+        else:
+            # Create two photon data object and save data
+            so_obj = load_serial_output(behpath)
+            last_trial = so_obj()
+
+            # Get twophon data object
+            s2p_obj = corralative_activity(datapath=imagepath,serialoutput_object=so_obj)
+            s2p_obj()
+            s2p_obj.get_euclidian_distance()
+
+            SaveObj(FullPath=os.path.join(s2p_obj.datapath,'objfile.json'), CurrentObject=s2p_obj)
+
         return s2p_obj
 
     def run_parrallel_creation(self):
@@ -192,11 +213,12 @@ class pipeline(pipeline):
 
 class alternative_pipeline(pipeline):
     """ Similar pipeline as above, however, written for reorganized file structure on cluster """
-    def __init__(self,base_directory,njobs): 
+    def __init__(self,base_directory,njobs,skip_new_dirs=False): 
         self.base_directory=base_directory
         self.recordings=[]
         self.state_distances=[]
         self.njobs=njobs
+        self.skip_new_dirs=skip_new_dirs
 
     def find_folders_and_files(self,base_directory):
         # Get all 2P directories
@@ -232,8 +254,7 @@ class alternative_pipeline(pipeline):
     def __call__(self):
         self.all_dirs = self.find_folders_and_files(self.base_directory)
         self.match_directories(self.all_dirs[0])
-        # self.main()
-        self.run_parrallel_creation()
+        self.run_parrallel_creation() # use to be main
 
 if __name__=='__main__':
     # Set up command line argument parser
@@ -261,7 +282,7 @@ if __name__=='__main__':
     # Run all subjects through pipeline
     else:
         # Create all data object containing correlative activity data + other attributres
-        alldata=alternative_pipeline(base_directory=args.data_directory,njobs=args.njobs)
+        alldata=alternative_pipeline(base_directory=args.data_directory,njobs=args.njobs,skip_new_dirs=True)
         alldata()
         alldata.plot_state_distances()
 

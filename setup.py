@@ -1,4 +1,13 @@
-# setup.py in my_repo/
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Module name: setup.py
+Description: Used to set up Sweet2Plus as a package
+Author: David Estrin
+Version: 1.0
+Date: 11-14-2024
+"""
+
 from setuptools import setup, find_packages
 
 setup(
