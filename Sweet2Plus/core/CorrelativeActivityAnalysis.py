@@ -149,6 +149,7 @@ class pipeline(pipeline):
         if os.path.isfile(os.path.join(imagepath,'objfile.json')):
             # Load previously made object
             s2p_obj=LoadObj(os.path.join(imagepath,'objfile.json'))
+            print('Quick loaded object')
 
         elif self.skip_new_dirs:
             s2p_obj=None
