@@ -51,7 +51,6 @@ def correlations(primary_obj):
     correlation_data=[] #Empty list to put correlation data into
     for subjectnumber in range(len(primary_obj.recordings)):    #Loop over subjects
         # Get important times
-        ipdb.set_trace()
         start_time = primary_obj.recordings[subjectnumber].all_evts_imagetime[2][0] #Get the first trial time. Baseline activity is everything preceding
         try:
             tmt_start = primary_obj.recordings[subjectnumber].all_evts_imagetime[3][0] #Get the first trial time. Baseline activity is everything preceding
