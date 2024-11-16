@@ -258,6 +258,22 @@ class alternative_pipeline(pipeline):
         self.match_directories(self.all_dirs[0])
         self.run_parrallel_creation() # use to be main
 
+def delete_2p_obj_files(input_directory):
+    """Delete a file after single user confirmation."""
+    if not os.path.exists(input_directory):
+        raise(f"Error: this path  '{input_directory}' does not exist.")
+    
+    # erify the user wants to delete all s2p objects
+    response = input(f"Are you sure you want to delete all Sweet2Plus objects in '{input_directory}'? (yes/no): ").strip().lower()
+    if response in {'yes', 'y'}:
+        obj_files_in_dir=glob.glob(os.path.join(input_directory,'**\objfile.json*'),recursive=True)
+        for obj_file_oh in obj_files_in_dir:
+            os.remove(obj_file_oh)
+            print(f"'{obj_file_oh}' has been deleted.")
+        
+    else:
+        print(f'You have decided NOT to delete all Sweet2Plus files in {input_directory}')
+
 if __name__=='__main__':
     # Set up command line argument parser
     parser=argparse.ArgumentParser()
@@ -266,7 +282,12 @@ if __name__=='__main__':
     parser.add_argument('--njobs',type=int,required=False,help='A parent path containing all of the two-data of interest')
     parser.add_argument('--single_subject_flag',action='store_true',help='run a single folder containing subject data')
     parser.add_argument('--force_redo',action='store_true',help='run a single folder containing subject data')
+    parser.add_argument('--skip_new_dirs',action='store_true',help='When added to command line, this will skip over directories that do not have created obj file')
+    parser.add_argument('--delete_all_obj_files',action='store_true',help='Deletes all obj files')
     args=parser.parse_args()
+
+    if args.delete_all_obj_files:
+        delete_2p_obj_files(input_directory=args.data_directory)
 
     # Run a single subject's data through pipeline 
     if args.single_subject_flag:
@@ -305,7 +326,7 @@ if __name__=='__main__':
     # Run all subjects through pipeline
     else:
         # Create all data object containing correlative activity data + other attributres
-        alldata=alternative_pipeline(base_directory=args.data_directory,njobs=args.njobs,skip_new_dirs=True)
+        alldata=alternative_pipeline(base_directory=args.data_directory,njobs=args.njobs,skip_new_dirs=args.skip_new_dirs)
         alldata()
         alldata.plot_state_distances()
 

@@ -50,6 +50,7 @@ def SaveObj(FullPath: str, s2p_obj_input):
     big_list.append(s2p_obj_input.day)
     big_list.append(s2p_obj_input.cage)
     big_list.append(s2p_obj_input.mouse)
+    big_list.append(s2p_obj_input.group)
 
     with open(FullPath, 'w') as file:
         json.dump(big_list, file)
@@ -94,6 +95,7 @@ def LoadObj(FullPath: str):
     CurrentObject.day=big_list[19]
     CurrentObject.cage=big_list[20]
     CurrentObject.mouse=big_list[21]
+    CurrentObject.group=big_list[22]
 
     return CurrentObject
 

@@ -96,8 +96,14 @@ class get_s2p():
     def animal_information(self,default_pattern = r'day-(\d+)_C(\d+)_M(\d+)_R(\d+)'):
         # Pull animal information from data path
         string=os.path.basename(self.datapath)
+        ipdb.set_trace()
         _,self.day,self.cage,self.mouse,self.recording=string.split('_')
         _,self.day=self.day.split('-')
+        
+        if 'control' in self.datapath:
+            self.group='control'
+        else:
+            self.group='cort'
 
         # Write first log entry
         message='Grabbed Animal Info%0'
