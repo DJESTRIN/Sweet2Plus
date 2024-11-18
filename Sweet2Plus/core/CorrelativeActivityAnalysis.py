@@ -44,7 +44,8 @@ need auc values across trial types
 
 """
 def run_parallel_correlations(primary_obj):
-    parse_info, correlation_data = Parallel(n_jobs=6)(delayed(parallel_correlations)(primary_obj.recordings[subjectnumber]) for subjectnumber in range(len(primary_obj.recordings)))
+    print('Generating correlations in parallel right now...')
+    parse_info, correlation_data = Parallel(n_jobs=6)(delayed(parallel_correlations)(primary_obj.recordings[subjectnumber]) for subjectnumber in tqdm.tqdm(range(len(primary_obj.recordings))))
     return parse_info,correlation_data
 
 def parallel_correlations(subject_obj_oh):
