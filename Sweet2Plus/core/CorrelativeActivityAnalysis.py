@@ -21,7 +21,7 @@ Compare correlation of acitivty:
 (4) Replicate findings from CORT study
 """
 import ipdb
-from Sweet2Plus.core.core import pipeline,corralative_activity 
+from Sweet2Plus.core.core import pipeline, corralative_activity 
 from behavior import load_serial_output
 import numpy as np
 import warnings
@@ -43,6 +43,76 @@ state distances needs to be parsable by day
 need auc values across trial types
 
 """
+def run_parallel_correlations(primary_obj):
+    parse_info, correlation_data = Parallel(n_jobs=4)(delayed(parallel_correlations)(primary_obj.recordings[subjectnumber]) for subjectnumber in range(len(primary_obj.recordings)))
+    return parse_info,correlation_data
+
+def parallel_correlations(subject_obj_oh):
+    """ Runs correlations code but meant for parallel processing 
+
+    Inputs:
+    primary_obj -- (obj) a pipeline object containing all data for all subjects in s2p obj formats
+    subjectnumber -- (str) the subject on hand that will be analyzed
+
+    Outputs:
+    parse_info -- (list) All relevant identifying information for the subject on hand
+    correlation_data -- (list) relevant correlation data in a list
+    """
+    parse_info=[]
+    correlation_data=[]
+    start_time = subject_obj_oh.all_evts_imagetime[2][0] #Get the first trial time. Baseline activity is everything preceding
+    try:
+        tmt_start = subject_obj_oh.all_evts_imagetime[3][0] #Get the first trial time. Baseline activity is everything preceding
+        tmt_end = subject_obj_oh.all_evts_imagetime[3][4] 
+
+        # Parse traces
+        ztracesoh=np.copy(subject_obj_oh.ztraces) #Make a copy of the trace data
+        baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time
+        rewardztracesoh=ztracesoh[:,int(start_time):int(tmt_start)] 
+        tmtztracesoh=ztracesoh[:,int(tmt_start):int(tmt_end)] 
+        posttmttracesoh=ztracesoh[:,int(tmt_end):] 
+
+        # Get correlations
+        blcorr, correlations = subject_obj_oh.get_activity_correlation(baselineztracesoh,output_filename='baseline_correlation.pdf') #Calculate correlation data
+        rewcorr, correlations = subject_obj_oh.get_activity_correlation(rewardztracesoh,output_filename='reward_correlation.pdf') #Calculate correlation data
+        tmtcorr, correlations = subject_obj_oh.get_activity_correlation(tmtztracesoh,output_filename='tmt_correlation.pdf') #Calculate correlation data
+        posttmtcorr, correlations = subject_obj_oh.get_activity_correlation(posttmttracesoh,output_filename='posttmt_correlation.pdf') #Calculate correlation data
+        info = [subject_obj_oh.day,subject_obj_oh.cage,subject_obj_oh.mouse,subject_obj_oh.group] #Get info data
+    
+        ## Classify whether group one or two is TMT activated
+        aucsoh=np.asarray(subject_obj_oh.auc_vals)
+        firstzero=aucsoh[np.where(subject_obj_oh.classifications==0)[0][0]]
+        firstone=aucsoh[np.where(subject_obj_oh.classifications==1)[0][0]]
+
+        if firstzero[3]>firstone[3]:
+            zerolabels='TMT_activated'
+            onelabels='NonTMT_activated'
+        else:
+            zerolabels='NonTMT_activated'
+            onelabels='TMT_activated'
+
+        neuron_labels=[]
+        for noh in subject_obj_oh.classifications:
+            if noh ==1:
+                neuron_labels.append(onelabels)
+            else:
+                neuron_labels.append(zerolabels)
+
+    except:
+        # Parse traces
+        ztracesoh=np.copy(subject_obj_oh.ztraces) #Make a copy of the trace data
+        baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time
+
+        # Get correlations
+        blcorr, correlations = subject_obj_oh.get_activity_correlation(baselineztracesoh) #Calculate correlation data
+        rewcorr,tmtcorr,posttmtcorr=np.nan,np.nan,np.nan
+        info = [subject_obj_oh.day,subject_obj_oh.cage,subject_obj_oh.mouse,subject_obj_oh.group] #Get info data
+    
+    #Append all data to lists
+    parse_info.append(info)
+    correlation_data.append([blcorr,rewcorr,tmtcorr,posttmtcorr,neuron_labels])
+    return parse_info, correlation_data
+
 
 def correlations(primary_obj):
     """ Compare correlation across each neuron in each mouse across times """
@@ -50,7 +120,7 @@ def correlations(primary_obj):
     parse_info=[] # Empty list to put animal info data (cage #, mouse # etc)
     correlation_data=[] #Empty list to put correlation data into
     for subjectnumber in tqdm.tqdm(range(len(primary_obj.recordings)),total=len(primary_obj.recordings)):    #Loop over subjects
-        if primary_obj.recordings[subjectnumber] is not None:
+        if subject_obj_oh is not None:
             # Get important times
             start_time = primary_obj.recordings[subjectnumber].all_evts_imagetime[2][0] #Get the first trial time. Baseline activity is everything preceding
             try:
@@ -331,4 +401,5 @@ if __name__=='__main__':
         alldata.plot_state_distances()
 
         # Run and graph statistics for all correlation data. 
-        correlations(alldata)
+        parse_info,correlation_data=run_parallel_correlations(alldata)
+        ipdb.set_trace()
