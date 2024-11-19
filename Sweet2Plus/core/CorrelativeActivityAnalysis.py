@@ -120,7 +120,7 @@ def parallel_correlations(subject_obj_oh):
 
     return [parse_info, correlation_data]
 
-def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='\repeatedmeasures_correlations_all.csv'):
+def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='Repeated_Measures_Correlations.csv'):
     """ Converts parse_info and correlation_data into a tall format dataset
 
     Inputs:
