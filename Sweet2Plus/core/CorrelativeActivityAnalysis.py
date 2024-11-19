@@ -45,8 +45,8 @@ need auc values across trial types
 """
 def run_parallel_correlations(primary_obj):
     print('Generating correlations in parallel right now...')
-    parse_info, correlation_data = Parallel(n_jobs=6)(delayed(parallel_correlations)(primary_obj.recordings[subjectnumber]) for subjectnumber in tqdm.tqdm(range(len(primary_obj.recordings))))
-    return parse_info,correlation_data
+    data = Parallel(n_jobs=6)(delayed(parallel_correlations)(primary_obj.recordings[subjectnumber]) for subjectnumber in tqdm.tqdm(range(len(primary_obj.recordings))))
+    return data
 
 def parallel_correlations(subject_obj_oh):
     """ Runs correlations code but meant for parallel processing 
@@ -113,12 +113,12 @@ def parallel_correlations(subject_obj_oh):
         #Append all data to lists
         parse_info.append(info)
         correlation_data.append([blcorr,rewcorr,tmtcorr,posttmtcorr,neuron_labels])
-        
+
     else:
         parse_info=[]
         correlation_data=[]
 
-    return parse_info, correlation_data
+    return [parse_info, correlation_data]
 
 
 def correlations(primary_obj):
@@ -408,5 +408,5 @@ if __name__=='__main__':
         alldata.plot_state_distances()
 
         # Run and graph statistics for all correlation data. 
-        parse_info,correlation_data=run_parallel_correlations(alldata)
+        data = run_parallel_correlations(alldata)
         ipdb.set_trace()
