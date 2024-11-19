@@ -299,6 +299,29 @@ def delete_2p_obj_files(input_directory):
     else:
         print(f'You have decided NOT to delete all Sweet2Plus files in {input_directory}')
 
+def all_subjects_pipeline(cli_args,output_file='info_correlation_data.pkl'):
+    """ Based on cli arguments, will run all subjects through pipeline. """
+    # Determine if final pkl file already created
+    if os.path.isfile(os.path.join(cli_args.data_directory,output_file)):
+        data = OpenList(FullPath=os.path.join(cli_args.data_directory,output_file))
+
+    else:
+        # Create all data object containing correlative activity data + other attributres
+        alldata=alternative_pipeline(base_directory=cli_args.data_directory,njobs=cli_args.njobs,skip_new_dirs=cli_args.skip_new_dirs)
+        alldata()
+        alldata.plot_state_distances()
+
+        # Run and graph statistics for all correlation data. 
+        data = run_parallel_correlations(alldata)
+
+        # Save data to pickled file
+        SaveList(FullPath=os.path.join(cli_args.data_directory,output_file),complicated_list=data)
+
+    ipdb.set_trace()
+    # Seperate data into counter parts and generate tall dataset
+    parse_info_oh,correlation_data_oh=data
+    generate_tall_dataset(parse_info=parse_info_oh,correlation_data=correlation_data_oh,root_directory=cli_args.data_directory)
+
 if __name__=='__main__':
     # Set up command line argument parser
     parser=argparse.ArgumentParser()
@@ -350,17 +373,4 @@ if __name__=='__main__':
 
     # Run all subjects through pipeline
     else:
-        # Create all data object containing correlative activity data + other attributres
-        alldata=alternative_pipeline(base_directory=args.data_directory,njobs=args.njobs,skip_new_dirs=args.skip_new_dirs)
-        alldata()
-        alldata.plot_state_distances()
-
-        # Run and graph statistics for all correlation data. 
-        data = run_parallel_correlations(alldata)
-
-        # Save data to pickled file
-        SaveList(FullPath=os.path.join(args.data_directory,'info_correlation_data.pkl'),complicated_list=data)
-
-        # Seperate data into counter parts and generate tall dataset
-        parse_info_oh,correlation_data_oh=data
-        generate_tall_dataset(parse_info=parse_info_oh,correlation_data=correlation_data_oh,root_directory=args.data_directory)
+        all_subjects_pipeline(cli_args=args)
