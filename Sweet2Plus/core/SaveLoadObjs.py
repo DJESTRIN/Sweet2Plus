@@ -11,6 +11,7 @@ Date: 11-14-2024
 import json
 import numpy as np
 from Sweet2Plus.core.core import corralative_activity 
+import pickle
 
 def SaveObj(FullPath: str, s2p_obj_input):
     """ Saves custom objects to json file
@@ -98,6 +99,16 @@ def LoadObj(FullPath: str):
     CurrentObject.group=big_list[22]
 
     return CurrentObject
+
+def SaveList(FullPath: str, complicated_list):
+    with open(FullPath, "wb") as file:
+        pickle.dump(complicated_list, file)
+    return print('List Saved...')
+
+def OpenList(FullPath: str):
+    with open(FullPath, "rb") as file:
+        complicated_list = pickle.load(file)
+    return complicated_list
 
 if __name__=='__main__':
     ooh = LoadObj(r'C:\Users\listo\twophoton\summary_data\example_obj.json')
