@@ -1,11 +1,13 @@
 library(ggplot2)
 library(tidyr)
-DF<-read.csv("C:/Users/listo/twophoton/repeatedmeasures_correlations_all.csv")
+DF<-read.csv("C:/Users/listo/Sweet2Plus/Repeated_Measures_Correlations.csv")
 DF$subject<-as.factor(DF$subject)
 DF$cage<-as.factor(DF$cage)
 DF$session<-as.factor(DF$session)
+DF$group<-as.factor(DF$group)
 DF$neuron<-as.factor(DF$neuron)
 DF$uid<-as.factor(paste(DF$cage,DF$subject))
+DF$classification<-as.factor(DF$classification)
 
 
 data_long <- gather(DF, period, average_pearson, baseline:posttmt)

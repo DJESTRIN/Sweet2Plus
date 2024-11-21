@@ -160,6 +160,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
                     DF=pd.concat([DF,dfoh])
                 counter+=1
 
+    ipdb.set_trace()
     # Save tall format dataframe to csv file in root_directory
     DF.to_csv(os.path.join(root_directory,filename), index=False)  
 
