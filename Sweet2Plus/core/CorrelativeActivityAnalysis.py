@@ -141,16 +141,14 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
         except:
             av_corrs_data.append([[np.nan],[np.nan],[np.nan],[np.nan],np.nan])
 
-    ipdb.set_trace()
     #Build tall dataset
     counter=0
     for infooh,data in zip(parse_info,av_corrs_data):
-        ipdb.set_trace()
         (bl,rew,tmt,post,neuron_labels)=data
         try:
             for neuron_id,(blv,rewv,tmtv,postv,labelsoh) in enumerate(zip(bl[0],rew[0],tmt[0],post[0],neuron_labels)):
                 # list of name, degree, score
-                dict={'subject':info[2],'cage':info[1],'session':info[0],'group':info[3],'neuron':neuron_id,'baseline':blv,'reward':rewv,'tmt':tmtv,'posttmt':postv,'classification':labelsoh}
+                dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':rewv,'tmt':tmtv,'posttmt':postv,'classification':labelsoh}
                 dfoh=pd.DataFrame(dict,index=[0])
                 if counter==0:
                     DF=dfoh
@@ -160,7 +158,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
         except:
             for neuron_id,(blv,labelsoh) in enumerate(bl[0],neuron_labels):
                 # list of name, degree, score
-                dict={'subject':info[2],'cage':info[1],'session':info[0],'group':info[3],'neuron':neuron_id,'baseline':blv,'reward':np.nan,'tmt':np.nan,'posttmt':np.nan,'classification':labelsoh}
+                dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':np.nan,'tmt':np.nan,'posttmt':np.nan,'classification':labelsoh}
                 dfoh=pd.DataFrame(dict,index=[0])
                 if counter==0:
                     DF=dfoh
