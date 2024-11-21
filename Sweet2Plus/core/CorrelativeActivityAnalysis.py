@@ -145,33 +145,31 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
     counter=0
     for infooh,data in zip(parse_info,av_corrs_data):
         (bl,rew,tmt,post,neuron_labels)=data
-        try:
+        if infooh:
             infooh=infooh[0]
-        except:
-            ipdb.set_trace()
-        try:
-            for neuron_id,(blv,rewv,tmtv,postv,labelsoh) in enumerate(zip(bl[0],rew[0],tmt[0],post[0],neuron_labels)):
-                # list of name, degree, score
-                dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':rewv,'tmt':tmtv,'posttmt':postv,'classification':labelsoh}
-                dfoh=pd.DataFrame(dict,index=[0])
-                if counter==0:
-                    DF=dfoh
-                else:
-                    DF=pd.concat([DF,dfoh])
-                counter+=1
-        except:
-            for neuron_id,(blv,labelsoh) in enumerate(zip(bl[0],neuron_labels)):
-                # list of name, degree, score
-                try:
-                    dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':np.nan,'tmt':np.nan,'posttmt':np.nan,'classification':labelsoh}
-                except:
-                    ipdb.set_trace()
-                dfoh=pd.DataFrame(dict,index=[0])
-                if counter==0:
-                    DF=dfoh
-                else:
-                    DF=pd.concat([DF,dfoh])
-                counter+=1
+            try:
+                for neuron_id,(blv,rewv,tmtv,postv,labelsoh) in enumerate(zip(bl[0],rew[0],tmt[0],post[0],neuron_labels)):
+                    # list of name, degree, score
+                    dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':rewv,'tmt':tmtv,'posttmt':postv,'classification':labelsoh}
+                    dfoh=pd.DataFrame(dict,index=[0])
+                    if counter==0:
+                        DF=dfoh
+                    else:
+                        DF=pd.concat([DF,dfoh])
+                    counter+=1
+            except:
+                for neuron_id,(blv,labelsoh) in enumerate(zip(bl[0],neuron_labels)):
+                    # list of name, degree, score
+                    try:
+                        dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':np.nan,'tmt':np.nan,'posttmt':np.nan,'classification':labelsoh}
+                    except:
+                        ipdb.set_trace()
+                    dfoh=pd.DataFrame(dict,index=[0])
+                    if counter==0:
+                        DF=dfoh
+                    else:
+                        DF=pd.concat([DF,dfoh])
+                    counter+=1
 
     ipdb.set_trace()
     # Save tall format dataframe to csv file in root_directory
