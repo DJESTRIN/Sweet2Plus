@@ -134,7 +134,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
     av_corrs_data=[]
     for uid in correlation_data:
         try:
-            av_corrs_data.append([[np.nanmean(uid[0],axis=0)],[np.nanmean(uid[1],axis=0)],[np.nanmean(uid[2],axis=0)],[np.nanmean(uid[3],axis=0)],uid[4]])
+            av_corrs_data.append([[np.nanmean(uid[0][0],axis=0)],[np.nanmean(uid[0][1],axis=0)],[np.nanmean(uid[0][2],axis=0)],[np.nanmean(uid[0][3],axis=0)],uid[0][4]])
         except:
             ipdb.set_trace()
 
