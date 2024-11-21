@@ -144,7 +144,8 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
     ipdb.set_trace()
     #Build tall dataset
     counter=0
-    for info,data in zip(parse_info,av_corrs_data):
+    for infooh,data in zip(parse_info,av_corrs_data):
+        ipdb.set_trace()
         (bl,rew,tmt,post,neuron_labels)=data
         try:
             for neuron_id,(blv,rewv,tmtv,postv,labelsoh) in enumerate(zip(bl[0],rew[0],tmt[0],post[0],neuron_labels)):
