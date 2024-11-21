@@ -156,6 +156,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
                     DF=pd.concat([DF,dfoh])
                 counter+=1
         except:
+            ipdb.set_trace()
             for neuron_id,(blv,labelsoh) in enumerate(bl[0],neuron_labels):
                 # list of name, degree, score
                 dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':np.nan,'tmt':np.nan,'posttmt':np.nan,'classification':labelsoh}
