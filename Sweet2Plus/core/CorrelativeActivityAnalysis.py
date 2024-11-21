@@ -319,6 +319,7 @@ def all_subjects_pipeline(cli_args,output_file='info_correlation_data.pkl'):
         SaveList(FullPath=os.path.join(cli_args.data_directory,output_file),complicated_list=data)
 
     # Seperate data into counter parts and generate tall dataset
+    ipdb.set_trace()
     parse_info_oh = data[0][0]
     correlation_data_oh = data[0][1]
     generate_tall_dataset(parse_info=parse_info_oh,correlation_data=correlation_data_oh,root_directory=cli_args.data_directory)
