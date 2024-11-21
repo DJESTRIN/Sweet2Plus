@@ -141,6 +141,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
         except:
             ipdb.set_trace()
 
+    ipdb.set_trace()
     #Build tall dataset
     counter=0
     for info,data in zip(parse_info,av_corrs_data):
