@@ -145,6 +145,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
     counter=0
     for infooh,data in zip(parse_info,av_corrs_data):
         (bl,rew,tmt,post,neuron_labels)=data
+        infooh=infooh[0]
         try:
             for neuron_id,(blv,rewv,tmtv,postv,labelsoh) in enumerate(zip(bl[0],rew[0],tmt[0],post[0],neuron_labels)):
                 # list of name, degree, score
