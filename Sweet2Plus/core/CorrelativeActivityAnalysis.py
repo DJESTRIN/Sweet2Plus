@@ -135,11 +135,13 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
     for uid in correlation_data:
         try:
             if not uid:
-                print('empty list')
+                ipdb.set_trace()
+                av_corrs_data.append([[np.nan],[np.nan],[np.nan],[np.nan],uid[0][4]])
             else:
                 av_corrs_data.append([[np.nanmean(uid[0][0],axis=0)],[np.nanmean(uid[0][1],axis=0)],[np.nanmean(uid[0][2],axis=0)],[np.nanmean(uid[0][3],axis=0)],uid[0][4]])
         except:
             ipdb.set_trace()
+            av_corrs_data.append([[np.nan],[np.nan],[np.nan],[np.nan],uid[0][4]])
 
     ipdb.set_trace()
     #Build tall dataset
