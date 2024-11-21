@@ -158,7 +158,10 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
         except:
             for neuron_id,(blv,labelsoh) in enumerate(zip(bl[0],neuron_labels)):
                 # list of name, degree, score
-                dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':np.nan,'tmt':np.nan,'posttmt':np.nan,'classification':labelsoh}
+                try:
+                    dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':np.nan,'tmt':np.nan,'posttmt':np.nan,'classification':labelsoh}
+                except:
+                    ipdb.set_trace()
                 dfoh=pd.DataFrame(dict,index=[0])
                 if counter==0:
                     DF=dfoh
