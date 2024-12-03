@@ -70,7 +70,6 @@ def LoadObj(FullPath: str):
     with open(FullPath, 'r') as file:
         big_list = json.load(file)
 
-   
     CurrentObject = corralative_activity(datapath=big_list[0],serialoutput_object=None)
 
     #Append everything of interest

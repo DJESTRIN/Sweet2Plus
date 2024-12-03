@@ -1,14 +1,12 @@
-# Script Name: RepeatedMeasuresCorrelations.r
-# Author: David Estrin 
-# Date: 11-21-2024
-# Version: 2.0
-# Description: The primary purpose of this script is to take repeated measures of functional connectivity across
-#             trial types, and determine if there is a difference across groups and time. 
 
-# Import dependencies
+library(knitr)
+library(kableExtra)
 library(ggplot2)
 library(tidyr)
 library(dplyr)
+library(lme4)
+library(lmerTest)
+library(grid)
 
 # Custom functions
 standard_error <- function(x) {
@@ -48,17 +46,30 @@ bl <- bl %>%
   select(-mean_avs, -sd_avs) %>% # Divide by avs at session 0
   ungroup()
 
-bl_intermediate_av_neu<-aggregate(normalized_pearson~group+classification+session+uid+nuid,data=bl,FUN='mean')
-bl_intermediate_av<-aggregate(normalized_pearson~group+classification+session+uid,data=bl_intermediate_av_neu,FUN='mean')
-bl_av<-aggregate(normalized_pearson~group+classification+session,data=bl_intermediate_av,FUN='mean')
-bl_errs<-aggregate(normalized_pearson~group+classification+session,data=bl_intermediate_av,FUN=standard_error)
+bl_intermediate_av_neu<-aggregate(normalized_pearson~group+session+uid+nuid,data=bl,FUN='mean')
+bl_intermediate_av<-aggregate(normalized_pearson~group+session+uid,data=bl_intermediate_av_neu,FUN='mean')
+bl_av<-aggregate(normalized_pearson~group+session,data=bl_intermediate_av,FUN='mean')
+bl_errs<-aggregate(normalized_pearson~group+session,data=bl_intermediate_av,FUN=standard_error)
 bl_av$errs<-bl_errs$normalized_pearson
 
-p<-ggplot(data=bl_av,aes(x=session,y=normalized_pearson,color=classification,group=classification))+
+# Generate lmer and anova stats
+pdf("output_with_ggplot1.pdf", width = 8, height = 6)  # Customize size
+baseline_correlation_model <- lmer(normalized_pearson ~ session * group + (1 | uid/nuid) ,data=bl_intermediate_av_neu)
+print(summary(baseline_correlation_model))
+
+grid.newpage()
+res<-anova(baseline_correlation_model)
+kr<-kable(res, caption = "res") %>%
+  kable_styling(latex_options = c("striped", "hold_position"))
+print(kr)
+
+
+plot(baseline_correlation_model, which = 1, col = "blue", pch = 20)
+
+p<-ggplot(data=bl_av,aes(x=session,y=normalized_pearson))+
   geom_line(data=bl_intermediate_av_neu,aes(x=session,y=normalized_pearson,group=nuid),alpha=0.01)+
   geom_errorbar(aes(ymin=normalized_pearson-errs,ymax=normalized_pearson+errs))+
   geom_point()+
-  scale_color_manual(values = c("blue", "red")) +
   facet_grid(.~group) +
   labs(y = expression(
     "Normalized Pearson Correlation (PC)" == frac(
@@ -67,8 +78,17 @@ p<-ggplot(data=bl_av,aes(x=session,y=normalized_pearson,color=classification,gro
   theme(axis.title.y = element_text(size = 5))+
   theme_minimal()
 print(p)
+grid.newpage()
+dev.off()
+# ggsave("C:/Users/listo/Sweet2Plus/my_figs/normalized_pearson_correlation_baseline_nuid.jpg", dpi = 300, width = 6, height = 8)
 
-ggsave("C:/Users/listo/Sweet2Plus/my_figs/normalized_pearson_correlation_across_groups_baseline_nuid.jpg", dpi = 300, width = 6, height = 8)
+# baseline_correlation_model <- lmer(normalized_pearson ~ session * group + (1 | uid/nuid) ,data=bl_intermediate_av_neu)
+# browser()
+# anova(baseline_correlation_model)
+#m1 <- lme(average_pearson~session*period ,random=~1|uid/nuid,data=data_long)
+# anova(m1)
+# #lsmeans(m1, pairwise~session*period, adjust="fdr")
+# emmeans(fm, list(pairwise ~ session*period), adjust = "tukey")
 
 # browser()
 # #Plot Neuronal Activity across Sessions, trial types and groups

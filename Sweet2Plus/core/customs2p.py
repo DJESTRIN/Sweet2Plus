@@ -28,9 +28,16 @@ class get_s2p():
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
         #Set input and output directories
         self.datapath=datapath
-        self.resultpath=os.path.join(self.datapath,'figures/')
-        self.resultpath_so=os.path.join(self.datapath,'figures/serialoutput/')
-        self.resultpath_neur=os.path.join(self.datapath,'figures/neuronal/')
+        if os.path.exists(self.datapath):
+            self.resultpath=os.path.join(self.datapath,'figures/')
+            self.resultpath_so=os.path.join(self.datapath,'figures/serialoutput/')
+            self.resultpath_neur=os.path.join(self.datapath,'figures/neuronal/')
+        else:
+            print('Output paths are not correctly set up!!! This will cause issues if unintented')
+            self.resultpath=os.path.join(os.getcwd(),'figures/')
+            self.resultpath_so=os.path.join(os.getcwd(),'figures/serialoutput/')
+            self.resultpath_neur=os.path.join(os.getcwd(),'figures/neuronal/')
+
         self.include_mask=True
         self.cellthreshold=cellthreshold
 
