@@ -15,7 +15,7 @@ Note: Portions of code are based on code from Drs. Puja Parekh & Jesse Keminsky,
 import argparse
 import glob, os
 import numpy as np
-from Sweet2Plus.core.SaveLoadObjs import LoadObj
+from Sweet2Plus.core.SaveLoadObjs import *
 from statsmodels.regression.linear_model import OLS
 from sklearn.cluster import KMeans as kmeans
 from sklearn.metrics import silhouette_score
