@@ -128,7 +128,7 @@ class regression_coeffecient_pca_clustering:
         # Determine best number of clusters unbiased via silhouette scores
         silhouette_scores = np.zeros(len(cluster_range))
         for idx, number_clusters in enumerate(cluster_range):
-            if idx%5==0:
+            if number_clusters%5==0:
                 print(f'Calculating silhouette score for {number_clusters} clusters')
             kmeans_results = kmeans(n_clusters=number_clusters, max_iter=1000).fit(pca_results)
             labels = kmeans_results.labels_
@@ -194,17 +194,21 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         ipdb.set_trace()
 
     def distribution_of_neurons_in_clusters(self,columns = ['day', 'cage', 'mouse', 'group']):
-
+        """ Generate plot of average number of neurons in each cluster w.r.t group and day
+         The primary purpose of this method is to analyze how the number of neurons in each group change as a 
+         function of day. In other words, are there more or less number of neurons per group during a given session? """
         # Build a dataframe for plotting cluster info by session and group
         self.sorted_neuron_info['subjectid'] = self.sorted_neuron_info['mouse'].astype(str) + "_" + self.sorted_neuron_info['cage'].astype(str)
         self.sorted_neuron_info = self.sorted_neuron_info.drop(columns=['mouse', 'cage'])
         cluster_df = pd.DataFrame(self.sorted_final_labels, columns=['cluster'])
         cluster_info_df = pd.concat([self.sorted_neuron_info, cluster_df], axis=1)
         cluster_counts = cluster_info_df.groupby(['group', 'day', 'subjectid', 'cluster']).size().reset_index(name='count')
+        subject_totals = cluster_counts.groupby('subjectid')['count'].transform('sum')
+        cluster_counts['count'] = cluster_counts['count'] / subject_totals
         plot_data = cluster_counts.groupby(['group', 'day', 'cluster']).agg(mean_count=('count', 'mean'),sem_count=('count', 'sem')).reset_index()
+        plot_data['day'] = pd.to_numeric(plot_data['day'], errors='coerce')
 
         # Generate plot
-        ipdb.set_trace()
         g = sns.catplot(
             data=plot_data,
             x='day',
@@ -218,27 +222,21 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
             aspect=1.2
         )
 
-        # Add error bars
-        for ax, (group_name, group_data) in zip(g.axes.flat, plot_data.groupby('group')):
-            for cluster in group_data['cluster'].unique():
-                cluster_data = group_data[group_data['cluster'] == cluster]
-                ax.errorbar(
-                    x=cluster_data['day'] - 1,  # Adjust x positions
-                    y=cluster_data['mean_count'],
-                    yerr=cluster_data['sem_count'],
-                    fmt='none',
-                    color='black',
-                    capsize=5
-                )
-
         # Customize plot
-        g.set_axis_labels('Session', 'Mean Cluster Count')
+        g.set_axis_labels('Session', 'Normalized # Neurons')
         g.set_titles('Group: {col_name}')
         g.set(ylim=(0, None))
-        g.figure.suptitle('Distribution of Cluster Values by Group and Session', y=1.05)
+        g.figure.suptitle('Distribution of Cluster Values by Group and Session')
+        plt.legend(
+            title='cluster',
+            bbox_to_anchor=(1.05, 1),  # Position to the right of the plot
+            loc='upper left',          # Anchor at the upper left of the legend box
+            borderaxespad=0
+        )
         plt.tight_layout()
         plt.savefig(os.path.join(self.drop_directory,"distribution_of_clusters.jpg"))
         plt.close()
+        ipdb.set_trace()
 
     # Plot clusters across subjects, sessions and groups to make sure they are randomly distributed... Clusters arent holding info on mice
     # Plot average +/- neuronal activity  for each trial type with respect to cluster to determine whether there are obvious differences
