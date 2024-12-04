@@ -128,6 +128,7 @@ class regression_coeffecient_pca_clustering:
             silhouette_scores[idx] = silhouette_score(self.values_to_be_clustered,labels)
         lowest_sil = silhouette_scores.argmax()
         final_cluster_number = list(cluster_range)[lowest_sil]
+        print(f'The final cluster number is {final_cluster_number} clusters')
 
         # Perform final kmeans clustering via correct number of clusters
         final_clusters = kmeans(n_clusters=final_cluster_number).fit(pca_results)
