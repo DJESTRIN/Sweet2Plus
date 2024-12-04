@@ -191,7 +191,8 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
     def __call__(self):
         super.__call__()
 
-    def distribution_of_neurons_in_clusters:
+    def distribution_of_neurons_in_clusters(self):
+        a=1
     # Plot clusters across subjects, sessions and groups to make sure they are randomly distributed... Clusters arent holding info on mice
     # Plot average +/- neuronal activity  for each trial type with respect to cluster to determine whether there are obvious differences
     # 
