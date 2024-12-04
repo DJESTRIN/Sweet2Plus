@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 from sklearn.linear_model import Ridge
 import ipdb
 import tqdm
+import pandas as pd
 
 # Set up default matplotlib plot settings
 matplotlib.rc('font', family='sans-serif')
@@ -191,8 +192,19 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
     def __call__(self):
         super.__call__()
 
-    def distribution_of_neurons_in_clusters(self):
-        a=1
+    def distribution_of_neurons_in_clusters(self,columns = ['day', 'cage', 'mouse', 'group']):
+
+        # Create temporary dataframe for neuron info
+        info_df = pd.DataFrame(self.sorted_neuron_info, columns=columns)
+        info_df['subjectid'] = info_df['mouse'].astype(str) + "_" + info_df['cage'].astype(str)
+        info_df = info_df.drop(columns=['mouse', 'cage'])
+
+        # cluster dataframe
+        cluster_df = pd.DataFrame(self.sorted_final_labels, columns=['cluster'])
+
+        # cluster info dataframe
+        cluster_info_df = pd.concat([info_df, cluster_df], axis=1)
+
     # Plot clusters across subjects, sessions and groups to make sure they are randomly distributed... Clusters arent holding info on mice
     # Plot average +/- neuronal activity  for each trial type with respect to cluster to determine whether there are obvious differences
     # 
@@ -218,6 +230,7 @@ def gather_data(parent_data_directory,file_indicator='obj'):
         objoh=LoadObj(FullPath=file)
         neuronal_activity.append(objoh.ztraces)
         behavioral_timestamps.append(objoh.all_evts_imagetime)
+        ipdb.set_trace()
         neuron_info.append([objoh.day, objoh.cage, objoh.mouse, objoh.group])
     
     return neuronal_activity, behavioral_timestamps, neuron_info
