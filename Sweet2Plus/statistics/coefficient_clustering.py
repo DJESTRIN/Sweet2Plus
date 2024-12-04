@@ -144,6 +144,9 @@ class regression_coeffecient_pca_clustering:
         self.sorted_values_to_be_clustered = self.values_to_be_clustered[sort_indices,:]
         self.sorted_final_labels = final_labels[sort_indices]
 
+        ipdb.set_trace()
+        self.sorted_neuron_info = self.neuron_info[sort_indices]
+
     def plot_cluster_results(self,plot_label='Coeffecients'):
 
         # Create horizontal lines
@@ -184,19 +187,22 @@ class regression_coeffecient_pca_clustering:
         # Plot clustering results
         self.plot_cluster_results(plot_label=f'{self.regression_type} regression coeffecients')
 
-# class map_clusters_to_activity:
-#     a=1
-#     # Plot clusters across subjects, sessions and groups to make sure they are randomly distributed... Clusters arent holding info on mice
-#     # Plot average +/- neuronal activity  for each trial type with respect to cluster to determine whether there are obvious differences
-#     # 
+class map_clusters_to_activity(regression_coeffecient_pca_clustering):
+    def __call__(self):
+        super.__call__()
 
-# class svm_neuronal_activity:
-#     # Take behavioral time stamps and neuronal activity and get svm deconding results
-#     a=1
+    def distribution_of_neurons_in_clusters:
+    # Plot clusters across subjects, sessions and groups to make sure they are randomly distributed... Clusters arent holding info on mice
+    # Plot average +/- neuronal activity  for each trial type with respect to cluster to determine whether there are obvious differences
+    # 
 
-# class svm_based_on_cluster:
-#     # Do the same as above but divide by cluster
-#     a=1
+class svm_neuronal_activity:
+    # Take behavioral time stamps and neuronal activity and get svm deconding results
+    a=1
+
+class svm_based_on_cluster:
+    # Do the same as above but divide by cluster
+    a=1
 
 def gather_data(parent_data_directory,file_indicator='obj'):
     """ Gather all data into lists from parent directory """
