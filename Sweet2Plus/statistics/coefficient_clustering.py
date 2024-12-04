@@ -15,7 +15,7 @@ Note: Portions of code are based on code from Drs. Puja Parekh & Jesse Keminsky,
 import argparse
 import glob, os
 import numpy as np
-from Sweet2Plus.core.SaveLoadObjs import *
+from Sweet2Plus.core.SaveLoadObjs import SaveObj, LoadObj, SaveList, OpenList
 from statsmodels.regression.linear_model import OLS
 from sklearn.cluster import KMeans as kmeans
 from sklearn.metrics import silhouette_score
@@ -24,6 +24,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from sklearn.linear_model import Ridge
 import ipdb
+import tqdm
 
 # Set up default matplotlib plot settings
 matplotlib.rc('font', family='sans-serif')
@@ -200,8 +201,7 @@ def gather_data(parent_data_directory,file_indicator='obj'):
     neuronal_activity=[]
     behavioral_timestamps=[]
     neuron_info=[]
-    for file in objfiles:
-        ipdb.set_trace()
+    for file in tqdm.tqdm(objfiles):
         objoh=LoadObj(FullPath=file)
         neuronal_activity.append(objoh.ztraces)
         behavioral_timestamps.append(objoh.all_evts_imagetime)
