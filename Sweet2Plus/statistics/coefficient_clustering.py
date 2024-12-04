@@ -200,13 +200,13 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         self.sorted_neuron_info = self.sorted_neuron_info.drop(columns=['mouse', 'cage'])
         cluster_df = pd.DataFrame(self.sorted_final_labels, columns=['cluster'])
         cluster_info_df = pd.concat([self.sorted_neuron_info, cluster_df], axis=1)
-        cluster_counts = cluster_info_df.groupby(['group', 'session', 'subjectid', 'cluster']).size().reset_index(name='count')
-        plot_data = cluster_counts.groupby(['group', 'session', 'cluster']).agg(mean_count=('count', 'mean'),sem_count=('count', 'sem')).reset_index()
+        cluster_counts = cluster_info_df.groupby(['group', 'day', 'subjectid', 'cluster']).size().reset_index(name='count')
+        plot_data = cluster_counts.groupby(['group', 'day', 'cluster']).agg(mean_count=('count', 'mean'),sem_count=('count', 'sem')).reset_index()
 
         # Generate plot
         g = sns.catplot(
             data=plot_data,
-            x='session',
+            x='day',
             y='mean_count',
             hue='cluster',
             col='group',
@@ -222,7 +222,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
             for cluster in group_data['cluster'].unique():
                 cluster_data = group_data[group_data['cluster'] == cluster]
                 ax.errorbar(
-                    x=cluster_data['session'] - 1,  # Adjust x positions
+                    x=cluster_data['day'] - 1,  # Adjust x positions
                     y=cluster_data['mean_count'],
                     yerr=cluster_data['sem_count'],
                     fmt='none',
@@ -234,7 +234,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         g.set_axis_labels('Session', 'Mean Cluster Count')
         g.set_titles('Group: {col_name}')
         g.set(ylim=(0, None))
-        g.fig.suptitle('Distribution of Cluster Values by Group and Session', y=1.05)
+        g.figure.suptitle('Distribution of Cluster Values by Group and Session', y=1.05)
         plt.tight_layout()
         plt.savefig(os.path.join(self.drop_directory,"distribution_of_clusters.jpg"))
         plt.close()
