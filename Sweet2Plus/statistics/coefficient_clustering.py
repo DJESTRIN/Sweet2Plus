@@ -201,6 +201,7 @@ def gather_data(parent_data_directory,file_indicator='obj'):
     behavioral_timestamps=[]
     neuron_info=[]
     for file in objfiles:
+        ipdb.set_trace()
         objoh=LoadObj(FullPath=file)
         neuronal_activity.append(objoh.ztraces)
         behavioral_timestamps.append(objoh.all_evts_imagetime)
