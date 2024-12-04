@@ -144,9 +144,7 @@ class regression_coeffecient_pca_clustering:
         sort_indices = np.argsort(final_labels)
         self.sorted_values_to_be_clustered = self.values_to_be_clustered[sort_indices,:]
         self.sorted_final_labels = final_labels[sort_indices]
-
-        ipdb.set_trace()
-        self.sorted_neuron_info = self.neuron_info[sort_indices]
+        self.sorted_neuron_info = self.neuron_info.iloc[sort_indices]
 
     def plot_cluster_results(self,plot_label='Coeffecients'):
 
@@ -191,10 +189,12 @@ class regression_coeffecient_pca_clustering:
 class map_clusters_to_activity(regression_coeffecient_pca_clustering):
     def __call__(self):
         super.__call__()
+        self.distribution_of_neurons_in_clusters()
 
     def distribution_of_neurons_in_clusters(self,columns = ['day', 'cage', 'mouse', 'group']):
 
         # Create temporary dataframe for neuron info
+        ipdb.set_trace()
         info_df = pd.DataFrame(self.sorted_neuron_info, columns=columns)
         info_df['subjectid'] = info_df['mouse'].astype(str) + "_" + info_df['cage'].astype(str)
         info_df = info_df.drop(columns=['mouse', 'cage'])
@@ -247,17 +247,10 @@ def cli_parser():
 if __name__=='__main__':
     data_directory, drop_directory = cli_parser()
     neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory)
-    regressobj = regression_coeffecient_pca_clustering(drop_directory=drop_directory,
+    regressobj = map_clusters_to_activity(drop_directory=drop_directory,
                                                        neuronal_activity=neuronal_activity,
                                                        behavioral_timestamps=behavioral_timestamps,
                                                        neuron_info=neuron_info)
-    regressobj()
-
-    regressobj = regression_coeffecient_pca_clustering(drop_directory=drop_directory,
-                                                        neuronal_activity=neuronal_activity,
-                                                        behavioral_timestamps=behavioral_timestamps,
-                                                        neuron_info=neuron_info,
-                                                        regression_type='OLS')
     regressobj()
 
     print('Finished coefficient clustering...')
