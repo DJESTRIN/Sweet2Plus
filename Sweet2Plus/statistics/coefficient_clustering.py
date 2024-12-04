@@ -204,6 +204,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         plot_data = cluster_counts.groupby(['group', 'day', 'cluster']).agg(mean_count=('count', 'mean'),sem_count=('count', 'sem')).reset_index()
 
         # Generate plot
+        ipdb.set_trace()
         g = sns.catplot(
             data=plot_data,
             x='day',
@@ -211,7 +212,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
             hue='cluster',
             col='group',
             kind='bar',
-            ci=None,  # Manual error bars
+            errorbar=None,  # Manual error bars
             palette='Set2',
             height=5,
             aspect=1.2
