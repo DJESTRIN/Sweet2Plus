@@ -88,13 +88,18 @@ class regression_coeffecient_pca_clustering:
         
     def ols_regression(self):
         """ Individually run's OLS regression on each neuron in dataset """
-        # Create empty arrays to place coeffs
-        self.coeffs = np.ndarray((self.neural_activity.shape[0], self.preds.shape[1]))
+        self.all_coeffs=[]
+        for recording_activity,recording_beh in zip(self.neuronal_activity,self.behavior_ts_onehot):
+            # Create empty arrays to place coeffs
+            recording_coeffs = np.zeros((recording_activity.shape[0], recording_beh.shape[1]))
 
-        # Loop over neurons in dataset, fit neural activity to predictors,  coeffs
-        for neuron_idx, neuron in enumerate(self.neural_activity):
-            ols_results = OLS(neuron, self.preds).fit()
-            self.coeffs[neuron_idx] = ols_results.params
+            # Loop over neurons in dataset, fit neural activity to predictors, get tvalues, coeffs, and pvalues
+            for neuron_idx, neuron in enumerate(recording_activity):
+                ols_results = OLS(neuron.reshape(-1,1),recording_beh).fit()
+                recording_coeffs[neuron_idx] = ols_results.params
+  
+            self.all_coeffs.append(recording_coeffs)
+
 
     def ridge_regression(self):
         """ Individually run's ridge regression on each neuron in dataset """
@@ -170,7 +175,7 @@ class regression_coeffecient_pca_clustering:
         # Run regression
         if self.regression_type=='ridge':
             self.ridge_regression()
-        elif self.regression_type=='ols':
+        elif self.regression_type=='OLS':
             self.ols_regression()
 
         # Run PCA and clustering
@@ -226,4 +231,11 @@ if __name__=='__main__':
                                                        neuron_info=neuron_info)
     regressobj()
 
-    ipdb.set_trace()
+    regressobj = regression_coeffecient_pca_clustering(drop_directory=drop_directory,
+                                                        neuronal_activity=neuronal_activity,
+                                                        behavioral_timestamps=behavioral_timestamps,
+                                                        neuron_info=neuron_info,
+                                                        regression_type='OLS')
+    regressobj()
+
+    print('Finished coefficient clustering...')
