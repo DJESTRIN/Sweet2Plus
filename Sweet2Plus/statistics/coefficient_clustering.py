@@ -188,7 +188,7 @@ class regression_coeffecient_pca_clustering:
 
 class map_clusters_to_activity(regression_coeffecient_pca_clustering):
     def __call__(self):
-        super.__call__()
+        super().__call__()
         self.distribution_of_neurons_in_clusters()
 
     def distribution_of_neurons_in_clusters(self,columns = ['day', 'cage', 'mouse', 'group']):
