@@ -26,6 +26,7 @@ from sklearn.linear_model import Ridge
 import ipdb
 import tqdm
 import pandas as pd
+import seaborn as sns
 
 # Set up default matplotlib plot settings
 matplotlib.rc('font', family='sans-serif')
@@ -190,20 +191,52 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
     def __call__(self):
         super().__call__()
         self.distribution_of_neurons_in_clusters()
+        ipdb.set_trace()
 
     def distribution_of_neurons_in_clusters(self,columns = ['day', 'cage', 'mouse', 'group']):
 
         # Create temporary dataframe for neuron info
-        ipdb.set_trace()
-        info_df = pd.DataFrame(self.sorted_neuron_info, columns=columns)
-        info_df['subjectid'] = info_df['mouse'].astype(str) + "_" + info_df['cage'].astype(str)
-        info_df = info_df.drop(columns=['mouse', 'cage'])
+        self.sorted_neuron_info['subjectid'] = self.sorted_neuron_info['mouse'].astype(str) + "_" + self.sorted_neuron_info['cage'].astype(str)
+        self.sorted_neuron_info = self.sorted_neuron_info.drop(columns=['mouse', 'cage'])
 
         # cluster dataframe
         cluster_df = pd.DataFrame(self.sorted_final_labels, columns=['cluster'])
 
         # cluster info dataframe
-        cluster_info_df = pd.concat([info_df, cluster_df], axis=1)
+        cluster_info_df = pd.concat([self.sorted_neuron_info, cluster_df], axis=1)
+        cluster_counts = cluster_info_df.groupby(['group', 'session', 'subjectid', 'cluster']).size().reset_index(name='count')
+        plot_data = cluster_counts.groupby(['group', 'session', 'cluster']).agg(mean_count=('count', 'mean'),sem_count=('count', 'sem')).reset_index()
+
+        plt.figure(figsize=(10, 6))
+        sns.barplot(
+            data=plot_data,
+            x='session',
+            y='mean_count',
+            hue='cluster',
+            ci=None,  # We'll manually add error bars
+            palette='Set2'
+        )
+
+        # Add error bars
+        for i, row in plot_data.iterrows():
+            plt.errorbar(
+                x=row['session'] - 1 + (row['cluster'] * 0.2),  # Adjust x position slightly for clarity
+                y=row['mean_count'],
+                yerr=row['sem_count'],
+                fmt='none',
+                color='black',
+                capsize=5
+            )
+
+        # Customize plot
+        plt.title('Distribution of Cluster Values by Group and Session')
+        plt.xlabel('Session')
+        plt.ylabel('Mean Cluster Count')
+        plt.legend(title='Cluster', loc='upper right')
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.drop_directory,"distribution_of_clusters.jpg"))
+        plt.close()
 
     # Plot clusters across subjects, sessions and groups to make sure they are randomly distributed... Clusters arent holding info on mice
     # Plot average +/- neuronal activity  for each trial type with respect to cluster to determine whether there are obvious differences
