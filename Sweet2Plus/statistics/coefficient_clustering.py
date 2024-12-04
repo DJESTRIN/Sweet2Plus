@@ -195,45 +195,46 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
     def distribution_of_neurons_in_clusters(self,columns = ['day', 'cage', 'mouse', 'group']):
 
-        # Create temporary dataframe for neuron info
+        # Build a dataframe for plotting cluster info by session and group
         self.sorted_neuron_info['subjectid'] = self.sorted_neuron_info['mouse'].astype(str) + "_" + self.sorted_neuron_info['cage'].astype(str)
         self.sorted_neuron_info = self.sorted_neuron_info.drop(columns=['mouse', 'cage'])
-
-        # cluster dataframe
         cluster_df = pd.DataFrame(self.sorted_final_labels, columns=['cluster'])
-
-        # cluster info dataframe
         cluster_info_df = pd.concat([self.sorted_neuron_info, cluster_df], axis=1)
         cluster_counts = cluster_info_df.groupby(['group', 'session', 'subjectid', 'cluster']).size().reset_index(name='count')
         plot_data = cluster_counts.groupby(['group', 'session', 'cluster']).agg(mean_count=('count', 'mean'),sem_count=('count', 'sem')).reset_index()
 
-        plt.figure(figsize=(10, 6))
-        sns.barplot(
+        # Generate plot
+        g = sns.catplot(
             data=plot_data,
             x='session',
             y='mean_count',
             hue='cluster',
-            ci=None,  # We'll manually add error bars
-            palette='Set2'
+            col='group',
+            kind='bar',
+            ci=None,  # Manual error bars
+            palette='Set2',
+            height=5,
+            aspect=1.2
         )
 
         # Add error bars
-        for i, row in plot_data.iterrows():
-            plt.errorbar(
-                x=row['session'] - 1 + (row['cluster'] * 0.2),  # Adjust x position slightly for clarity
-                y=row['mean_count'],
-                yerr=row['sem_count'],
-                fmt='none',
-                color='black',
-                capsize=5
-            )
+        for ax, (group_name, group_data) in zip(g.axes.flat, plot_data.groupby('group')):
+            for cluster in group_data['cluster'].unique():
+                cluster_data = group_data[group_data['cluster'] == cluster]
+                ax.errorbar(
+                    x=cluster_data['session'] - 1,  # Adjust x positions
+                    y=cluster_data['mean_count'],
+                    yerr=cluster_data['sem_count'],
+                    fmt='none',
+                    color='black',
+                    capsize=5
+                )
 
         # Customize plot
-        plt.title('Distribution of Cluster Values by Group and Session')
-        plt.xlabel('Session')
-        plt.ylabel('Mean Cluster Count')
-        plt.legend(title='Cluster', loc='upper right')
-        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        g.set_axis_labels('Session', 'Mean Cluster Count')
+        g.set_titles('Group: {col_name}')
+        g.set(ylim=(0, None))
+        g.fig.suptitle('Distribution of Cluster Values by Group and Session', y=1.05)
         plt.tight_layout()
         plt.savefig(os.path.join(self.drop_directory,"distribution_of_clusters.jpg"))
         plt.close()
