@@ -297,7 +297,6 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                 for neuron,timestamps in zip(current_cluster_neurons,current_cluster_timestamps):
                     average_neuron_activity=[]
                     for time in timestamps:
-                        ipdb.set_trace()
                         average_neuron_activity.append(neuron[int(np.round(time-8)):int(np.round(time+8))]) # ~ 10 seconds before and after each stimulus
 
                     average_neuron_activity=np.asarray(average_neuron_activity).mean(axis=0)
@@ -307,7 +306,6 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                 all_neuron_average_activity=np.asarray(all_neuron_average_activity).mean(axis=0)
                 data_list.append([trial_names,cluster_id,all_neuron_average_activity,all_neuron_error_activity])
         
-        ipdb.set_trace()
         # Convert data to a DataFrame for easier grouping
         df = pd.DataFrame(data_list, columns=['Trial', 'Cluster', 'Average', 'Error'])
 
