@@ -343,17 +343,24 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                         label='Error'
                     )
 
+                    ax.axvline(x=8, color='black', linestyle='--', label='t=0')
+
+
                 # Set titles and labels
                 ax.set_title(f"Cluster {group}, {trial}")
                 if i == len(groups) - 1:
                     ax.set_xlabel("Time")
                 if j == 0:
                     ax.set_ylabel("Activity")
+                
+                if i == 0:  # Add trial name to the first row
+                    ax.set_title(trial, fontsize=12, pad=10)
 
         # Adjust layout and add a legend
         fig.tight_layout()
         fig.legend(loc='upper right', bbox_to_anchor=(1.15, 1), bbox_transform=plt.gcf().transFigure)
-        plt.show()
+        plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trial.jpg"))
+        plt.close()
 
 
 
