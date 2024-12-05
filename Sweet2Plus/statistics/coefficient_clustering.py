@@ -315,6 +315,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         colors = cm.viridis(np.linspace(0, 1, len(groups)))
 
         # Create a grid of subplots
+        ipdb.set_trace()
         fig, axes = plt.subplots(len(groups), len(trials), figsize=(12, 8), sharex=True, sharey=True)
 
         for i, group in enumerate(groups):
