@@ -302,7 +302,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                     average_neuron_activity=np.asarray(average_neuron_activity).mean(axis=0)
                     all_neuron_average_activity.append(average_neuron_activity)
 
-                all_neuron_error_activity = np.std(np.asarray(all_neuron_average_activity), axis=1, ddof=1) / np.sqrt(np.asarray(all_neuron_average_activity).shape[1])
+                all_neuron_error_activity = np.std(np.asarray(all_neuron_average_activity), axis=0, ddof=1) / np.sqrt(np.asarray(all_neuron_average_activity).shape[1])
                 all_neuron_average_activity=np.asarray(all_neuron_average_activity).mean(axis=0)
                 data_list.append([trial_names,cluster_id,all_neuron_average_activity,all_neuron_error_activity])
         
