@@ -27,6 +27,7 @@ import ipdb
 import tqdm
 import pandas as pd
 import seaborn as sns
+import json
 
 # Set up default matplotlib plot settings
 matplotlib.rc('font', family='sans-serif')
@@ -249,10 +250,26 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         self.activity_stack_sort = self.activity_stack[self.sort_indices]
 
         # Build behavioral array
+        van_trials=[]
+        pb_trials=[]
+        wat_trials=[]
         tmt_trials=[]
+
         for behoh,neuoh in zip(self.behavioral_timestamps,self.neuronal_activity):
             ipdb.set_trace()
             van,pb,wat,tmt=behoh
+            van_trials.append(np.tile(van, (neuoh.shape[0],1)))
+            pb_trials.append(np.tile(pb, (neuoh.shape[0],1)))
+            wat_trials.append(np.tile(tmt, (neuoh.shape[0],1)))
+            tmt_trials.append(np.tile(wat, (neuoh.shape[0],1)))
+
+        # Reformat to a single array
+        van_trials=np.concat(van_trials,axis=1)
+        pb_trials=np.concat(pb_trials,axis=1)
+        wat_trials=np.concat(wat_trials,axis=1)
+        tmt_trials=np.concat(tmt_trials,axis=1)
+
+        ipdb.set_trace()
 
 class svm_neuronal_activity:
     # Take behavioral time stamps and neuronal activity and get svm deconding results
@@ -262,24 +279,49 @@ class svm_based_on_cluster:
     # Do the same as above but divide by cluster
     a=1
 
-def gather_data(parent_data_directory,file_indicator='obj'):
+def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
     """ Gather all data into lists from parent directory """
-    # Get full path to object files
-    objfiles=glob.glob(os.path.join(parent_data_directory,f'**/{file_indicator}*.json'),recursive=True)
-
-    # Grab relevant data from files and create lists
-    neuronal_activity=[]
-    behavioral_timestamps=[]
-    neuron_info = pd.DataFrame(columns=['day', 'cage', 'mouse', 'group'])
-    for file in tqdm.tqdm(objfiles):
-        objoh=LoadObj(FullPath=file)
-        neuronal_activity.append(objoh.ztraces)
-        behavioral_timestamps.append(objoh.all_evts_imagetime)
-        repeated_info = np.tile([objoh.day, objoh.cage, objoh.mouse, objoh.group], objoh.ztraces.shape[0]) 
-        repeated_info = repeated_info.reshape(objoh.ztraces.shape[0], 4)
-        repeated_info_df = pd.DataFrame(repeated_info, columns=['day', 'cage', 'mouse', 'group'])
-        neuron_info = pd.concat([neuron_info, repeated_info_df], ignore_index=True)
+    # Determine if files were previously created and load them in quicker
+    if (os.path.isfile(os.path.join(drop_directory,"org_neuronal_activity.json")) and 
+        os.path.isfile(os.path.join(drop_directory,"org_behavioral_timestamps.json")) and 
+        os.path.isfile(os.path.join(drop_directory,"org_neuron_info.json"))): 
+        
+        with open(os.path.join(drop_directory,"org_neuronal_activity.json"), 'r') as file:
+            neuronal_activity = json.load(file)
+        
+        with open(os.path.join(drop_directory,"org_behavioral_timestamps.json"), 'r') as file:
+            behavioral_timestamps = json.load(file)
+        
+        with open(os.path.join(drop_directory,"org_neuron_info.json"), 'r') as file:
+            neuron_info = json.load(file)
     
+    else:
+        # Get full path to object files
+        objfiles=glob.glob(os.path.join(parent_data_directory,f'**/{file_indicator}*.json'),recursive=True)
+
+        # Grab relevant data from files and create lists
+        neuronal_activity=[]
+        behavioral_timestamps=[]
+        neuron_info = pd.DataFrame(columns=['day', 'cage', 'mouse', 'group'])
+        for file in tqdm.tqdm(objfiles):
+            objoh=LoadObj(FullPath=file)
+            neuronal_activity.append(objoh.ztraces)
+            behavioral_timestamps.append(objoh.all_evts_imagetime)
+            repeated_info = np.tile([objoh.day, objoh.cage, objoh.mouse, objoh.group], objoh.ztraces.shape[0]) 
+            repeated_info = repeated_info.reshape(objoh.ztraces.shape[0], 4)
+            repeated_info_df = pd.DataFrame(repeated_info, columns=['day', 'cage', 'mouse', 'group'])
+            neuron_info = pd.concat([neuron_info, repeated_info_df], ignore_index=True)
+        
+        # Save data to files for easier loading in future
+        with open(os.path.join(drop_directory,"org_neuronal_activity.json"), 'w') as file:
+            json.dump(neuronal_activity, file)
+        
+        with open(os.path.join(drop_directory,"org_behavioral_timestamps.json"), 'w') as file:
+            json.dump(behavioral_timestamps, file)
+
+        with open(os.path.join(drop_directory,"org_neuron_info.json"), 'w') as file:
+            json.dump(neuron_info, file)
+
     return neuronal_activity, behavioral_timestamps, neuron_info
 
 def cli_parser():
@@ -291,7 +333,7 @@ def cli_parser():
 
 if __name__=='__main__':
     data_directory, drop_directory = cli_parser()
-    neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory)
+    neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
     regressobj = map_clusters_to_activity(drop_directory=drop_directory,
                                                        neuronal_activity=neuronal_activity,
                                                        behavioral_timestamps=behavioral_timestamps,
