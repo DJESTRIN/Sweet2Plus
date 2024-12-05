@@ -266,22 +266,22 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         ipdb.set_trace()
         target_shape = van_trials[0].shape
         adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in van_trials]
-        van_trials=np.concat(adjusted_arrays,axis=1)
+        van_trials=np.concat(adjusted_arrays,axis=0)
         van_trials=van_trials[self.sort_indices]
 
         target_shape = pb_trials[0].shape
         adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in pb_trials]
-        pb_trials=np.concat(adjusted_arrays,axis=1)
+        pb_trials=np.concat(adjusted_arrays,axis=0)
         pb_trials=pb_trials[self.sort_indices]
 
         target_shape = wat_trials[0].shape
         adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in wat_trials]
-        wat_trials=np.concat(adjusted_arrays,axis=1)
+        wat_trials=np.concat(adjusted_arrays,axis=0)
         wat_trials=wat_trials[self.sort_indices]
 
         target_shape = tmt_trials[0].shape
         adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in tmt_trials]
-        tmt_trials=np.concat(adjusted_arrays,axis=1)
+        tmt_trials=np.concat(adjusted_arrays,axis=0)
         tmt_trials=tmt_trials[self.sort_indices]
         all_trials=[van_trials,pb_trials,wat_trials,tmt_trials]
 
@@ -297,14 +297,60 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                 for neuron,timestamps in zip(current_cluster_neurons,current_cluster_timestamps):
                     average_neuron_activity=[]
                     for time in timestamps:
-                        average_neuron_activity.append(neuron[time-15:time+15])
+                        average_neuron_activity.append(neuron[time-8:time+8]) # ~ 10 seconds before and after each stimulus
+
                     average_neuron_activity=np.asarray(average_neuron_activity).mean(axis=0)
                     all_neuron_average_activity.append(average_neuron_activity)
 
+                all_neuron_error_activity = np.std(np.asarray(all_neuron_average_activity), axis=1, ddof=1) / np.sqrt(np.asarray(all_neuron_average_activity).shape[1])
                 all_neuron_average_activity=np.asarray(all_neuron_average_activity).mean(axis=0)
-                data_list.append([trial_names,cluster_id,all_neuron_average_activity])
+                data_list.append([trial_names,cluster_id,all_neuron_average_activity,all_neuron_error_activity])
         
         ipdb.set_trace()
+        # Convert data to a DataFrame for easier grouping
+        df = pd.DataFrame(data_list, columns=['Trial', 'Cluster', 'Average', 'Error'])
+
+        # Unique groups and trials
+        groups = df['Cluster'].unique()
+        trials = df['Trial'].unique()
+
+        # Create a grid of subplots
+        fig, axes = plt.subplots(len(groups), len(trials), figsize=(12, 8), sharex=True, sharey=True)
+
+        for i, group in enumerate(groups):
+            for j, trial in enumerate(trials):
+                # Get the data for the current group and trial
+                subset = df[(df['Cluster'] == group) & (df['Trial'] == trial)]
+                ax = axes[i, j]
+
+                # If data exists for this group-trial combination
+                if not subset.empty:
+                    avg_activity = subset['Average'].values[0]
+                    error_activity = subset['Error'].values[0]
+                    time = np.arange(len(avg_activity))  # Assume time is implicit
+
+                    # Plot the line and error ribbon
+                    ax.plot(time, avg_activity, label='Average Activity', color='blue')
+                    ax.fill_between(
+                        time,
+                        avg_activity - error_activity,
+                        avg_activity + error_activity,
+                        color='blue',
+                        alpha=0.2,
+                        label='Error'
+                    )
+
+                # Set titles and labels
+                ax.set_title(f"Cluster {group}, {trial}")
+                if i == len(groups) - 1:
+                    ax.set_xlabel("Time")
+                if j == 0:
+                    ax.set_ylabel("Activity")
+
+        # Adjust layout and add a legend
+        fig.tight_layout()
+        fig.legend(loc='upper right', bbox_to_anchor=(1.15, 1), bbox_transform=plt.gcf().transFigure)
+        plt.show()
 
 
 
