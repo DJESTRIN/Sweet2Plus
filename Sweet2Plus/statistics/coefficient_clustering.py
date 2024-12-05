@@ -264,12 +264,34 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
         # Reformat to a single array
         ipdb.set_trace()
-        van_trials=np.concat(van_trials,axis=1)
-        pb_trials=np.concat(pb_trials,axis=1)
-        wat_trials=np.concat(wat_trials,axis=1)
-        tmt_trials=np.concat(tmt_trials,axis=1)
+        target_shape = van_trials.shape[0]
+        adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in van_trials]
+        van_trials=np.concat(adjusted_arrays,axis=1)
+        van_trials=van_trials[self.sort_indices]
 
-        ipdb.set_trace()
+        target_shape = pb_trials.shape[0]
+        adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in pb_trials]
+        pb_trials=np.concat(adjusted_arrays,axis=1)
+        pb_trials=pb_trials[self.sort_indices]
+
+        target_shape = wat_trials.shape[0]
+        adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in wat_trials]
+        wat_trials=np.concat(adjusted_arrays,axis=1)
+        wat_trials=wat_trials[self.sort_indices]
+
+        target_shape = tmt_trials.shape[0]
+        adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in tmt_trials]
+        tmt_trials=np.concat(adjusted_arrays,axis=1)
+        tmt_trials=tmt_trials[self.sort_indices]
+        all_trials=[van_trials,pb_trials,wat_trials,tmt_trials]
+
+        # Loop over trials and clusters to get averages
+        for trial in all_trials:
+            for cluster_id in np.unique(self.sorted_final_labels):
+                
+                current_cluster_neurons=self.activity_stack_sort[np.where(self.sorted_final_labels==cluster_id)]
+
+
 
 class svm_neuronal_activity:
     # Take behavioral time stamps and neuronal activity and get svm deconding results
