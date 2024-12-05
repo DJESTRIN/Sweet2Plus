@@ -22,6 +22,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 from sklearn.linear_model import Ridge
 import ipdb
 import tqdm
@@ -265,22 +266,22 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         # Reformat to a single array
         ipdb.set_trace()
         target_shape = van_trials[0].shape
-        adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in van_trials]
+        adjusted_arrays = [arr[:, :target_shape[1]] for arr in van_trials]
         van_trials=np.concat(adjusted_arrays,axis=0)
         van_trials=van_trials[self.sort_indices]
 
         target_shape = pb_trials[0].shape
-        adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in pb_trials]
+        adjusted_arrays = [arr[:, :target_shape[1]] for arr in pb_trials]
         pb_trials=np.concat(adjusted_arrays,axis=0)
         pb_trials=pb_trials[self.sort_indices]
 
         target_shape = wat_trials[0].shape
-        adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in wat_trials]
+        adjusted_arrays = [arr[:, :target_shape[1]] for arr in wat_trials]
         wat_trials=np.concat(adjusted_arrays,axis=0)
         wat_trials=wat_trials[self.sort_indices]
 
         target_shape = tmt_trials[0].shape
-        adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in tmt_trials]
+        adjusted_arrays = [arr[:, :target_shape[1]] for arr in tmt_trials]
         tmt_trials=np.concat(adjusted_arrays,axis=0)
         tmt_trials=tmt_trials[self.sort_indices]
         all_trials=[van_trials,pb_trials,wat_trials,tmt_trials]
@@ -313,6 +314,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         # Unique groups and trials
         groups = df['Cluster'].unique()
         trials = df['Trial'].unique()
+        colors = cm.viridis(np.linspace(0, 1, len(groups)))
 
         # Create a grid of subplots
         fig, axes = plt.subplots(len(groups), len(trials), figsize=(12, 8), sharex=True, sharey=True)
@@ -325,17 +327,18 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
                 # If data exists for this group-trial combination
                 if not subset.empty:
+                    color = colors[i]
                     avg_activity = subset['Average'].values[0]
                     error_activity = subset['Error'].values[0]
                     time = np.arange(len(avg_activity))  # Assume time is implicit
 
                     # Plot the line and error ribbon
-                    ax.plot(time, avg_activity, label='Average Activity', color='blue')
+                    ax.plot(time, avg_activity, label='Average Activity', color=color)
                     ax.fill_between(
                         time,
                         avg_activity - error_activity,
                         avg_activity + error_activity,
-                        color='blue',
+                        color=color,
                         alpha=0.2,
                         label='Error'
                     )
