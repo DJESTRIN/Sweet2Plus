@@ -314,7 +314,8 @@ def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
         
         # Save data to files for easier loading in future
         with open(os.path.join(drop_directory,"org_neuronal_activity.json"), 'w') as file:
-            json.dump(neuronal_activity, file)
+            ipdb.set_trace()
+            json.dump(neuronal_activity.tolist(), file)
         
         with open(os.path.join(drop_directory,"org_behavioral_timestamps.json"), 'w') as file:
             json.dump(behavioral_timestamps, file)
