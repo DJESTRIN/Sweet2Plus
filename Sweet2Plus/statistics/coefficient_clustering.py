@@ -292,8 +292,7 @@ def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
         with open(os.path.join(drop_directory,"org_behavioral_timestamps.json"), 'r') as file:
             behavioral_timestamps = json.load(file)
         
-        with open(os.path.join(drop_directory,"org_neuron_info.json"), 'r') as file:
-            neuron_info = json.load(file)
+        neuron_info = pd.read_json(os.path.join(drop_directory,"org_neuron_info.json"), orient="records", lines=True)
     
     else:
         # Get full path to object files
@@ -314,14 +313,12 @@ def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
         
         # Save data to files for easier loading in future
         with open(os.path.join(drop_directory,"org_neuronal_activity.json"), 'w') as file:
-            ipdb.set_trace()
-            json.dump(neuronal_activity.tolist(), file)
+            json.dump(neuronal_activity, file)
         
         with open(os.path.join(drop_directory,"org_behavioral_timestamps.json"), 'w') as file:
             json.dump(behavioral_timestamps, file)
 
-        with open(os.path.join(drop_directory,"org_neuron_info.json"), 'w') as file:
-            json.dump(neuron_info, file)
+        neuron_info.to_json(os.path.join(drop_directory,"org_neuron_info.json"), orient="records", lines=True) 
 
     return neuronal_activity, behavioral_timestamps, neuron_info
 
