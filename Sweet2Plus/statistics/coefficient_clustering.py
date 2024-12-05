@@ -264,32 +264,48 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
         # Reformat to a single array
         ipdb.set_trace()
-        target_shape = van_trials.shape[0]
+        target_shape = van_trials[0].shape
         adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in van_trials]
         van_trials=np.concat(adjusted_arrays,axis=1)
         van_trials=van_trials[self.sort_indices]
 
-        target_shape = pb_trials.shape[0]
+        target_shape = pb_trials[0].shape
         adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in pb_trials]
         pb_trials=np.concat(adjusted_arrays,axis=1)
         pb_trials=pb_trials[self.sort_indices]
 
-        target_shape = wat_trials.shape[0]
+        target_shape = wat_trials[0].shape
         adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in wat_trials]
         wat_trials=np.concat(adjusted_arrays,axis=1)
         wat_trials=wat_trials[self.sort_indices]
 
-        target_shape = tmt_trials.shape[0]
+        target_shape = tmt_trials[0].shape
         adjusted_arrays = [arr[:target_shape[0], :target_shape[1]] for arr in tmt_trials]
         tmt_trials=np.concat(adjusted_arrays,axis=1)
         tmt_trials=tmt_trials[self.sort_indices]
         all_trials=[van_trials,pb_trials,wat_trials,tmt_trials]
 
         # Loop over trials and clusters to get averages
-        for trial in all_trials:
+        for trial,trial_names in zip(all_trials,['vanilla','peanutbutter','water','tmt']):
+            data_list=[]
             for cluster_id in np.unique(self.sorted_final_labels):
                 
                 current_cluster_neurons=self.activity_stack_sort[np.where(self.sorted_final_labels==cluster_id)]
+                current_cluster_timestamps=trial[np.where(self.sorted_final_labels==cluster_id)]
+
+                all_neuron_average_activity=[]
+                for neuron,timestamps in zip(current_cluster_neurons,current_cluster_timestamps):
+                    average_neuron_activity=[]
+                    for time in timestamps:
+                        average_neuron_activity.append(neuron[time-15:time+15])
+                    average_neuron_activity=np.asarray(average_neuron_activity).mean(axis=0)
+                    all_neuron_average_activity.append(average_neuron_activity)
+
+                all_neuron_average_activity=np.asarray(all_neuron_average_activity).mean(axis=0)
+                data_list.append([trial_names,cluster_id,all_neuron_average_activity])
+        
+        ipdb.set_trace()
+
 
 
 
