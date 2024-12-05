@@ -286,8 +286,8 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         all_trials=[van_trials,pb_trials,wat_trials,tmt_trials]
 
         # Loop over trials and clusters to get averages
+        data_list=[]
         for trial,trial_names in zip(all_trials,['vanilla','peanutbutter','water','tmt']):
-            data_list=[]
             for cluster_id in np.unique(self.sorted_final_labels):
                 
                 current_cluster_neurons=self.activity_stack_sort[np.where(self.sorted_final_labels==cluster_id)]
