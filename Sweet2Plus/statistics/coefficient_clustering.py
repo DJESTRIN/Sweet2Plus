@@ -256,7 +256,6 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         tmt_trials=[]
 
         for behoh,neuoh in zip(self.behavioral_timestamps,self.neuronal_activity):
-            ipdb.set_trace()
             van,pb,wat,tmt=behoh
             van_trials.append(np.tile(van, (neuoh.shape[0],1)))
             pb_trials.append(np.tile(pb, (neuoh.shape[0],1)))
