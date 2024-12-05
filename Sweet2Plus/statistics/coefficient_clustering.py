@@ -102,7 +102,6 @@ class regression_coeffecient_pca_clustering:
   
             self.all_coeffs.append(recording_coeffs)
 
-
     def ridge_regression(self):
         """ Individually run's ridge regression on each neuron in dataset """
         self.all_coeffs=[]
@@ -146,6 +145,7 @@ class regression_coeffecient_pca_clustering:
         self.sorted_values_to_be_clustered = self.values_to_be_clustered[sort_indices,:]
         self.sorted_final_labels = final_labels[sort_indices]
         self.sorted_neuron_info = self.neuron_info.iloc[sort_indices]
+        self.sort_indices=sort_indices
 
     def plot_cluster_results(self,plot_label='Coeffecients'):
 
@@ -190,8 +190,11 @@ class regression_coeffecient_pca_clustering:
 class map_clusters_to_activity(regression_coeffecient_pca_clustering):
     def __call__(self):
         super().__call__()
+        # Plot distribution of neurons in cluster
         self.distribution_of_neurons_in_clusters()
-        ipdb.set_trace()
+
+        # Plot trial activity by cluster
+        self.plot_activity_by_cluser()
 
     def distribution_of_neurons_in_clusters(self,columns = ['day', 'cage', 'mouse', 'group']):
         """ Generate plot of average number of neurons in each cluster w.r.t group and day
@@ -236,11 +239,20 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         plt.tight_layout()
         plt.savefig(os.path.join(self.drop_directory,"distribution_of_clusters.jpg"))
         plt.close()
-        ipdb.set_trace()
 
-    # Plot clusters across subjects, sessions and groups to make sure they are randomly distributed... Clusters arent holding info on mice
-    # Plot average +/- neuronal activity  for each trial type with respect to cluster to determine whether there are obvious differences
-    # 
+    def plot_activity_by_cluser(self):
+        """Plot average +/- neuronal activity  for each trial type with respect to cluster to 
+            determine whether there are differences"""
+
+        # Stack neuronal data
+        self.activity_stack = np.concat(self.neuronal_activity,axis=0)
+        self.activity_stack_sort = self.activity_stack[self.sort_indices]
+
+        # Build behavioral array
+        tmt_trials=[]
+        for behoh,neuoh in zip(self.behavioral_timestamps,self.neuronal_activity):
+            ipdb.set_trace()
+            van,pb,wat,tmt=behoh
 
 class svm_neuronal_activity:
     # Take behavioral time stamps and neuronal activity and get svm deconding results
