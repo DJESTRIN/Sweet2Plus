@@ -304,7 +304,7 @@ def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
     neuron_info = pd.DataFrame(columns=['day', 'cage', 'mouse', 'group'])
     for file in tqdm.tqdm(objfiles):
         objoh=LoadObj(FullPath=file)
-        neuronal_activity.append(objoh.ztraces.tolist())
+        neuronal_activity.append(objoh.ztraces)
         behavioral_timestamps.append(objoh.all_evts_imagetime)
         repeated_info = np.tile([objoh.day, objoh.cage, objoh.mouse, objoh.group], objoh.ztraces.shape[0]) 
         repeated_info = repeated_info.reshape(objoh.ztraces.shape[0], 4)
