@@ -263,6 +263,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
             tmt_trials.append(np.tile(wat, (neuoh.shape[0],1)))
 
         # Reformat to a single array
+        ipdb.set_trace()
         van_trials=np.concat(van_trials,axis=1)
         pb_trials=np.concat(pb_trials,axis=1)
         wat_trials=np.concat(wat_trials,axis=1)
