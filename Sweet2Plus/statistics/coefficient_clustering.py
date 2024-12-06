@@ -382,15 +382,14 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         trials=np.array(trials)
         clusters=np.array(clusters)
 
-        nrows=len(np.unique(trials))
-        ncols=len(np.unique(clusters))
+        nrows=np.unique(trials)
+        ncols=np.unique(clusters)
 
-        fig, axes = plt.subplots(nrows, ncols, figsize=(20, 20), sharex=True, sharey=True)
-        for i, cluster in enumerate(clusters):
-            for j, trial in enumerate(trials):
+        fig, axes = plt.subplots(len(nrows), len(ncols), figsize=(20, 20), sharex=True, sharey=True)
+        for i, cluster in enumerate(ncols):
+            for j, trial in enumerate(nrows):
                 heatmap_oh = heatmaps[i+j]
                 ax = axes[i, j]
-                ipdb.set_trace()
                 ax.imshow(np.asarray(heatmap_oh), cmap='viridis', interpolation='nearest')
         
         fig.tight_layout()
