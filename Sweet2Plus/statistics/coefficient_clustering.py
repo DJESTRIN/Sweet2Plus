@@ -290,6 +290,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
         # Loop over trials and clusters to get averages
         data_list=[]
+        heat_map_list=[]
         for trial,trial_names in zip(all_trials,['vanilla','peanutbutter','water','tmt']):
             for cluster_id in np.unique(self.sorted_final_labels):
                 
@@ -308,17 +309,19 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                     all_neuron_average_activity.append(average_neuron_activity)
 
                 all_neuron_error_activity = np.std(np.asarray(all_neuron_average_activity), axis=0, ddof=1) / np.sqrt(np.asarray(all_neuron_average_activity).shape[1])
+                heat_map_list.append([trial_names,cluster_id,all_neuron_average_activity])
                 all_neuron_average_activity=np.asarray(all_neuron_average_activity).mean(axis=0)
                 data_list.append([trial_names,cluster_id,all_neuron_average_activity,all_neuron_error_activity])
         
         # Convert data to a DataFrame for easier grouping
         self.activity_by_cluster_df = pd.DataFrame(data_list, columns=['Trial', 'Cluster', 'Average', 'Error'])
+        self.heat_map_by_cluster = heat_map_list
 
     def plot_activity_by_cluser(self):
         # Unique groups and trials
         groups = self.activity_by_cluster_df['Cluster'].unique()
         trials = self.activity_by_cluster_df['Trial'].unique()
-        colors = cm.get_cmap('plasma', len(groups))
+        colors = cm.get_cmap('inferno', len(groups))
 
         # Create a grid of subplots
         fig, axes = plt.subplots(len(groups), len(trials), figsize=(20, 20), sharex=True, sharey=True)
@@ -343,16 +346,14 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                         avg_activity - error_activity,
                         avg_activity + error_activity,
                         color=color,
-                        alpha=0.9,
+                        alpha=0.6,
                         label='Error'
                     )
 
                     ax.axvline(x=4, color='black', linestyle='--', label='t=0')
                     ax.grid(False)
-
-                    for spine in ax.spines.values():
-                        spine.set_visible(False)
-
+                    ax.spines['top'].set_visible(False) 
+                    ax.spines['right'].set_visible(False) 
 
                 # Set titles and labels
                 #ax.set_title(f"Cluster {group}, {trial}")
@@ -366,9 +367,11 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
         # Adjust layout and add a legend
         fig.tight_layout()
-        #fig.legend(loc='upper right', bbox_to_anchor=(1.15, 1), bbox_transform=plt.gcf().transFigure)
         plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trial.jpg"))
         plt.close()
+
+    def plot_heat_maps(self):
+        for trial, clusterid, heatmap in self.heat_map_by_cluster:
 
 
 def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
