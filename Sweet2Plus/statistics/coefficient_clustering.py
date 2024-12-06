@@ -377,6 +377,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         heatmaps=[]
         ipdb.set_trace()
         for trial, clusterid, heatmap in self.heat_map_by_cluster:
+            ipdb.set_trace()
             trials.append(trial)
             clusters.append(clusterid)
             heatmaps.append(heatmap)
