@@ -318,7 +318,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         # Unique groups and trials
         groups = self.activity_by_cluster_df['Cluster'].unique()
         trials = self.activity_by_cluster_df['Trial'].unique()
-        colors = cm.get_cmap('Set3', len(groups))
+        colors = cm.get_cmap('plasma', len(groups))
 
         # Create a grid of subplots
         fig, axes = plt.subplots(len(groups), len(trials), figsize=(20, 20), sharex=True, sharey=True)
@@ -343,12 +343,12 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                         avg_activity - error_activity,
                         avg_activity + error_activity,
                         color=color,
-                        alpha=0.2,
+                        alpha=0.9,
                         label='Error'
                     )
 
                     ax.axvline(x=4, color='black', linestyle='--', label='t=0')
-                    plt.grid(False)
+                    ax.grid(False)
 
                     for spine in ax.spines.values():
                         spine.set_visible(False)
