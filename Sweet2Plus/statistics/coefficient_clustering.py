@@ -34,6 +34,8 @@ import json
 matplotlib.rc('font', family='sans-serif')
 matplotlib.rc('font', serif='Arial')
 matplotlib.rcParams.update({'font.size': 12})
+matplotlib.rcParams['axes.linewidth'] = 2 
+
 
 class regression_coeffecient_pca_clustering:
     def __init__(self, drop_directory, neuronal_activity, behavioral_timestamps, neuron_info, trial_list=['Vanilla','PeanutButter','Water','FoxUrine'],
@@ -316,7 +318,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         # Unique groups and trials
         groups = self.activity_by_cluster_df['Cluster'].unique()
         trials = self.activity_by_cluster_df['Trial'].unique()
-        colors = cm.viridis(np.linspace(0, 1, len(groups)))
+        colors = colors = cm.get_cmap('Set3', len(groups))
 
         # Create a grid of subplots
         fig, axes = plt.subplots(len(groups), len(trials), figsize=(20, 20), sharex=True, sharey=True)
@@ -345,7 +347,11 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                         label='Error'
                     )
 
-                    ax.axvline(x=3, color='black', linestyle='--', label='t=0')
+                    ax.axvline(x=4, color='black', linestyle='--', label='t=0')
+                    plt.grid(False)
+
+                    for spine in ax.spines.values():
+                        spine.set_visible(False)
 
 
                 # Set titles and labels
@@ -360,19 +366,10 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
         # Adjust layout and add a legend
         fig.tight_layout()
-        plt.grid(False)
         #fig.legend(loc='upper right', bbox_to_anchor=(1.15, 1), bbox_transform=plt.gcf().transFigure)
         plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trial.jpg"))
         plt.close()
 
-
-class svm_neuronal_activity:
-    # Take behavioral time stamps and neuronal activity and get svm deconding results
-    a=1
-
-class svm_based_on_cluster:
-    # Do the same as above but divide by cluster
-    a=1
 
 def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
     """ Gather all data into lists from parent directory """
