@@ -33,7 +33,7 @@ import json
 # Set up default matplotlib plot settings
 matplotlib.rc('font', family='sans-serif')
 matplotlib.rc('font', serif='Arial')
-matplotlib.rcParams.update({'font.size': 24})
+matplotlib.rcParams.update({'font.size': 12})
 
 class regression_coeffecient_pca_clustering:
     def __init__(self, drop_directory, neuronal_activity, behavioral_timestamps, neuron_info, trial_list=['Vanilla','PeanutButter','Water','FoxUrine'],
@@ -319,7 +319,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         colors = cm.viridis(np.linspace(0, 1, len(groups)))
 
         # Create a grid of subplots
-        fig, axes = plt.subplots(len(groups), len(trials), figsize=(12, 8), sharex=True, sharey=True)
+        fig, axes = plt.subplots(len(groups), len(trials), figsize=(20, 20), sharex=True, sharey=True)
 
         for i, group in enumerate(groups):
             for j, trial in enumerate(trials):
@@ -345,21 +345,22 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                         label='Error'
                     )
 
-                    ax.axvline(x=8, color='black', linestyle='--', label='t=0')
+                    ax.axvline(x=3, color='black', linestyle='--', label='t=0')
 
 
                 # Set titles and labels
-                ax.set_title(f"Cluster {group}, {trial}")
+                #ax.set_title(f"Cluster {group}, {trial}")
                 if i == len(groups) - 1:
-                    ax.set_xlabel("Time")
+                    ax.set_xlabel("Time",fontsize=12, pad=10)
                 if j == 0:
-                    ax.set_ylabel("Activity")
+                    ax.set_ylabel("Activity",fontsize=12, pad=10)
                 
                 if i == 0:  # Add trial name to the first row
                     ax.set_title(trial, fontsize=12, pad=10)
 
         # Adjust layout and add a legend
         fig.tight_layout()
+        plt.grid(False)
         #fig.legend(loc='upper right', bbox_to_anchor=(1.15, 1), bbox_transform=plt.gcf().transFigure)
         plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trial.jpg"))
         plt.close()
