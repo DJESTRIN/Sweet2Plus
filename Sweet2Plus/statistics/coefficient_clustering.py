@@ -200,6 +200,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         # Plot trial activity by cluster
         self.get_activity_by_cluser()
         self.plot_activity_by_cluser()
+        self.plot_heat_maps()
 
     def distribution_of_neurons_in_clusters(self,columns = ['day', 'cage', 'mouse', 'group']):
         """ Generate plot of average number of neurons in each cluster w.r.t group and day
@@ -321,7 +322,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         # Unique groups and trials
         groups = self.activity_by_cluster_df['Cluster'].unique()
         trials = self.activity_by_cluster_df['Trial'].unique()
-        colors = cm.get_cmap('inferno', len(groups))
+        colors = cm.get_cmap('magma', len(groups))
 
         # Create a grid of subplots
         fig, axes = plt.subplots(len(groups), len(trials), figsize=(20, 20), sharex=True, sharey=True)
@@ -370,8 +371,30 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trial.jpg"))
         plt.close()
 
-    # def plot_heat_maps(self):
-    #     for trial, clusterid, heatmap in self.heat_map_by_cluster:
+    def plot_heat_maps(self):
+        # Seperate data into lists
+        trials=[], clusters=[], heatmaps=[]
+        for trial, clusterid, heatmap in self.heat_map_by_cluster:
+            trials.append(trial)
+            clusters.append(clusterid)
+            heatmaps.append(heatmap)
+        trials=np.array(trials)
+        clusters=np.array(clusters)
+        heatmaps=np.array(heatmaps)
+
+        nrows=np.unique(trials)
+        ncols=np.unique(clusters)
+
+        fig, axes = plt.subplots(nrows, ncols, figsize=(20, 20), sharex=True, sharey=True)
+        for i, cluster in enumerate(clusters):
+            for j, trial in enumerate(trials):
+                heatmap_oh = heatmaps[i+j]
+                ax = axes[i, j]
+                ax.imshow(np.asarray(heatmap_oh), cmap='viridis', interpolation='nearest')
+        
+        fig.tight_layout()
+        plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trialheatmap.jpg"))
+        plt.close()
 
 
 def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
