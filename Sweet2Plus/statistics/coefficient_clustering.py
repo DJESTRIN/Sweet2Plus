@@ -242,7 +242,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         plt.savefig(os.path.join(self.drop_directory,"distribution_of_clusters.jpg"))
         plt.close()
 
-    def plot_activity_by_cluser(self):
+    def get_activity_by_cluser(self):
         """Plot average +/- neuronal activity  for each trial type with respect to cluster to 
             determine whether there are differences"""
 
@@ -297,7 +297,9 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                 for neuron,timestamps in zip(current_cluster_neurons,current_cluster_timestamps):
                     average_neuron_activity=[]
                     for time in timestamps:
-                        average_neuron_activity.append(neuron[int(np.round(time-8)):int(np.round(time+8))]) # ~ 10 seconds before and after each stimulus
+                        ipdb.set_trace()
+                        act_oh = neuron[int(np.round(time-4)):int(np.round(time+15))]
+                        average_neuron_activity.append(act_oh) # ~ 10 seconds before and after each stimulus
 
                     average_neuron_activity=np.asarray(average_neuron_activity).mean(axis=0)
                     all_neuron_average_activity.append(average_neuron_activity)
@@ -307,21 +309,21 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                 data_list.append([trial_names,cluster_id,all_neuron_average_activity,all_neuron_error_activity])
         
         # Convert data to a DataFrame for easier grouping
-        df = pd.DataFrame(data_list, columns=['Trial', 'Cluster', 'Average', 'Error'])
+        self.activity_by_cluster_df = pd.DataFrame(data_list, columns=['Trial', 'Cluster', 'Average', 'Error'])
 
+    def plot_activity_by_cluser(self):
         # Unique groups and trials
-        groups = df['Cluster'].unique()
-        trials = df['Trial'].unique()
+        groups = self.activity_by_cluster_df['Cluster'].unique()
+        trials = self.activity_by_cluster_df['Trial'].unique()
         colors = cm.viridis(np.linspace(0, 1, len(groups)))
 
         # Create a grid of subplots
-        ipdb.set_trace()
         fig, axes = plt.subplots(len(groups), len(trials), figsize=(12, 8), sharex=True, sharey=True)
 
         for i, group in enumerate(groups):
             for j, trial in enumerate(trials):
                 # Get the data for the current group and trial
-                subset = df[(df['Cluster'] == group) & (df['Trial'] == trial)]
+                subset = self.activity_by_cluster_df[(self.activity_by_cluster_df['Cluster'] == group) & (self.activity_by_cluster_df['Trial'] == trial)]
                 ax = axes[i, j]
 
                 # If data exists for this group-trial combination
@@ -357,11 +359,9 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
         # Adjust layout and add a legend
         fig.tight_layout()
-        fig.legend(loc='upper right', bbox_to_anchor=(1.15, 1), bbox_transform=plt.gcf().transFigure)
+        #fig.legend(loc='upper right', bbox_to_anchor=(1.15, 1), bbox_transform=plt.gcf().transFigure)
         plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trial.jpg"))
         plt.close()
-
-
 
 
 class svm_neuronal_activity:
