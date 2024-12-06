@@ -298,8 +298,8 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                 for neuron,timestamps in zip(current_cluster_neurons,current_cluster_timestamps):
                     average_neuron_activity=[]
                     for time in timestamps:
-                        ipdb.set_trace()
                         act_oh = neuron[int(np.round(time-4)):int(np.round(time+15))]
+                        act_oh = act_oh - np.mean(act_oh[0:2]) # Subtract by average of baseline values for scaling. 
                         average_neuron_activity.append(act_oh) # ~ 10 seconds before and after each stimulus
 
                     average_neuron_activity=np.asarray(average_neuron_activity).mean(axis=0)
