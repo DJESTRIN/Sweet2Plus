@@ -321,7 +321,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         # Unique groups and trials
         groups = self.activity_by_cluster_df['Cluster'].unique()
         trials = self.activity_by_cluster_df['Trial'].unique()
-        colors = cm.get_cmap('Greens', len(groups))
+        colors = cm.get_cmap('Greens', (len(groups) + 4))
 
         # Create a grid of subplots
         fig, axes = plt.subplots(len(groups), len(trials), figsize=(20, 20), sharex=True, sharey=True)
@@ -334,7 +334,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
                 # If data exists for this group-trial combination
                 if not subset.empty:
-                    color = colors(i / len(groups))
+                    color = colors((i+2) / (len(groups) + 4))
                     avg_activity = subset['Average'].values[0]
                     error_activity = subset['Error'].values[0]
                     time = np.arange(len(avg_activity))  # Assume time is implicit
