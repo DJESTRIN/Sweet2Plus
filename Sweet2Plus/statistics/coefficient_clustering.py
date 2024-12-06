@@ -370,8 +370,8 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trial.jpg"))
         plt.close()
 
-    def plot_heat_maps(self):
-        for trial, clusterid, heatmap in self.heat_map_by_cluster:
+    # def plot_heat_maps(self):
+    #     for trial, clusterid, heatmap in self.heat_map_by_cluster:
 
 
 def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
