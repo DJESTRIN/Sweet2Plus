@@ -376,15 +376,14 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         clusters=[]
         heatmaps=[]
         for trial, clusterid, heatmap in self.heat_map_by_cluster:
-            ipdb.set_trace()
             trials.append(trial)
             clusters.append(clusterid)
             heatmaps.append(heatmap)
         trials=np.array(trials)
         clusters=np.array(clusters)
 
-        nrows=np.unique(trials)
-        ncols=np.unique(clusters)
+        nrows=len(np.unique(trials))
+        ncols=len(np.unique(clusters))
 
         fig, axes = plt.subplots(nrows, ncols, figsize=(20, 20), sharex=True, sharey=True)
         for i, cluster in enumerate(clusters):
