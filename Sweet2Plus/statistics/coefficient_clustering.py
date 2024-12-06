@@ -196,6 +196,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         self.distribution_of_neurons_in_clusters()
 
         # Plot trial activity by cluster
+        self.get_activity_by_cluser()
         self.plot_activity_by_cluser()
 
     def distribution_of_neurons_in_clusters(self,columns = ['day', 'cage', 'mouse', 'group']):
