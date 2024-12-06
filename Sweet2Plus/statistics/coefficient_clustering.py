@@ -390,8 +390,10 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
             for j, trial in enumerate(nrows):
                 heatmap_oh = heatmaps[i+j]
                 ax = axes[i, j]
+                ipdb.set_trace()
                 ax.imshow(np.asarray(heatmap_oh), cmap='viridis', interpolation='nearest')
         
+        ipdb.set_trace()
         fig.tight_layout()
         plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trialheatmap.jpg"))
         plt.close()
