@@ -36,7 +36,6 @@ matplotlib.rc('font', serif='Arial')
 matplotlib.rcParams.update({'font.size': 16})
 matplotlib.rcParams['axes.linewidth'] = 2 
 
-
 class regression_coeffecient_pca_clustering:
     def __init__(self, drop_directory, neuronal_activity, behavioral_timestamps, neuron_info, trial_list=['Vanilla','PeanutButter','Water','FoxUrine'],
                  normalize_neural_activity=False,regression_type='ridge'):
@@ -322,7 +321,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         # Unique groups and trials
         groups = self.activity_by_cluster_df['Cluster'].unique()
         trials = self.activity_by_cluster_df['Trial'].unique()
-        colors = cm.get_cmap('magma', len(groups))
+        colors = cm.get_cmap('Greens', len(groups))
 
         # Create a grid of subplots
         fig, axes = plt.subplots(len(groups), len(trials), figsize=(20, 20), sharex=True, sharey=True)
