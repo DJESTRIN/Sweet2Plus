@@ -245,12 +245,14 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         plt.savefig(os.path.join(self.drop_directory,"distribution_of_clusters.jpg"))
         plt.close()
 
-    def get_activity_by_cluser(self, preceding_frames=10,post_stim_frames=20):
+    def get_activity_by_cluser(self, preceding_frames=20,post_stim_frames=26):
         """Plot average +/- neuronal activity  for each trial type with respect to cluster to 
             determine whether there are differences"""
 
         self.preceding_frames = preceding_frames
         self.post_stim_frames = post_stim_frames
+        self.preceding_seconds = self.preceding_frames/1.315
+        self.post_stim_seconds = self.post_stim_frames/1.315
 
         # Stack neuronal data
         self.activity_stack = np.concat(self.neuronal_activity,axis=0)
@@ -340,7 +342,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                     color = colors((i+2) / (len(groups) + 4))
                     avg_activity = subset['Average'].values[0]
                     error_activity = subset['Error'].values[0]
-                    time = np.linspace(-1*self.preceding_frames, self.post_stim_frames, len(avg_activity))
+                    time = np.linspace(-1*self.preceding_seconds, self.post_stim_seconds, len(avg_activity))
 
                     # Plot the line and error ribbon
                     ax.plot(time, avg_activity, label='Average Activity', color=color)
