@@ -389,11 +389,19 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
         for i, cluster in enumerate(ncols):
             for j, trial in enumerate(nrows):
                 heatmap_oh = heatmaps[i+j]
+
+                # Sort array from largest activity to least
+                heatmap_oh = np.asarray(heatmap_oh)
+                row_averages = np.mean(heatmap_oh, axis=1)
+                sorted_indices = np.argsort(row_averages)[::-1]
+                heatmap_oh = heatmap_oh[sorted_indices]
+
+                # Plot array as image
                 ax = axes[i, j]
-                ipdb.set_trace()
-                ax.imshow(np.asarray(heatmap_oh), cmap='viridis', interpolation='nearest')
+                norm = matplotlib.colors.Normalize(vmin=np.min(heatmap_oh), vmax=np.max(heatmap_oh))
+                ax.imshow(heatmap_oh, cmap='viridis', interpolation='nearest',norm=norm)
+                ax.set_aspect('auto')
         
-        ipdb.set_trace()
         fig.tight_layout()
         plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trialheatmap.jpg"))
         plt.close()
