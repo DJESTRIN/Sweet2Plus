@@ -398,8 +398,8 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
                 # Plot array as image
                 ax = axes[i, j]
-                norm = matplotlib.colors.Normalize(vmin=np.min(heatmap_oh), vmax=np.max(heatmap_oh))
-                ax.imshow(heatmap_oh, cmap='jet', interpolation='nearest',norm=norm)
+                #norm = matplotlib.colors.Normalize(vmin=np.min(heatmap_oh), vmax=np.max(heatmap_oh))
+                ax.imshow(heatmap_oh, cmap='jet', interpolation='nearest')
                 ax.set_aspect('auto')
                 ax.axvline(x=4, color='black', linestyle='--', label='t=0')
                 ax.grid(False)
