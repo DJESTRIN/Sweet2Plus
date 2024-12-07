@@ -353,7 +353,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                         label='Error'
                     )
 
-                    ax.axvline(x=self.preceding_frames, color='black', linestyle='--', label='t=0')
+                    ax.axvline(x=0, color='black', linestyle='--', label='t=0')
                     ax.grid(False)
                     ax.spines['top'].set_visible(False) 
                     ax.spines['right'].set_visible(False) 
