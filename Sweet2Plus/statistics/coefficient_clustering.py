@@ -401,6 +401,20 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                 norm = matplotlib.colors.Normalize(vmin=np.min(heatmap_oh), vmax=np.max(heatmap_oh))
                 ax.imshow(heatmap_oh, cmap='jet', interpolation='nearest',norm=norm)
                 ax.set_aspect('auto')
+                ax.axvline(x=4, color='black', linestyle='--', label='t=0')
+                ax.grid(False)
+                ax.spines['top'].set_visible(False) 
+                ax.spines['right'].set_visible(False) 
+
+                if i == len(ncols) - 1:
+                    ax.set_xlabel("Time")
+
+                if j == 0:
+                    ax.set_ylabel("Activity")
+                
+                if i == 0:  # Add trial name to the first row
+                    ax.set_title(trial)
+                
         
         fig.tight_layout()
         plt.savefig(os.path.join(self.drop_directory,"activity_by_cluster_trialheatmap.jpg"))
