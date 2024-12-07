@@ -399,7 +399,7 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
                 # Plot array as image
                 ax = axes[i, j]
                 norm = matplotlib.colors.Normalize(vmin=np.min(heatmap_oh), vmax=np.max(heatmap_oh))
-                ax.imshow(heatmap_oh, cmap='viridis', interpolation='nearest',norm=norm)
+                ax.imshow(heatmap_oh, cmap='jet', interpolation='nearest',norm=norm)
                 ax.set_aspect('auto')
         
         fig.tight_layout()
