@@ -8,7 +8,7 @@ Author: David Estrin
 Version: 1.0
 Date: 12-06-2024
 """
-
+import numpy as np
 from Sweet2Plus.statistics.coefficient_clustering import regression_coeffecient_pca_clustering, gather_data, cli_parser
 import ipdb 
 
@@ -22,8 +22,15 @@ class heatmap(regression_coeffecient_pca_clustering):
         self.gather_data_by_trial()
         self.plot_data_by_trial()
 
-    def gather_data_by_trial(self):
-        ipdb.set_trace()
+    def gather_data_by_trial(self,preceding_frames=20,post_stim_frames=26):
+        self.preceding_frames = preceding_frames
+        self.post_stim_frames = post_stim_frames
+        self.preceding_seconds = self.preceding_frames/1.315
+        self.post_stim_seconds = self.post_stim_frames/1.315
+
+        for k,single_neuron_activity in enumerate(self.neuronal_activity):
+            one_hot_oh = self.timestamps_to_one_hot_array[k]
+            ipdb.set_trace()
 
     def plot_data_by_trial(self):
         ipdb.set_trace()
