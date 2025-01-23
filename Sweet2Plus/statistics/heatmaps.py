@@ -10,9 +10,9 @@ Date: 12-06-2024
 """
 
 from Sweet2Plus.statistics.coefficient_clustering import regression_coeffecient_pca_clustering, gather_data, cli_parser
-import ipdb
+import ipdb 
 
-def heatmap(regression_coeffecient_pca_clustering):
+class heatmap(regression_coeffecient_pca_clustering):
     def __call__(self):
         # Inherited methods
         self.normalize_activity()

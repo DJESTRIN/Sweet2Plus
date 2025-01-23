@@ -102,7 +102,7 @@ class load_serial_output():
                 raise Exception("Sync File has no stops, suggesting recording error")
     
         if len(stops)>1:
-            stops=[stops[-1]]
+            stops=[stops[-1]] # The last stop? 
 
         if type(stops) is np.float64 or type(stops) is np.int64:
             stops=[int(stops)]

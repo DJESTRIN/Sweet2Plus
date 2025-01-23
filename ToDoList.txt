@@ -1,0 +1,6 @@
+Running to do list:
+(1) How to determine neurons across recording sessions?
+(2) Analyze euclidian distance of state between trial types and sessions
+(3) How do manifold state differ within session ....
+    How do these state changes differ across sessions
+    NEED: Euclidian distance 
