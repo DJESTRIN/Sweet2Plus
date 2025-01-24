@@ -66,6 +66,12 @@ class heatmap(regression_coeffecient_pca_clustering):
                     ipdb.set_trace()
                 trial_mean = all_av_neu_for_trial.mean(axis=0)
                 all_avs_by_trial.append(trial_mean)
+
+            try:
+                all_avs_by_trial = np.array(all_avs_by_trial)
+            except:
+                ipdb.set_trace()
+                
             all_subject_avs_by_trial.append(all_avs_by_trial)
         ipdb.set_trace()
         all_subject_avs_by_trial = np.array(all_subject_avs_by_trial)
