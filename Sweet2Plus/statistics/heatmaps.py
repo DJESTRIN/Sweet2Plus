@@ -70,11 +70,10 @@ class heatmap(regression_coeffecient_pca_clustering):
                 most_common_shape = shape_counts.most_common(1)[0][0]  # The most common shape
                 all_av_neu_for_trial = [array for array in all_av_neu_for_trial if array.shape == most_common_shape]
 
-                ipdb.set_trace()
                 all_av_neu_for_trial = np.array(all_av_neu_for_trial)
                 trial_mean = all_av_neu_for_trial.mean(axis=0)
                 all_avs_by_trial.append(trial_mean)
-
+                
             try:
                 all_avs_by_trial = np.array(all_avs_by_trial)
             except:
