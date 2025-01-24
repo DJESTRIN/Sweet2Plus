@@ -28,8 +28,21 @@ class heatmap(regression_coeffecient_pca_clustering):
         self.preceding_seconds = self.preceding_frames/1.315
         self.post_stim_seconds = self.post_stim_frames/1.315
 
-        for k,single_neuron_activity in enumerate(self.neuronal_activity):
+        for k,subject_recording_activity in enumerate(self.neuronal_activity):
             one_hot_oh = self.behavior_ts_onehot[k]
+            
+            # Get all indexes for time stamps in image time
+            timestamps_oh = []
+            for trial in one_hot_oh:
+                
+                trial_ts = []
+                for index in range(len(trial)-1):
+                    if trial[index]==0 and trial[index+1]==1:
+                        trial_ts.append(index)
+                
+                timestamps_oh.append(trial_ts)
+
+
             ipdb.set_trace()
 
     def plot_data_by_trial(self):
