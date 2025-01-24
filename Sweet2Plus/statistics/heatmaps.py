@@ -29,6 +29,7 @@ class heatmap(regression_coeffecient_pca_clustering):
         self.post_stim_seconds = self.post_stim_frames/1.315
 
         for k,subject_recording_activity in enumerate(self.neuronal_activity):
+            subject_recording_activity = subject_recording_activity.T
             one_hot_oh = self.behavior_ts_onehot[k]
             
             # Get all indexes for time stamps in image time
@@ -42,7 +43,6 @@ class heatmap(regression_coeffecient_pca_clustering):
                 
                 timestamps_oh.append(trial_ts)
 
-            ipdb.set_trace()
             # Get all neural data for each timestamp
             for trial in timestamps_oh:
                 for ts in trial:
