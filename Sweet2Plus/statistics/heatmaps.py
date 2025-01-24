@@ -9,6 +9,7 @@ Version: 1.0
 Date: 12-06-2024
 """
 import numpy as np
+from collections import Counter
 from Sweet2Plus.statistics.coefficient_clustering import regression_coeffecient_pca_clustering, gather_data, cli_parser
 import ipdb 
 
@@ -61,9 +62,15 @@ class heatmap(regression_coeffecient_pca_clustering):
             all_avs_by_trial = []
             for trial in subject_peth_oh:
                 try:
-                    all_av_neu_for_trial = np.array([ts.mean(axis=1) for ts in trial])
+                    all_av_neu_for_trial = [ts.mean(axis=1) for ts in trial]
+                    shapes = [array.shape for array in all_av_neu_for_trial]
+                    shape_counts = Counter(shapes)
+                    most_common_shape = shape_counts.most_common(1)[0][0]  # The most common shape
+                    all_av_neu_for_trial = [array for array in all_av_neu_for_trial if array.shape == most_common_shape]
+
                 except:
                     ipdb.set_trace()
+                    
                 trial_mean = all_av_neu_for_trial.mean(axis=0)
                 all_avs_by_trial.append(trial_mean)
 
@@ -71,7 +78,7 @@ class heatmap(regression_coeffecient_pca_clustering):
                 all_avs_by_trial = np.array(all_avs_by_trial)
             except:
                 ipdb.set_trace()
-                
+
             all_subject_avs_by_trial.append(all_avs_by_trial)
         ipdb.set_trace()
         all_subject_avs_by_trial = np.array(all_subject_avs_by_trial)
