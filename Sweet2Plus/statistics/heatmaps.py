@@ -61,7 +61,10 @@ class heatmap(regression_coeffecient_pca_clustering):
         for subject_peth_oh in self.all_neural_peth_data:
             all_avs_by_trial = []
             for trial in subject_peth_oh:
+                # Calculate the average neural activity across neurons for all time stamps for given trial
                 all_av_neu_for_trial = [ts.mean(axis=1) for ts in trial]
+
+                # Filter out any trials that might not have the correct number of timestamps 
                 shapes = [array.shape for array in all_av_neu_for_trial]
                 shape_counts = Counter(shapes)
                 most_common_shape = shape_counts.most_common(1)[0][0]  # The most common shape
