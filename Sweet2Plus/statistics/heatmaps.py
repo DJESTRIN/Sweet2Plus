@@ -60,7 +60,10 @@ class heatmap(regression_coeffecient_pca_clustering):
         for subject_peth_oh in self.all_neural_peth_data:
             all_avs_by_trial = []
             for trial in subject_peth_oh:
-                all_av_neu_for_trial = np.array([ts.mean(axis=1) for ts in trial])
+                try:
+                    all_av_neu_for_trial = np.array([ts.mean(axis=1) for ts in trial])
+                except:
+                    ipdb.set_trace()
                 trial_mean = all_av_neu_for_trial.mean(axis=0)
                 all_avs_by_trial.append(trial_mean)
             all_subject_avs_by_trial.append(all_avs_by_trial)
