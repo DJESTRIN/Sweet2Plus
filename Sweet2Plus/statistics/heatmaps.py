@@ -55,11 +55,12 @@ class heatmap(regression_coeffecient_pca_clustering):
                 self.all_neural_trial_ts.append(trial_neural_all_ts)
             self.all_neural_peth_data.append(self.all_neural_trial_ts)
 
-    def plot_data_by_trial(self):
+        # Regroup data by averages
         all_subject_avs_by_trial = []
         for subject_peth_oh in self.all_neural_peth_data:
             all_avs_by_trial = []
             for trial in subject_peth_oh:
+                ipdb.set_trace()
                 all_av_neu_for_trial = np.array([ts.mean(axis=0) for ts in trial])
                 trial_mean = all_av_neu_for_trial.mean(axis=0)
                 all_avs_by_trial.append(trial_mean)
@@ -67,6 +68,11 @@ class heatmap(regression_coeffecient_pca_clustering):
             all_subject_avs_by_trial.append(all_avs_by_trial)
         ipdb.set_trace()
         all_subject_avs_by_trial = np.array(all_subject_avs_by_trial)
+
+    def plot_data_by_trial(self):
+        """ """
+        ipdb.set_trace()
+
 
 
 if __name__=='__main__':
