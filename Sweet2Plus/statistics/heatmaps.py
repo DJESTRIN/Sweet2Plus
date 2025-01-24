@@ -9,7 +9,9 @@ Version: 1.0
 Date: 12-06-2024
 """
 import numpy as np
+import os
 from collections import Counter
+import matplotlib.pyplot as plt
 from Sweet2Plus.statistics.coefficient_clustering import regression_coeffecient_pca_clustering, gather_data, cli_parser
 import ipdb 
 
@@ -73,21 +75,23 @@ class heatmap(regression_coeffecient_pca_clustering):
                 all_av_neu_for_trial = np.array(all_av_neu_for_trial)
                 trial_mean = all_av_neu_for_trial.mean(axis=0)
                 all_avs_by_trial.append(trial_mean)
-                
-            try:
                 all_avs_by_trial = np.array(all_avs_by_trial)
-            except:
-                ipdb.set_trace()
-
             all_subject_avs_by_trial.append(all_avs_by_trial)
-        ipdb.set_trace()
         all_subject_avs_by_trial = np.array(all_subject_avs_by_trial)
+        self.all_avs = all_subject_avs_by_trial.mean(axis=0)
 
     def plot_data_by_trial(self):
         """ """
-        ipdb.set_trace()
-
-
+        time = np.arange(self.all_avs.shape[1])
+        plt.figure(figsize=(10, 6))
+        for row in self.all_avs:
+            plt.plot(time, row) 
+        plt.xlabel('Time')
+        plt.ylabel('Average Normalized DF across all subjects and neurons')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(self.drop_directory,"AverageActivityAllNeurons.jpg"))
+        print('Finished plotting averages')
 
 if __name__=='__main__':
     data_directory, drop_directory = cli_parser()
