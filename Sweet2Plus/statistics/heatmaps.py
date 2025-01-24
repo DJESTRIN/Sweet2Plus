@@ -41,8 +41,6 @@ class heatmap(regression_coeffecient_pca_clustering):
                         trial_ts.append(index)
                 
                 timestamps_oh.append(trial_ts)
-
-
             ipdb.set_trace()
 
     def plot_data_by_trial(self):
