@@ -61,16 +61,14 @@ class heatmap(regression_coeffecient_pca_clustering):
         for subject_peth_oh in self.all_neural_peth_data:
             all_avs_by_trial = []
             for trial in subject_peth_oh:
-                try:
-                    all_av_neu_for_trial = [ts.mean(axis=1) for ts in trial]
-                    shapes = [array.shape for array in all_av_neu_for_trial]
-                    shape_counts = Counter(shapes)
-                    most_common_shape = shape_counts.most_common(1)[0][0]  # The most common shape
-                    all_av_neu_for_trial = [array for array in all_av_neu_for_trial if array.shape == most_common_shape]
+                all_av_neu_for_trial = [ts.mean(axis=1) for ts in trial]
+                shapes = [array.shape for array in all_av_neu_for_trial]
+                shape_counts = Counter(shapes)
+                most_common_shape = shape_counts.most_common(1)[0][0]  # The most common shape
+                all_av_neu_for_trial = [array for array in all_av_neu_for_trial if array.shape == most_common_shape]
 
-                except:
-                    ipdb.set_trace()
-                    
+                ipdb.set_trace()
+                all_av_neu_for_trial = np.array(all_av_neu_for_trial)
                 trial_mean = all_av_neu_for_trial.mean(axis=0)
                 all_avs_by_trial.append(trial_mean)
 
