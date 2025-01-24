@@ -88,11 +88,12 @@ class heatmap(regression_coeffecient_pca_clustering):
         N = self.all_avs.shape[0] 
 
         plt.figure(figsize=(10, 6))
-
+        ipdb.set_trace()
         for row, sd, labeloh in zip(self.all_avs, self.all_sds, self.trial_list):
             se = sd / np.sqrt(N) 
             plt.plot(time, row, label=labeloh) 
             plt.fill_between(time, row - se, row + se, alpha=0.2, label=labeloh)  
+            print('labeloh')
 
         plt.xlabel('Time')
         plt.ylabel('Average Normalized DF across all subjects and neurons')
