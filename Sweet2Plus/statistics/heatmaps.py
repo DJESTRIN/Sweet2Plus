@@ -80,18 +80,24 @@ class heatmap(regression_coeffecient_pca_clustering):
             all_subject_avs_by_trial.append(all_avs_by_trial)
         all_subject_avs_by_trial = np.array(all_subject_avs_by_trial)
         self.all_avs = all_subject_avs_by_trial.mean(axis=0)
+        self.all_sds = all_subject_avs_by_trial.std(axis=0)
 
     def plot_data_by_trial(self):
         """ """
         time = np.arange(self.all_avs.shape[1])
+        N = self.all_avs.shape[0] 
+
         plt.figure(figsize=(10, 6))
-        for row in self.all_avs:
-            plt.plot(time, row) 
+
+        for row, sd, labeloh in zip(self.all_avs, self.all_sds, self.trial_list):
+            se = sd / np.sqrt(N) 
+            plt.plot(time, row, label=labeloh) 
+            plt.fill_between(time, row - se, row + se, alpha=0.2, label=labeloh)  
+
         plt.xlabel('Time')
         plt.ylabel('Average Normalized DF across all subjects and neurons')
-        plt.legend()
+        plt.legend(loc="best")
         plt.grid(True)
-        plt.savefig(os.path.join(self.drop_directory,"AverageActivityAllNeurons.jpg"))
         print('Finished plotting averages')
 
 if __name__=='__main__':
