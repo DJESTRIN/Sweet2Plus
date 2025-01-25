@@ -105,24 +105,18 @@ class heatmap(regression_coeffecient_pca_clustering):
                         trial_mean_auc = np.nan
 
                     all_auc_by_trial.append(trial_mean_auc)
-            
-            # Convert the AUCs for this subject to a numpy array and append
-            all_auc_by_trial = np.array(all_auc_by_trial)  # Shape: (trials,)
-            all_subject_auc_by_trial.append(all_auc_by_trial)
+                # Convert the AUCs for this subject to a numpy array and append
+                all_auc_by_trial = np.array(all_auc_by_trial)  # Shape: (trials,)
+                all_subject_auc_by_trial.append(all_auc_by_trial)
 
-        # Convert to numpy array
-        all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  # Shape: (subjects, trials)
+            # Convert to numpy array
+            all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  # Shape: (subjects, trials)
 
-        # Calculate the mean and standard deviation of AUCs across subjects
-        self.all_aucs = all_subject_auc_by_trial.mean(axis=0)  # Mean AUC for each trial across subjects
-        self.all_sds = all_subject_auc_by_trial.std(axis=0)   # Std deviation of AUCs for each trial across subjects
-        self.N2 = all_subject_auc_by_trial.shape[0]            # Number of subjects
-        self.all_subject_auc_by_trial = all_subject_auc_by_trial
 
     def plot_data_by_trial(self):
-        """ """
+
         time = np.arange(self.all_avs.shape[1])
-        custom_labels = np.linspace(-self.preceding_seconds, self.post_stim_seconds len(time))  # Generate custom labels
+        custom_labels = np.linspace( (-1*self.preceding_seconds), self.post_stim_seconds, len(time))  # Generate custom labels
 
 
         plt.figure(figsize=(10, 6))
