@@ -147,6 +147,33 @@ class heatmap(regression_coeffecient_pca_clustering):
         plt.tight_layout()
         plt.savefig(os.path.join(self.drop_directory, "average_acitvity_auc.jpg"))
 
+    def generate_singular_neuronal_onehot(self):
+        """ 
+        
+        output 
+            individual neuronal activities for a trial (46, 1) floats -----> trial answer as one hot [0 , 0 , 1, 0]
+        """
+        all_trial_neuronal_data = []
+        all_trial_results = []
+        for subject_peth_oh in self.all_neural_peth_data:
+            for k,trial_data,trial_name in enumerate(zip(subject_peth_oh,self.trial_list)):
+                
+                for single_neuron_data in enumerate(trial_data):
+                    result_oh = np.zeros(shape=(1,4))
+                    if single_neuron_data.shape[0]<46:
+                        ipdb.set_trace()
+                        continue
+
+                    else:
+                        ipdb.set_trace()
+                        all_trial_neuronal_data.append(single_neuron_data)
+                        result_oh[:,k] = 1
+                        all_trial_results.append(result_oh)
+
+        ipdb.set_trace()
+
+
+
 
 if __name__=='__main__':
     data_directory, drop_directory = cli_parser()
