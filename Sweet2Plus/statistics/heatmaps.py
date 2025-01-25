@@ -108,33 +108,45 @@ class heatmap(regression_coeffecient_pca_clustering):
             avs_by_trial = np.array([np.array(trial_auc_oh).mean() for trial_auc_oh in all_auc_by_trial])
             all_subject_auc_by_trial.append(avs_by_trial)
         
-        ipdb.set_trace()
-        all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  
+        all_subject_auc_by_trial = np.array(all_subject_auc_by_trial) 
 
+        # Pull out attributes 
+        self.auc_avs = all_subject_auc_by_trial.mean(axis=0)
+        self.auc_N = all_subject_auc_by_trial.shape[0]
+        self.auc_ses = all_subject_auc_by_trial.std(axis=0)/np.sqrt(self.auc_N)
+        self.all_subject_auc_by_trial = all_subject_auc_by_trial
 
     def plot_data_by_trial(self):
-
+        # Set up x axis
         time = np.arange(self.all_avs.shape[1])
-        custom_labels = np.linspace( (-1*self.preceding_seconds), self.post_stim_seconds, len(time))  # Generate custom labels
+        custom_labels = np.linspace(-1 * self.preceding_seconds, self.post_stim_seconds, len(time))
+        colors = plt.cm.tab10(np.arange(len(self.trial_list))) 
 
+        # Generate plot
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6), gridspec_kw={'width_ratios': [2, 1]})  # Adjust relative sizes
 
-        plt.figure(figsize=(10, 6))
-        for row, sd, labeloh in zip(self.all_avs, self.all_sds, self.trial_list):
-            row = row - row[0] # rescale plot
-            se = sd / np.sqrt(self.N) 
-            plt.plot(custom_labels, row, label=labeloh) 
-            plt.fill_between(custom_labels, row - se, row + se, alpha=0.2)  
+        # AVerage activity plot
+        for row, sd, labeloh, coloroh in zip(self.all_avs, self.all_sds, self.trial_list, colors):
+            row = row - row[0]  # Rescale plot
+            se = sd / np.sqrt(self.N)
+            axes[0].plot(custom_labels, row, label=labeloh, color = coloroh)
+            axes[0].fill_between(custom_labels, row - se, row + se, alpha=0.2, color = coloroh)
 
-        plt.axvline(x=0, color='black', linestyle='--')
+        axes[0].axvline(x=0, color='black', linestyle='--')
+        axes[0].set_xlabel('Time')
+        axes[0].set_ylabel('Average Normalized DF \n Across Subjects and Neurons')
+        axes[0].legend(loc="best")
+        axes[0].grid(True)
 
-        plt.xlabel('Time')
-        plt.ylabel('Average Normalized DF \n Across Subjects and Neurons')
-        plt.legend(loc="best")
-        plt.grid(True)
-        plt.savefig(os.path.join(self.drop_directory,"AllAveragesNeuralActivity.jpg"))
-        print('Finished plotting averages')
+        # AUC bar plot
+        axes[1].bar(self.trial_list, self.auc_avs, yerr=self.auc_ses, capsize=5, alpha=0.8, edgecolor='black', color = colors)
+        axes[1].set_ylabel('AUC')
+        axes[1].grid(axis='y', linestyle='--', alpha=0.7)
 
-        ipdb.set_trace()
+        # Adjust layout and save the figure
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.drop_directory, "average_acitvity_auc.jpg"))
+
 
 if __name__=='__main__':
     data_directory, drop_directory = cli_parser()
