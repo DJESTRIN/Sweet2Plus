@@ -84,6 +84,50 @@ class heatmap(regression_coeffecient_pca_clustering):
         self.N = all_subject_avs_by_trial.shape[0]
         self.all_subject_avs_by_trial = all_subject_avs_by_trial
 
+        all_subject_auc_by_trial = []  # Store AUCs for all subjects
+        for subject_peth_oh in self.all_neural_peth_data:
+            all_auc_by_trial = []
+            for trial in subject_peth_oh:
+                # Calculate the average neural activity for each neuron across timestamps for given trial
+                all_neuron_data_for_trial = [ts for ts in trial]
+
+                # Filter out any trials that might not have the correct number of timestamps
+                shapes = [array.shape for array in all_neuron_data_for_trial]
+                shape_counts = Counter(shapes)
+                most_common_shape = shape_counts.most_common(1)[0][0]  # The most common shape
+                all_neuron_data_for_trial = [array for array in all_neuron_data_for_trial if array.shape == most_common_shape]
+
+                all_neuron_data_for_trial = np.array(all_neuron_data_for_trial)  # Shape: (neurons, time)
+
+                # Compute AUC for each neuron for the period 20 to 30
+                start_idx = 20  # Starting index (inclusive)
+                end_idx = 30    # Ending index (exclusive)
+                time = np.arange(all_neuron_data_for_trial.shape[-1])  # Generate time points
+
+                # Slice the time and data arrays for the desired range
+                sliced_time = time[start_idx:end_idx]
+                sliced_neuron_data = all_neuron_data_for_trial[:, start_idx:end_idx]  # Shape: (neurons, time in range)
+
+                # Compute AUC for each neuron
+                neuron_aucs = [np.trapz(data, sliced_time) for data in sliced_neuron_data]
+
+                # Average AUC across neurons for this trial
+                trial_mean_auc = np.mean(neuron_aucs)
+                all_auc_by_trial.append(trial_mean_auc)
+            
+            # Convert the AUCs for this subject to a numpy array and append
+            all_auc_by_trial = np.array(all_auc_by_trial)  # Shape: (trials,)
+            all_subject_auc_by_trial.append(all_auc_by_trial)
+
+        # Convert to numpy array
+        all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  # Shape: (subjects, trials)
+
+        # Calculate the mean and standard deviation of AUCs across subjects
+        self.all_aucs = all_subject_auc_by_trial.mean(axis=0)  # Mean AUC for each trial across subjects
+        self.all_sds = all_subject_auc_by_trial.std(axis=0)   # Std deviation of AUCs for each trial across subjects
+        self.N2 = all_subject_auc_by_trial.shape[0]            # Number of subjects
+        self.all_subject_auc_by_trial = all_subject_auc_by_trial
+
     def plot_data_by_trial(self):
         """ """
         time = np.arange(self.all_avs.shape[1])
@@ -100,11 +144,13 @@ class heatmap(regression_coeffecient_pca_clustering):
         plt.axvline(x=0, color='black', linestyle='--')
 
         plt.xlabel('Time')
-        plt.ylabel('Average Normalized DF across all subjects and neurons')
+        plt.ylabel('Average Normalized DF \n Across Subjects and Neurons')
         plt.legend(loc="best")
         plt.grid(True)
         plt.savefig(os.path.join(self.drop_directory,"AllAveragesNeuralActivity.jpg"))
         print('Finished plotting averages')
+
+        ipdb.set_trace()
 
 if __name__=='__main__':
     data_directory, drop_directory = cli_parser()
