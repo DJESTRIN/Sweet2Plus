@@ -86,31 +86,28 @@ class heatmap(regression_coeffecient_pca_clustering):
 
         # Regroup data by AUCs
         all_subject_auc_by_trial = []  # Store AUCs for all subjects
-        for subject_peth_oh in self.all_neural_peth_data:
-            all_auc_by_trial = []
-
-            # Loop over each trial_type in subject
-            for trial_type in subject_peth_oh:
-
-                # Loop over each timestamp
-                for ts in trial_type:
-                    # Parse out time of interest
+        for subject_peth_oh in self.all_neural_peth_data: # Loop over subjects
+            
+            all_auc_by_trial = [] # Collect average auc by trial for current subject
+            for trial_type in subject_peth_oh: # Loop over trial types
+                for ts in trial_type: # Loop over time stamps in trial type
+                    
+                    # Calculate AUC
                     try:
-                        ipdb.set_trace()
-                        cropped_data = ts[:,20:30]
-                        neuron_aucs = [np.trapz(row_oh) for row_oh in cropped_data]
-                        trial_mean_auc = np.mean(neuron_aucs)
+                        cropped_data = ts[20:30,:]
+                        neuron_aucs = [np.trapz(row_oh) for row_oh in cropped_data.T]
+                        trial_mean_auc = np.array(neuron_aucs).mean()[0]
+                    
                     except:
-                        ipdb.set_trace()
                         trial_mean_auc = np.nan
 
                     all_auc_by_trial.append(trial_mean_auc)
-                # Convert the AUCs for this subject to a numpy array and append
-                all_auc_by_trial = np.array(all_auc_by_trial)  # Shape: (trials,)
-                all_subject_auc_by_trial.append(all_auc_by_trial)
 
-            # Convert to numpy array
-            all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  # Shape: (subjects, trials)
+                ipdb.set_trace()
+                all_auc_by_trial = np.array(all_auc_by_trial)  
+                all_subject_auc_by_trial.append(all_auc_by_trial.mean())
+            ipdb.set_trace()
+            all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  
 
 
     def plot_data_by_trial(self):
