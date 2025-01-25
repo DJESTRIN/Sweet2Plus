@@ -12,6 +12,9 @@ import numpy as np
 import os
 from collections import Counter
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score
 from Sweet2Plus.statistics.coefficient_clustering import regression_coeffecient_pca_clustering, gather_data, cli_parser
 import ipdb 
 
@@ -25,6 +28,7 @@ class heatmap(regression_coeffecient_pca_clustering):
         self.gather_data_by_trial()
         self.plot_data_by_trial()
         self.generate_singular_neuronal_onehot()
+        self.run_svm()
 
     def gather_data_by_trial(self,preceding_frames=20,post_stim_frames=26):
         self.preceding_frames = preceding_frames
@@ -169,8 +173,25 @@ class heatmap(regression_coeffecient_pca_clustering):
                             result_oh[:,k] = 1
                             all_trial_results.append(result_oh)
 
-        ipdb.set_trace()
+        all_trial_results = np.array(all_trial_results)
+        all_trial_results = np.squeeze(all_trial_results)
+        all_trial_neuronal_data = np.array(all_trial_neuronal_data)
+        
+        self.X = all_trial_neuronal_data
+        self.y_one_hot = all_trial_results
 
+    def run_svm(self):
+        self.y = np.argmax(self.y_one_hot, axis=1)
+
+        indices = np.arange(self.X.shape[0])
+        np.random.shuffle(indices)
+        X, y = self.X[indices], self.y[indices]
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        svm = SVC(kernel='linear', random_state=42)
+        svm.fit(X_train, y_train)
+        y_pred = svm.predict(X_test)
+        return accuracy_score(y_test, y_pred)
 
 
 
