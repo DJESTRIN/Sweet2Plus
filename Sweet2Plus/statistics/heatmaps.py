@@ -104,9 +104,9 @@ class heatmap(regression_coeffecient_pca_clustering):
 
                     auc_by_trial.append(trial_mean_auc) # Collects each trial auc
                 all_auc_by_trial.append(auc_by_trial)
-            ipdb.set_trace()
-            all_auc_by_trial = np.array(all_auc_by_trial)  
-            all_subject_auc_by_trial.append(np.nanmean(all_auc_by_trial))
+
+            avs_by_trial = np.array([np.array(trial_auc_oh).mean() for trial_auc_oh in all_auc_by_trial])
+            all_subject_auc_by_trial.append(avs_by_trial)
         
         ipdb.set_trace()
         all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  
