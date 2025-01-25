@@ -91,6 +91,7 @@ class heatmap(regression_coeffecient_pca_clustering):
         plt.figure(figsize=(10, 6))
         for row, sd, labeloh in zip(self.all_avs, self.all_sds, self.trial_list):
             ipdb.set_trace()
+            row = row - row[0] # rescale plot
             se = sd / np.sqrt(self.N) 
             plt.plot(time, row, label=labeloh) 
             plt.fill_between(time, row - se, row + se, alpha=0.2, label=labeloh)  
