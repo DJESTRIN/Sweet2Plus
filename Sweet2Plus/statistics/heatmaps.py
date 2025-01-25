@@ -90,7 +90,6 @@ class heatmap(regression_coeffecient_pca_clustering):
 
         plt.figure(figsize=(10, 6))
         for row, sd, labeloh in zip(self.all_avs, self.all_sds, self.trial_list):
-            ipdb.set_trace()
             row = row - row[0] # rescale plot
             se = sd / np.sqrt(self.N) 
             plt.plot(time, row, label=labeloh) 
@@ -101,6 +100,7 @@ class heatmap(regression_coeffecient_pca_clustering):
         plt.ylabel('Average Normalized DF across all subjects and neurons')
         plt.legend(loc="best")
         plt.grid(True)
+        plt.savefig(os.path.join(self.drop_directory,"AllAveragesNeuralActivity.jpg"))
         print('Finished plotting averages')
 
 if __name__=='__main__':
