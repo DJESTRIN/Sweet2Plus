@@ -84,11 +84,12 @@ class heatmap(regression_coeffecient_pca_clustering):
         self.N = all_subject_avs_by_trial.shape[0]
         self.all_subject_avs_by_trial = all_subject_avs_by_trial
 
+        # Regroup data by AUCs
         all_subject_auc_by_trial = []  # Store AUCs for all subjects
         for subject_peth_oh in self.all_neural_peth_data:
             all_auc_by_trial = []
             for trial in subject_peth_oh:
-                # Calculate the average neural activity for each neuron across timestamps for given trial
+                # Reformat data into list
                 all_neuron_data_for_trial = [ts for ts in trial]
 
                 # Filter out any trials that might not have the correct number of timestamps
@@ -96,8 +97,9 @@ class heatmap(regression_coeffecient_pca_clustering):
                 shape_counts = Counter(shapes)
                 most_common_shape = shape_counts.most_common(1)[0][0]  # The most common shape
                 all_neuron_data_for_trial = [array for array in all_neuron_data_for_trial if array.shape == most_common_shape]
+                all_neuron_data_for_trial = np.array(all_neuron_data_for_trial)
 
-                all_neuron_data_for_trial = np.array(all_neuron_data_for_trial)  # Shape: (neurons, time)
+                ipdb.set_trace()
 
                 # Compute AUC for each neuron for the period 20 to 30
                 start_idx = 20  # Starting index (inclusive)
