@@ -28,7 +28,8 @@ class heatmap(regression_coeffecient_pca_clustering):
         self.gather_data_by_trial()
         self.plot_data_by_trial()
         self.generate_singular_neuronal_onehot()
-        self.run_svm()
+        column_accuracies = self.run_svm()
+        ipdb.set_trace()
 
     def gather_data_by_trial(self,preceding_frames=20,post_stim_frames=26):
         self.preceding_frames = preceding_frames
@@ -179,19 +180,32 @@ class heatmap(regression_coeffecient_pca_clustering):
         
         self.X = all_trial_neuronal_data
         self.y_one_hot = all_trial_results
-
+    
     def run_svm(self):
-        self.y = np.argmax(self.y_one_hot, axis=1)
-
+        # Shuffle and split data
         indices = np.arange(self.X.shape[0])
         np.random.shuffle(indices)
-        X, y = self.X[indices], self.y[indices]
-
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        svm = SVC(kernel='linear', random_state=42, verbose=True)
-        svm.fit(X_train, y_train)
-        y_pred = svm.predict(X_test)
-        return accuracy_score(y_test, y_pred)
+        X, y_one_hot = self.X[indices], self.y_one_hot[indices]
+        X_train, X_test, y_train_one_hot, y_test_one_hot = train_test_split(X, y_one_hot, test_size=0.2, random_state=42)
+        
+        # Train SVM on the full dataset
+        print('fitting svm')
+        svm = SVC(kernel='poly', random_state=42, verbose=True)
+        svm.fit(X_train, y_train_one_hot)
+        
+        column_accuracies = []
+        
+        # Predict on the test set for each column
+        for col in range(y_one_hot.shape[1]):
+            # Get the binary labels for each column
+            y_test = y_test_one_hot[:, col]
+            
+            # Predict and calculate accuracy for the current column
+            y_pred = svm.predict(X_test)[:, col]  # Get predictions for the current column
+            accuracy = accuracy_score(y_test, y_pred)
+            column_accuracies.append(accuracy)
+        
+        return column_accuracies
 
 
 
