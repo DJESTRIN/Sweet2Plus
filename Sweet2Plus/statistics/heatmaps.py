@@ -87,14 +87,17 @@ class heatmap(regression_coeffecient_pca_clustering):
     def plot_data_by_trial(self):
         """ """
         time = np.arange(self.all_avs.shape[1])
+        custom_labels = np.linspace(-20, 26, len(time))  # Generate custom labels
+
 
         plt.figure(figsize=(10, 6))
         for row, sd, labeloh in zip(self.all_avs, self.all_sds, self.trial_list):
             row = row - row[0] # rescale plot
             se = sd / np.sqrt(self.N) 
-            plt.plot(time, row, label=labeloh) 
-            plt.fill_between(time, row - se, row + se, alpha=0.2, label=labeloh)  
-            print('labeloh')
+            plt.plot(custom_labels, row, label=labeloh) 
+            plt.fill_between(custom_labels, row - se, row + se, alpha=0.2)  
+
+        plt.axvline(x=0, color='black', linestyle='--')
 
         plt.xlabel('Time')
         plt.ylabel('Average Normalized DF across all subjects and neurons')
