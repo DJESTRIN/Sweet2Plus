@@ -191,22 +191,25 @@ class heatmap(regression_coeffecient_pca_clustering):
         # Train SVM on the full dataset
         print('fitting svm')
         svm = SVC(kernel='poly', random_state=42, verbose=True)
-        svm.fit(X_train, y_train_one_hot)
+        
+        # Fit the SVM model once on the training data for each class
+        svm.fit(X_train, np.argmax(y_train_one_hot, axis=1))  # Training with the labels (not one-hot)
         
         column_accuracies = []
         
-        # Predict on the test set for each column
+        # Predict for each column in y_test_one_hot
         for col in range(y_one_hot.shape[1]):
-            # Get the binary labels for each column
+            # Convert the current column to 1D binary labels
             y_test = y_test_one_hot[:, col]
             
-            # Predict and calculate accuracy for the current column
-            y_pred = svm.predict(X_test)[:, col]  # Get predictions for the current column
+            # Predict on the test set for the current class
+            y_pred = svm.predict(X_test)
+            
+            # Calculate accuracy for the current class
             accuracy = accuracy_score(y_test, y_pred)
             column_accuracies.append(accuracy)
         
         return column_accuracies
-
 
 
 if __name__=='__main__':
