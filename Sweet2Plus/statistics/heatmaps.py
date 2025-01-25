@@ -90,6 +90,7 @@ class heatmap(regression_coeffecient_pca_clustering):
             
             all_auc_by_trial = [] # Collect average auc by trial for current subject
             for trial_type in subject_peth_oh: # Loop over trial types
+                auc_by_trial = []
                 for ts in trial_type: # Loop over time stamps in trial type
                     
                     # Calculate AUC
@@ -101,12 +102,14 @@ class heatmap(regression_coeffecient_pca_clustering):
                     except:
                         trial_mean_auc = np.nan
 
-                    all_auc_by_trial.append(trial_mean_auc)
-
-                all_auc_by_trial = np.array(all_auc_by_trial)  
-                all_subject_auc_by_trial.append(np.nanmean(all_auc_by_trial))
+                    auc_by_trial.append(trial_mean_auc) # Collects each trial auc
+                all_auc_by_trial.append(auc_by_trial)
             ipdb.set_trace()
-            all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  
+            all_auc_by_trial = np.array(all_auc_by_trial)  
+            all_subject_auc_by_trial.append(np.nanmean(all_auc_by_trial))
+        
+        ipdb.set_trace()
+        all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  
 
 
     def plot_data_by_trial(self):
