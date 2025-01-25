@@ -158,17 +158,16 @@ class heatmap(regression_coeffecient_pca_clustering):
         all_trial_results = []
         for subject_peth_oh in self.all_neural_peth_data:
             for k,trial_data in enumerate(subject_peth_oh):
-                for single_neuron_data in trial_data:
-                    result_oh = np.zeros(shape=(1,4))
-                    if single_neuron_data.shape[0]<46:
-                        ipdb.set_trace()
+                for neuron_data in trial_data:
+                    if neuron_data.shape[0]<46:
                         continue
 
                     else:
-                        ipdb.set_trace()
-                        all_trial_neuronal_data.append(single_neuron_data)
-                        result_oh[:,k] = 1
-                        all_trial_results.append(result_oh)
+                        for single_neuron_data in neuron_data:
+                            all_trial_neuronal_data.append(single_neuron_data)
+                            result_oh = np.zeros(shape=(1,4))
+                            result_oh[:,k] = 1
+                            all_trial_results.append(result_oh)
 
         ipdb.set_trace()
 
