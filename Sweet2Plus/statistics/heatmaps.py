@@ -88,34 +88,23 @@ class heatmap(regression_coeffecient_pca_clustering):
         all_subject_auc_by_trial = []  # Store AUCs for all subjects
         for subject_peth_oh in self.all_neural_peth_data:
             all_auc_by_trial = []
-            for trial in subject_peth_oh:
-                # Reformat data into list
-                all_neuron_data_for_trial = [ts for ts in trial]
 
-                # Filter out any trials that might not have the correct number of timestamps
-                shapes = [array.shape for array in all_neuron_data_for_trial]
-                shape_counts = Counter(shapes)
-                most_common_shape = shape_counts.most_common(1)[0][0]  # The most common shape
-                all_neuron_data_for_trial = [array for array in all_neuron_data_for_trial if array.shape == most_common_shape]
-                all_neuron_data_for_trial = np.array(all_neuron_data_for_trial)
+            # Loop over each trial_type in subject
+            for trial_type in subject_peth_oh:
 
-                ipdb.set_trace()
+                # Loop over each timestamp
+                for ts in trial_type:
+                    # Parse out time of interest
+                    try:
+                        ipdb.set_trace()
+                        cropped_data = ts[:,20:30]
+                        neuron_aucs = [np.trapz(row_oh) for row_oh in cropped_data]
+                        trial_mean_auc = np.mean(neuron_aucs)
+                    except:
+                        ipdb.set_trace()
+                        trial_mean_auc = np.nan
 
-                # Compute AUC for each neuron for the period 20 to 30
-                start_idx = 20  # Starting index (inclusive)
-                end_idx = 30    # Ending index (exclusive)
-                time = np.arange(all_neuron_data_for_trial.shape[-1])  # Generate time points
-
-                # Slice the time and data arrays for the desired range
-                sliced_time = time[start_idx:end_idx]
-                sliced_neuron_data = all_neuron_data_for_trial[:, start_idx:end_idx]  # Shape: (neurons, time in range)
-
-                # Compute AUC for each neuron
-                neuron_aucs = [np.trapz(data, sliced_time) for data in sliced_neuron_data]
-
-                # Average AUC across neurons for this trial
-                trial_mean_auc = np.mean(neuron_aucs)
-                all_auc_by_trial.append(trial_mean_auc)
+                    all_auc_by_trial.append(trial_mean_auc)
             
             # Convert the AUCs for this subject to a numpy array and append
             all_auc_by_trial = np.array(all_auc_by_trial)  # Shape: (trials,)
@@ -133,7 +122,7 @@ class heatmap(regression_coeffecient_pca_clustering):
     def plot_data_by_trial(self):
         """ """
         time = np.arange(self.all_avs.shape[1])
-        custom_labels = np.linspace(-20, 26, len(time))  # Generate custom labels
+        custom_labels = np.linspace(-self.preceding_seconds, self.post_stim_seconds len(time))  # Generate custom labels
 
 
         plt.figure(figsize=(10, 6))
