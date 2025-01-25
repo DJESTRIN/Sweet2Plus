@@ -24,6 +24,7 @@ class heatmap(regression_coeffecient_pca_clustering):
         # New methods
         self.gather_data_by_trial()
         self.plot_data_by_trial()
+        self.generate_singular_neuronal_onehot()
 
     def gather_data_by_trial(self,preceding_frames=20,post_stim_frames=26):
         self.preceding_frames = preceding_frames
