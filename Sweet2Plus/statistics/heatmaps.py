@@ -163,7 +163,7 @@ class heatmap(regression_coeffecient_pca_clustering):
                         continue
 
                     else:
-                        for single_neuron_data in neuron_data:
+                        for single_neuron_data in neuron_data.T:
                             all_trial_neuronal_data.append(single_neuron_data)
                             result_oh = np.zeros(shape=(1,4))
                             result_oh[:,k] = 1
