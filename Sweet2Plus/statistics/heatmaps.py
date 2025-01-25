@@ -96,16 +96,15 @@ class heatmap(regression_coeffecient_pca_clustering):
                     try:
                         cropped_data = ts[20:30,:]
                         neuron_aucs = [np.trapz(row_oh) for row_oh in cropped_data.T]
-                        trial_mean_auc = np.array(neuron_aucs).mean()[0]
+                        trial_mean_auc = np.array(neuron_aucs).mean()
                     
                     except:
                         trial_mean_auc = np.nan
 
                     all_auc_by_trial.append(trial_mean_auc)
 
-                ipdb.set_trace()
                 all_auc_by_trial = np.array(all_auc_by_trial)  
-                all_subject_auc_by_trial.append(all_auc_by_trial.mean())
+                all_subject_auc_by_trial.append(np.nanmean(all_auc_by_trial))
             ipdb.set_trace()
             all_subject_auc_by_trial = np.array(all_subject_auc_by_trial)  
 
