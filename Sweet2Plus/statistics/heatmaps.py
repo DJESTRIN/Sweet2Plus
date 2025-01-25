@@ -81,7 +81,7 @@ class heatmap(regression_coeffecient_pca_clustering):
         all_subject_avs_by_trial = np.array(all_subject_avs_by_trial)
         self.all_avs = all_subject_avs_by_trial.mean(axis=0)
         self.all_sds = all_subject_avs_by_trial.std(axis=0)
-        self.N = self.all_subject_avs_by_trial.shape[0]
+        self.N = all_subject_avs_by_trial.shape[0]
         self.all_subject_avs_by_trial = all_subject_avs_by_trial
 
     def plot_data_by_trial(self):
