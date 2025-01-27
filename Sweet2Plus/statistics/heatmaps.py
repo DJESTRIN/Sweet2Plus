@@ -190,7 +190,7 @@ class heatmap(regression_coeffecient_pca_clustering):
         
         # Train SVM on the full dataset
         print('fitting svm')
-        svm = SVC(kernel='poly', random_state=42, verbose=True, njobs = -1, max_iter = 100)
+        svm = SVC(kernel='poly', random_state=42, verbose=True, max_iter = 100)
         
         # Fit the SVM model once on the training data for each class
         svm.fit(X_train, np.argmax(y_train_one_hot, axis=1))  # Training with the labels (not one-hot)
