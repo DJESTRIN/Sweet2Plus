@@ -177,7 +177,7 @@ class heatmap(regression_coeffecient_pca_clustering):
         all_trial_results = np.squeeze(all_trial_results)
         all_trial_neuronal_data = np.array(all_trial_neuronal_data)
         
-        self.X = all_trial_neuronal_data
+        self.X_original = all_trial_neuronal_data
         self.y_one_hot = all_trial_results
     
     def run_svm(self):

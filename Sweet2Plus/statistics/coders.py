@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Module name: decoders.py
+Module name: coders.py
 Description: Contains classes for decoding neuronal activity. 
 Author: David Estrin
 Version: 1.0
@@ -19,7 +19,8 @@ Analysis 2:
     How should we graph the data? -- 
 
 """
-from Sweet2Plus.statistics.heatmaps import *
+from Sweet2Plus.statistics.heatmaps import heatmap
+from Sweet2Plus.statistics.coefficient_clustering import cli_parser, gather_data
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -29,12 +30,17 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import optuna
 import ipdb
 
-
 class format_data(heatmap):
-    def __init__(self,batch_size=64):
-        super(format_data, self).__init__()
+    def __init__(self, drop_directory, neuronal_activity, behavioral_timestamps, neuron_info, 
+                 trial_list=['Vanilla', 'PeanutButter', 'Water', 'FoxUrine'],
+                 normalize_neural_activity=False, regression_type='ridge', 
+                 batch_size=64):
+        super().__init__(drop_directory, neuronal_activity, behavioral_timestamps, neuron_info,
+                         trial_list, normalize_neural_activity, regression_type)
+        
         self.batch_size = batch_size
 
     def __call__(self):
@@ -149,7 +155,6 @@ class Education:
                                                  label = "training_f1",
                                                  output_file = os.path.join(self.drop_directory,"training_f1.jpg"))
 
-
     def testing(self):
         self.model_oh.eval()  # Set model to evaluation mode
         all_preds = []
@@ -165,20 +170,70 @@ class Education:
         self.testing_f1 = f1_score(all_labels, all_preds, average='macro')
         print(f"Final Testing F1 Score: {self.testing_f1:.4f}")
     
+def hyperparameter_search_wrapper(data_directory, drop_directory,ntrials=1000):
+    """ Utalizes optuna to find the best hyperparmeter results """
+    def objective(trial):
+        lr = trial.suggest_float("lr", -np.pi/2, np.pi/2)  
+    
+        # Preprocess and structure the data
+        neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
+        data_obj_oh = format_data(drop_directory=drop_directory,
+                            neuronal_activity=neuronal_activity,
+                            behavioral_timestamps=behavioral_timestamps,
+                            neuron_info=neuron_info)
+
+        # Build neural network model
+        current_model_oh = NeuronalActivity_Encoder_Decoder()
+
+        # Build figures object
+        figures_object_oh = NeuralNetworkFigures()
+
+        # Build education pipeline
+        education_obj = Education(data_obj = data_obj_oh,
+                neural_network_obj = current_model_oh, 
+                figures_obj = figures_object_oh)
+            
+        average_train_f1 , average_test_f1 = education_obj()
+
+        return average_test_f1
+    
+    study = optuna.create_study(direction="maximize")  # We want to minimize the metric
+    study.optimize(objective, n_trials=ntrials, n_jobs=-1, show_progress_bar=True)  # Run optimization for 100 trials
+
+    # Get the best parameters from the optimization
+    best_trial = study.best_trial
+    print(f"Best trial: {best_trial.number}")
+    print(f"Best value: {best_trial.value}")
+    print(f"Best parameters: {best_trial.params}")
 
 if __name__=='__main__':
-    # Structure data
-    data_obj_oh = format_data()
-    data_obj_oh()
+    # Get data paths
+    data_directory, drop_directory = cli_parser()
 
-    # Build neural network model
-    current_model_oh = NeuronalActivity_Encoder_Decoder()
+    # Hard coded for now
+    tune_hyperparameters = False
 
-    # Build figures object
-    figures_object_oh = NeuralNetworkFigures()
+    # Search hyper parmeter space for best model or just run a single model
+    if tune_hyperparameters:
+        hyperparameter_search_wrapper(data_directory=data_directory,drop_directory=drop_directory)
+    
+    else:
+        # Preprocess and structure the data
+        neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
+        data_obj_oh = format_data(drop_directory=drop_directory,
+                            neuronal_activity=neuronal_activity,
+                            behavioral_timestamps=behavioral_timestamps,
+                            neuron_info=neuron_info)
 
-    # Build education pipeline
-    education_obj = Education(data_obj = data_obj_oh,
-              neural_network_obj = current_model_oh, 
-              figures_obj = figures_object_oh)    
-    education_obj()
+        # Build neural network model
+        current_model_oh = NeuronalActivity_Encoder_Decoder()
+
+        # Build figures object
+        figures_object_oh = NeuralNetworkFigures()
+
+        # Build education pipeline
+        education_obj = Education(data_obj = data_obj_oh,
+                neural_network_obj = current_model_oh, 
+                figures_obj = figures_object_oh)
+            
+        education_obj()
