@@ -192,18 +192,12 @@ class heatmap(regression_coeffecient_pca_clustering):
         # Train SVM on the full dataset
         print('fitting svm')
         param_grid = {
-            'C': [0.1, 1, 10, 100],                   # Regularization parameter
-            'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],  # Kernel types
-            'degree': [2, 3, 4, 5],                   # Degree of polynomial kernel (only used if kernel='poly')
-            'gamma': ['scale', 'auto', 0.1, 0.01, 1], # Kernel coefficient for 'rbf', 'poly', and 'sigmoid'
-            'coef0': [0.0, 0.1, 0.5, 1],              # Independent term in kernel function (used for 'poly' and 'sigmoid')
-            'tol': [1e-3, 1e-4, 1e-5],                # Tolerance for stopping criteria
-            'class_weight': [None, 'balanced'],       # Adjust weights based on class frequencies
-            'shrinking': [True, False],               # Use shrinking heuristic
-            'probability': [True, False],             # Enable probability estimates (slower but useful in some cases)
-            'decision_function_shape': ['ovo', 'ovr'] # Decision function shape: one-vs-one or one-vs-rest
+            'C': [0.1, 1, 10],  # Regularization parameter
+            'degree': [2, 3, 4],  # Degree of the polynomial kernel
+            'coef0': [0.0, 0.5, 1.0],  # Independent term in the polynomial kernel
+            'gamma': ['scale', 'auto']  # Kernel coefficient
         }
-        grid = GridSearchCV(SVC(), param_grid, n_jobs=-1, verbose=2, cv=3)
+        grid = GridSearchCV(SVC(kernel='poly',verbose=True,max_iter=100), param_grid, n_jobs=-1, verbose=2, cv=3)
         grid.fit(X_train, np.argmax(y_train_one_hot, axis=1))
 
         print("Best parameters found:", grid.best_params_)
