@@ -197,7 +197,7 @@ class heatmap(regression_coeffecient_pca_clustering):
             'coef0': [0.0, 0.5, 1.0],  # Independent term in the polynomial kernel
             'gamma': ['scale', 'auto']  # Kernel coefficient
         }
-        grid = GridSearchCV(SVC(kernel='poly',verbose=True,max_iter=100), param_grid, n_jobs=-1, verbose=2, cv=3)
+        grid = GridSearchCV(SVC(kernel='poly',verbose=True,max_iter=10000), param_grid, n_jobs=-1, verbose=2, cv=3)
         grid.fit(X_train, np.argmax(y_train_one_hot, axis=1))
 
         print("Best parameters found:", grid.best_params_)
