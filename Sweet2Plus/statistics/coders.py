@@ -37,14 +37,24 @@ class format_data(heatmap):
     def __init__(self, drop_directory, neuronal_activity, behavioral_timestamps, neuron_info, 
                  trial_list=['Vanilla', 'PeanutButter', 'Water', 'FoxUrine'],
                  normalize_neural_activity=False, regression_type='ridge', 
-                 hyp_batch_size=64):
+                 hyp_batch_size=64, preprocessed = None):
         super().__init__(drop_directory, neuronal_activity, behavioral_timestamps, neuron_info,
                          trial_list, normalize_neural_activity, regression_type)
         
         self.batch_size = hyp_batch_size
+        self.preprocessed = preprocessed
+        ipdb.set_trace()
 
     def __call__(self):
-        super().__call__()
+        if self.preprocessed:
+            # Load data from .npy files
+            ipdb.set_trace()
+            X_path, y_path = self.preprocessed
+            self.X_original = np.load(X_path)
+            self.y_one_hot = np.load(y_path)
+        else:
+            super().__call__()
+
         X_train, X_test, y_train, y_test = self.clean_and_split_data()
         self.torch_loader(X_train, X_test, y_train, y_test)
 
@@ -243,11 +253,13 @@ if __name__=='__main__':
     
     else:
         # Preprocess and structure the data
-        neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
+        # neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
+        preprossesed_oh = (os.path.join(drop_directory,"X_original.npy"),os.path.join(drop_directory,"y_one_hot.npy"))
         data_obj_oh = format_data(drop_directory=drop_directory,
-                            neuronal_activity=neuronal_activity,
-                            behavioral_timestamps=behavioral_timestamps,
-                            neuron_info=neuron_info)
+                            neuronal_activity=None,
+                            behavioral_timestamps=None,
+                            neuron_info=None,
+                            preprocessed=preprossesed_oh)
 
         # Build neural network model
         ipdb.set_trace()
