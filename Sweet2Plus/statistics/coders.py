@@ -97,10 +97,11 @@ class NeuralNetworkFigures():
         plt.savefig(outputfile)
 
 class Education:
-    def __init__(self, data_obj, neural_network_obj, figures_obj):
-        self.total_epochs = 100  
-        self.learning_rate = 0.001
-        self.M = 10  
+    def __init__(self, data_obj, neural_network_obj, figures_obj, total_epochs = 100, learning_rate = 0.001, gamma=0.9, show_results = 10):
+        self.total_epochs = total_epochs
+        self.learning_rate = learning_rate
+        self.gamma = gamma
+        self.show_results = show_results
         self.model_oh = neural_network_obj 
         self.train_loader = data_obj.train_loader 
         self.test_loader = data_obj.test_loader  
@@ -118,6 +119,8 @@ class Education:
     def training(self):
         criterion = nn.MSELoss()
         optimizer = optim.Adam(self.model_oh.parameters(), lr=self.learning_rate)
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=self.gamma)  # Decay factor = 0.9
+
 
         for epoch in range(self.total_epochs):
             self.model_oh.train()  # Set model to training mode
@@ -131,6 +134,7 @@ class Education:
                 loss = criterion(res, batch_y)  # Compute loss
                 loss.backward()  # Backward pass
                 optimizer.step()  # Update weights
+                scheduler.step()
 
                 total_loss += loss.item()
                 all_preds.extend(torch.argmax(res, dim=1).cpu().numpy())
@@ -145,7 +149,7 @@ class Education:
             self.training_f1.append(avg_f1)
 
             # Print stats every M epochs
-            if (epoch + 1) % self.M == 0:
+            if (epoch + 1) % self.show_results == 0:
                 print(f"Epoch {epoch + 1}/{self.total_epochs}, Loss: {avg_loss:.4f}, F1 Score: {avg_f1:.4f}")
                 self.figures.plot_learning_curve(data = self.training_loss, 
                                                  label = "training_loss", 
@@ -170,7 +174,7 @@ class Education:
         self.testing_f1 = f1_score(all_labels, all_preds, average='macro')
         print(f"Final Testing F1 Score: {self.testing_f1:.4f}")
     
-def hyperparameter_search_wrapper(data_directory, drop_directory,ntrials=1000):
+def hyperparameter_search_wrapper(data_directory, drop_directory, ntrials=1000):
     """ Utalizes optuna to find the best hyperparmeter results """
     def objective(trial):
         lr = trial.suggest_float("lr", -np.pi/2, np.pi/2)  
