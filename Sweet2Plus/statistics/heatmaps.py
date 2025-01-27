@@ -179,49 +179,11 @@ class heatmap(regression_coeffecient_pca_clustering):
         
         self.X_original = all_trial_neuronal_data
         self.y_one_hot = all_trial_results
-    
-    def run_svm(self):
-        # Shuffle and split data
-        indices = np.arange(self.X.shape[0])
-        np.random.shuffle(indices)
-        X, y_one_hot = self.X[indices], self.y_one_hot[indices]
-        X_train, X_test, y_train_one_hot, y_test_one_hot = train_test_split(X, y_one_hot, test_size=0.2, random_state=42)
-        
-        # Train SVM on the full dataset
-        print('fitting svm')
-        param_grid = {
-            'C': [0.1, 1, 10],  # Regularization parameter
-            'degree': [2, 3, 4],  # Degree of the polynomial kernel
-            'coef0': [0.0, 0.5, 1.0],  # Independent term in the polynomial kernel
-            'gamma': ['scale', 'auto']  # Kernel coefficient
-        }
-        grid = GridSearchCV(SVC(kernel='poly',verbose=True,max_iter=10000), param_grid, n_jobs=-1, verbose=2, cv=3)
-        grid.fit(X_train, np.argmax(y_train_one_hot, axis=1))
 
-        print("Best parameters found:", grid.best_params_)
-        print("Best cross-validation score:", grid.best_score_)
-        ipdb.set_trace()
-
-        # svm = SVC(kernel='poly', random_state=42, verbose=True, max_iter = 100)
-        
-        # # Fit the SVM model once on the training data for each class
-        # svm.fit(X_train, np.argmax(y_train_one_hot, axis=1))  # Training with the labels (not one-hot)
-        
-        column_accuracies = []
-        
-        # Predict for each column in y_test_one_hot
-        for col in range(y_one_hot.shape[1]):
-            # Convert the current column to 1D binary labels
-            y_test = y_test_one_hot[:, col]
-            
-            # Predict on the test set for the current class
-            y_pred = svm.predict(X_test)
-            
-            # Calculate accuracy for the current class
-            accuracy = accuracy_score(y_test, y_pred)
-            column_accuracies.append(accuracy)
-        
-        return column_accuracies
+        # Save results to numpy file
+        np.save(file = os.path.join(self.drop_directory, "X_original.npy"), arr=self.X_original, allow_pickle=True)
+        np.save(file = os.path.join(self.drop_directory, "y_one_hot.npy"), arr=self.y_one_hot, allow_pickle=True)
+        print('Data was saved!')
 
 
 if __name__=='__main__':
