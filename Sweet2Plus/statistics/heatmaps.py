@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import GridSearchCV
 from Sweet2Plus.statistics.coefficient_clustering import regression_coeffecient_pca_clustering, gather_data, cli_parser
 import ipdb 
 
@@ -190,10 +191,29 @@ class heatmap(regression_coeffecient_pca_clustering):
         
         # Train SVM on the full dataset
         print('fitting svm')
-        svm = SVC(kernel='poly', random_state=42, verbose=True, max_iter = 100)
+        param_grid = {
+            'C': [0.1, 1, 10, 100],                   # Regularization parameter
+            'kernel': ['linear', 'poly', 'rbf', 'sigmoid'],  # Kernel types
+            'degree': [2, 3, 4, 5],                   # Degree of polynomial kernel (only used if kernel='poly')
+            'gamma': ['scale', 'auto', 0.1, 0.01, 1], # Kernel coefficient for 'rbf', 'poly', and 'sigmoid'
+            'coef0': [0.0, 0.1, 0.5, 1],              # Independent term in kernel function (used for 'poly' and 'sigmoid')
+            'tol': [1e-3, 1e-4, 1e-5],                # Tolerance for stopping criteria
+            'class_weight': [None, 'balanced'],       # Adjust weights based on class frequencies
+            'shrinking': [True, False],               # Use shrinking heuristic
+            'probability': [True, False],             # Enable probability estimates (slower but useful in some cases)
+            'decision_function_shape': ['ovo', 'ovr'] # Decision function shape: one-vs-one or one-vs-rest
+        }
+        grid = GridSearchCV(SVC(), param_grid, n_jobs=-1, verbose=2, cv=3)
+        grid.fit(X_train, np.argmax(y_train_one_hot, axis=1))
+
+        print("Best parameters found:", grid.best_params_)
+        print("Best cross-validation score:", grid.best_score_)
+        ipdb.set_trace()
+
+        # svm = SVC(kernel='poly', random_state=42, verbose=True, max_iter = 100)
         
-        # Fit the SVM model once on the training data for each class
-        svm.fit(X_train, np.argmax(y_train_one_hot, axis=1))  # Training with the labels (not one-hot)
+        # # Fit the SVM model once on the training data for each class
+        # svm.fit(X_train, np.argmax(y_train_one_hot, axis=1))  # Training with the labels (not one-hot)
         
         column_accuracies = []
         
