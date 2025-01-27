@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Module name: decoders.py
+Description: Contains classes for decoding neuronal activity. 
+Author: David Estrin
+Version: 1.0
+Date: 12-06-2024
+
+Analysis 1:
+    What are we trying to test? -- We are trying to determine what percent of neurons encode information regarding each stimulus...
+    What is the hypothesis? -- I hypothesize that most neurons encode information regarding the TMT stimulus 
+    How should we graph the data? -- We should graph the trial type in x axis and decoder accuracy +/- sem in y axis. 
+        We should also seperate the data based on Session and Group. 
+    
+Analysis 2:
+    What are we trying to test? -- We are trying to determine whether clustered neurons do in fact encode different aspects of task
+    What is the hypothesis? -- I hypothesize that different clusters activity decode better/worse certain stimuli than others
+    How should we graph the data? -- 
+
+"""
+from Sweet2Plus.statistics.heatmaps import *
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from sklearn.metrics import f1_score
+from torch.utils.data import DataLoader, TensorDataset, random_split
+from sklearn.model_selection import train_test_split
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+import ipdb
+
+
+class format_data(heatmap):
+    def __init__(self,batch_size=64):
+        super(format_data, self).__init__()
+        self.batch_size = batch_size
+
+    def __call__(self):
+        super().__call__()
+        X_train, X_test, y_train, y_test = self.clean_and_split_data()
+        self.torch_loader(X_train, X_test, y_train, y_test)
+
+    def clean_and_split_data(self):
+        # Shuffle the data
+        indices = np.arange(self.X_original.shape[0])
+        np.random.shuffle(indices)
+        self.X, y_one_hot = self.X_original[indices], self.y_one_hot[indices]
+
+        # Convert one hot to arg max
+        self.y = np.argmax(y_one_hot, axis=1)
+
+        # Split the data into training and testing
+        X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.2, random_state=42)
+
+        return X_train, X_test, y_train, y_test
+
+    def torch_loader(self, X_train, X_test, y_train, y_test):
+        """ Put numpy arrays into torch's data loader format """
+        training_dataset = TensorDataset(X_train, y_train)
+        testing_dataset = TensorDataset(X_test, y_test)
+
+        self.train_loader = DataLoader(training_dataset, batch_size=self.batch_size, shuffle=True)
+        self.test_loader = DataLoader(testing_dataset, batch_size=self.batch_size)
+        
+class NeuronalActivity_Encoder_Decoder(nn.Module):
+    def __init__(self, input_size, middle_dimension, output_size):
+        super(NeuronalActivity_Encoder_Decoder, self).__init__()
+
+        self.encoder = nn.Sequential(nn.Linear(input_size, 32), 
+                                     nn.ReLU(), 
+                                     nn.Linear(32, middle_dimension))
+        
+        self.decoder = nn.Sequential(nn.Linear(middle_dimension, 32),
+                                     nn.ReLU(),
+                                     nn.Linear(32, output_size))
+
+    def forward(self, x):
+        self.decoder(self.encoder(x))
+        return self.decoder(self.encoder(x))
+
+class NeuralNetworkFigures():
+    def __init__(self,name):
+        self.name = name
+    
+    def plot_learning_curve(self,data,label,outputfile):
+        plt.figure()
+        plt.plot(np.asarray(data),label=label)
+        plt.title(label=f"Current {label} results")
+        plt.savefig(outputfile)
+
+class Education:
+    def __init__(self, data_obj, neural_network_obj, figures_obj):
+        self.total_epochs = 100  
+        self.learning_rate = 0.001
+        self.M = 10  
+        self.model_oh = neural_network_obj 
+        self.train_loader = data_obj.train_loader 
+        self.test_loader = data_obj.test_loader  
+        self.drop_directory = os.path.join(data_obj.drop_directory,"neural_network_encoder_results/")
+
+        # Generate path if not real
+        if not os.path.exists(self.drop_directory):
+            os.mkdirs(self.drop_directory)
+
+        self.training_loss = []
+        self.training_f1 = []
+        self.testing_f1 = None
+        self.figures = figures_obj
+
+    def training(self):
+        criterion = nn.MSELoss()
+        optimizer = optim.Adam(self.model_oh.parameters(), lr=self.learning_rate)
+
+        for epoch in range(self.total_epochs):
+            self.model_oh.train()  # Set model to training mode
+            total_loss = 0
+            all_preds = []
+            all_labels = []
+
+            for batch_X, batch_y in self.train_loader:
+                optimizer.zero_grad()
+                res = self.model_oh(batch_X)  # Forward pass
+                loss = criterion(res, batch_y)  # Compute loss
+                loss.backward()  # Backward pass
+                optimizer.step()  # Update weights
+
+                total_loss += loss.item()
+                all_preds.extend(torch.argmax(res, dim=1).cpu().numpy())
+                all_labels.extend(batch_y.cpu().numpy())
+
+            # Calculate average loss and F1 score for the epoch
+            avg_loss = total_loss / len(self.train_loader)
+            avg_f1 = f1_score(all_labels, all_preds, average='macro')
+            
+            # Store stats for graphing
+            self.training_loss.append(avg_loss)
+            self.training_f1.append(avg_f1)
+
+            # Print stats every M epochs
+            if (epoch + 1) % self.M == 0:
+                print(f"Epoch {epoch + 1}/{self.total_epochs}, Loss: {avg_loss:.4f}, F1 Score: {avg_f1:.4f}")
+                self.figures.plot_learning_curve(data = self.training_loss, 
+                                                 label = "training_loss", 
+                                                 output_file = os.path.join(self.drop_directory,"training_loss.jpg"))
+                
+                self.figures.plot_learning_curve(data = self.training_f1, 
+                                                 label = "training_f1",
+                                                 output_file = os.path.join(self.drop_directory,"training_f1.jpg"))
+
+
+    def testing(self):
+        self.model_oh.eval()  # Set model to evaluation mode
+        all_preds = []
+        all_labels = []
+
+        with torch.no_grad():
+            for batch_X, batch_y in self.test_loader:
+                res = self.model_oh(batch_X)  # Forward pass
+                all_preds.extend(torch.argmax(res, dim=1).cpu().numpy())
+                all_labels.extend(batch_y.cpu().numpy())
+
+        # Calculate final F1 score
+        self.testing_f1 = f1_score(all_labels, all_preds, average='macro')
+        print(f"Final Testing F1 Score: {self.testing_f1:.4f}")
+    
+
+if __name__=='__main__':
+    # Structure data
+    data_obj_oh = format_data()
+    data_obj_oh()
+
+    # Build neural network model
+    current_model_oh = NeuronalActivity_Encoder_Decoder()
+
+    # Build figures object
+    figures_object_oh = NeuralNetworkFigures()
+
+    # Build education pipeline
+    education_obj = Education(data_obj = data_obj_oh,
+              neural_network_obj = current_model_oh, 
+              figures_obj = figures_object_oh)    
+    education_obj()

@@ -29,8 +29,6 @@ class heatmap(regression_coeffecient_pca_clustering):
         self.gather_data_by_trial()
         self.plot_data_by_trial()
         self.generate_singular_neuronal_onehot()
-        column_accuracies = self.run_svm()
-        ipdb.set_trace()
 
     def gather_data_by_trial(self,preceding_frames=20,post_stim_frames=26):
         self.preceding_frames = preceding_frames
