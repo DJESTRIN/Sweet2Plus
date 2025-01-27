@@ -37,11 +37,11 @@ class format_data(heatmap):
     def __init__(self, drop_directory, neuronal_activity, behavioral_timestamps, neuron_info, 
                  trial_list=['Vanilla', 'PeanutButter', 'Water', 'FoxUrine'],
                  normalize_neural_activity=False, regression_type='ridge', 
-                 batch_size=64):
+                 hyp_batch_size=64):
         super().__init__(drop_directory, neuronal_activity, behavioral_timestamps, neuron_info,
                          trial_list, normalize_neural_activity, regression_type)
         
-        self.batch_size = batch_size
+        self.batch_size = hyp_batch_size
 
     def __call__(self):
         super().__call__()
@@ -64,26 +64,27 @@ class format_data(heatmap):
 
     def torch_loader(self, X_train, X_test, y_train, y_test):
         """ Put numpy arrays into torch's data loader format """
-        training_dataset = TensorDataset(X_train, y_train)
-        testing_dataset = TensorDataset(X_test, y_test)
+        X_train, X_test, y_train, y_test = map(torch.tensor, (X_train, X_test, y_train, y_test))
+
+        training_dataset = TensorDataset(X_train.float(), y_train.long())
+        testing_dataset = TensorDataset(X_test.float(), y_test.long())
 
         self.train_loader = DataLoader(training_dataset, batch_size=self.batch_size, shuffle=True)
         self.test_loader = DataLoader(testing_dataset, batch_size=self.batch_size)
         
 class NeuronalActivity_Encoder_Decoder(nn.Module):
-    def __init__(self, input_size, middle_dimension, output_size):
+    def __init__(self, input_size, hyp_middle_dimension, output_size):
         super(NeuronalActivity_Encoder_Decoder, self).__init__()
 
         self.encoder = nn.Sequential(nn.Linear(input_size, 32), 
                                      nn.ReLU(), 
-                                     nn.Linear(32, middle_dimension))
+                                     nn.Linear(32, hyp_middle_dimension))
         
-        self.decoder = nn.Sequential(nn.Linear(middle_dimension, 32),
+        self.decoder = nn.Sequential(nn.Linear(hyp_middle_dimension, 32),
                                      nn.ReLU(),
                                      nn.Linear(32, output_size))
 
     def forward(self, x):
-        self.decoder(self.encoder(x))
         return self.decoder(self.encoder(x))
 
 class NeuralNetworkFigures():
@@ -93,14 +94,14 @@ class NeuralNetworkFigures():
     def plot_learning_curve(self,data,label,outputfile):
         plt.figure()
         plt.plot(np.asarray(data),label=label)
-        plt.title(label=f"Current {label} results")
+        plt.title(f"Current {label} results")
         plt.savefig(outputfile)
 
 class Education:
-    def __init__(self, data_obj, neural_network_obj, figures_obj, total_epochs = 100, learning_rate = 0.001, gamma=0.9, show_results = 10):
-        self.total_epochs = total_epochs
-        self.learning_rate = learning_rate
-        self.gamma = gamma
+    def __init__(self, data_obj, neural_network_obj, figures_obj, hyp_total_epochs = 100, hyp_learning_rate = 0.001, hyp_gamma=0.5, show_results = 10):
+        self.total_epochs = hyp_total_epochs
+        self.learning_rate = hyp_learning_rate
+        self.gamma = hyp_gamma
         self.show_results = show_results
         self.model_oh = neural_network_obj 
         self.train_loader = data_obj.train_loader 
@@ -109,18 +110,22 @@ class Education:
 
         # Generate path if not real
         if not os.path.exists(self.drop_directory):
-            os.mkdirs(self.drop_directory)
+            os.makedirs(self.drop_directory, exist_ok=True)
 
         self.training_loss = []
         self.training_f1 = []
         self.testing_f1 = None
         self.figures = figures_obj
 
-    def training(self):
-        criterion = nn.MSELoss()
-        optimizer = optim.Adam(self.model_oh.parameters(), lr=self.learning_rate)
-        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=self.gamma)  # Decay factor = 0.9
+    def __call__(self):
+        average_train_f1 = self.training()
+        average_test_f1 = self.testing()
+        return average_train_f1, average_test_f1
 
+    def training(self):
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(self.model_oh.parameters(), lr=self.learning_rate)
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=self.gamma)  
 
         for epoch in range(self.total_epochs):
             self.model_oh.train()  # Set model to training mode
@@ -158,6 +163,7 @@ class Education:
                 self.figures.plot_learning_curve(data = self.training_f1, 
                                                  label = "training_f1",
                                                  output_file = os.path.join(self.drop_directory,"training_f1.jpg"))
+        return np.mean(self.training_f1)
 
     def testing(self):
         self.model_oh.eval()  # Set model to evaluation mode
@@ -173,21 +179,29 @@ class Education:
         # Calculate final F1 score
         self.testing_f1 = f1_score(all_labels, all_preds, average='macro')
         print(f"Final Testing F1 Score: {self.testing_f1:.4f}")
+
+        return self.testing_f1
     
 def hyperparameter_search_wrapper(data_directory, drop_directory, ntrials=1000):
     """ Utalizes optuna to find the best hyperparmeter results """
     def objective(trial):
-        lr = trial.suggest_float("lr", -np.pi/2, np.pi/2)  
-    
+        hyp_learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-1, log=True)
+        hyp_gamma = trial.suggest_float("gamma", 0.1, 1.0, log=False)  # Typically between 0 and 1, no log scale
+        hyp_middle_dimension = trial.suggest_int("middle_dimension", 16, 512, log=True)  # Log scale for larger ranges
+        hype_batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128, 256, 512])
+        hyp_total_epochs = trial.suggest_int("total_epochs", 10, 200)  # Reasonable range for training epochs
+
+
         # Preprocess and structure the data
         neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
         data_obj_oh = format_data(drop_directory=drop_directory,
                             neuronal_activity=neuronal_activity,
                             behavioral_timestamps=behavioral_timestamps,
-                            neuron_info=neuron_info)
+                            neuron_info=neuron_info, 
+                            hyp_batch_size = hype_batch_size)
 
         # Build neural network model
-        current_model_oh = NeuronalActivity_Encoder_Decoder()
+        current_model_oh = NeuronalActivity_Encoder_Decoder(input_size=46, hyp_middle_dimension = hyp_middle_dimension, output_size=4)
 
         # Build figures object
         figures_object_oh = NeuralNetworkFigures()
@@ -195,8 +209,13 @@ def hyperparameter_search_wrapper(data_directory, drop_directory, ntrials=1000):
         # Build education pipeline
         education_obj = Education(data_obj = data_obj_oh,
                 neural_network_obj = current_model_oh, 
-                figures_obj = figures_object_oh)
-            
+                figures_obj = figures_object_oh,
+                hyp_total_epochs = hyp_total_epochs, 
+                hyp_learning_rate = hyp_learning_rate, 
+                hyp_gamma = hyp_gamma, 
+                show_results = int(np.round(hyp_total_epochs/10)))
+        print(f"Results will be showed every {int(np.round(hyp_total_epochs/10))} epochs")
+        
         average_train_f1 , average_test_f1 = education_obj()
 
         return average_test_f1
@@ -209,6 +228,7 @@ def hyperparameter_search_wrapper(data_directory, drop_directory, ntrials=1000):
     print(f"Best trial: {best_trial.number}")
     print(f"Best value: {best_trial.value}")
     print(f"Best parameters: {best_trial.params}")
+    ipdb.set_trace()
 
 if __name__=='__main__':
     # Get data paths
@@ -230,7 +250,9 @@ if __name__=='__main__':
                             neuron_info=neuron_info)
 
         # Build neural network model
-        current_model_oh = NeuronalActivity_Encoder_Decoder()
+        ipdb.set_trace()
+        # Need to set up automatic inputs and outputs for the model
+        current_model_oh = NeuronalActivity_Encoder_Decoder(input_size=46, hyp_middle_dimension = 16, output_size=4)
 
         # Build figures object
         figures_object_oh = NeuralNetworkFigures()
