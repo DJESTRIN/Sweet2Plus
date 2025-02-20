@@ -4,3 +4,16 @@ Running to do list:
 (3) How do manifold state differ within session ....
     How do these state changes differ across sessions
     NEED: Euclidian distance 
+
+
+
+Kenneth & David 02/20/2025
+
+Raster plots
+    Average all neurons:
+        - seperate data into cort and control
+
+    Average per cell type:
+        - Double check y axis compared to above plots
+        - Double check average compared to above plots
+        - Put heatmap above average +/- sem plots 
