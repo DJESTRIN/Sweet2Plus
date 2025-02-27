@@ -35,15 +35,18 @@ Questions:
 # Import dependencies
 import argparse
 from Sweet2Plus.core.SaveLoadObjs import LoadObj
+from Sweet2Plus.modeling.network_archs import SingleSampleNN, weighted_mse_loss
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.model_selection import train_test_split
 import numpy as np
 import matplotlib.pyplot as plt
 import optuna
 import os
+import random
 import ipdb
 
 """ Data wrangling and set up functions and classes """
@@ -51,6 +54,16 @@ def zscore_data_from_obj(obj_file_oh):
     # Pull z scored neuronal trace data from object and load into numpy array
     objoh = LoadObj(FullPath=obj_file_oh)
     return np.asarray(objoh.ztraces).T
+
+def plot_loss(training_loss,validation_loss, full_output_file):
+    """ Quickly plots training and validation loss for monitoring """
+    if len(training_loss)<3:
+        return
+    else:
+        plt.figure(figsize=(10,10))
+        plt.plot(training_loss)
+        plt.plot(validation_loss)
+        plt.savefig(full_output_file)
 
 class datawrangler(torch.utils.data.Dataset):
     """ Wrangles data from z score neuronal trace data into the correct format for ANN """
@@ -111,99 +124,11 @@ class datawrangler(torch.utils.data.Dataset):
         X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=self.test_size,random_state=self.random_state)
         return X_train, y_train, X_test, y_test
 
-""" Custom Neuronal Network layers and Architectures"""
-class DirectInputLayer(nn.Module):
-    """ A Custom Layer where M inputs are directly input into N neurons,
-      This is notably not a dense layer.  """
-    def __init__(self, network_size, inputs_per_neuron,dropout=0.15,ns=0.1):
-        super(DirectInputLayer, self).__init__()
-        self.network_size = network_size
-        self.inputs_per_neuron = inputs_per_neuron
-
-        # Build layers
-        self.d_layer1 = nn.Linear(inputs_per_neuron, 16, bias=True)
-        self.d_layer2 = nn.Linear(16,8,bias=True)
-        self.d_layer3 = nn.Linear(8,4,bias=True)
-        self.d_layer4 = nn.Linear(4,1,bias=True)
-
-        self.l_relu = torch.nn.LeakyReLU(negative_slope=ns)
-        self.drop_out = torch.nn.Dropout(p=dropout)
-    
-    def forward(self,x):
-        # Ensure tensor is contiguous before reshaping
-        x = x.contiguous()  # Add this
-        
-        try:
-            x = self.drop_out(self.l_relu(self.d_layer1(x)))
-            x = self.drop_out(self.l_relu(self.d_layer2(x)))
-            x = self.drop_out(self.l_relu(self.d_layer3(x)))
-            x = self.drop_out(self.l_relu(self.d_layer4(x)))
-        except:
-            ipdb.set_trace()
-            
-        return x.squeeze(-1)
-
-class SingleLayerNetwork(torch.nn.Module):
-    """ A Single Layer network utalizing DirectInputLayer """
-    def __init__(self, network_size=339,inputs_per_neuron=100,dropout=0.15):
-        super(SingleLayerNetwork, self).__init__()
-        # Set up layers for neural network
-        self.direct_input_layer = DirectInputLayer(network_size, inputs_per_neuron)
-        self.relu1 = torch.nn.LeakyReLU(negative_slope=0.1)
-        self.drop1 = torch.nn.Dropout(p=dropout)
-        self.dense_layer1 = torch.nn.Linear(network_size, network_size)  
-
-    def forward(self,xoh):
-        xoriginal=xoh
-        xoh = self.direct_input_layer(xoh)
-        xoh = self.relu1(xoh)
-        xoh = self.drop1(xoh)
-        xoh = self.dense_layer1(xoh)  
-        return xoh
-    
-class SimpleSingleLayerNetwork(torch.nn.Module):
-    """ A Single Layer network utalizing DirectInputLayer """
-    def __init__(self, network_size=339,dropout=0.2):
-        super(SimpleSingleLayerNetwork, self).__init__()
-        # Set up layers for neural network
-        self.dense_layer1 = torch.nn.Linear(network_size, network_size)  
-        self.relu1 = torch.nn.LeakyReLU(negative_slope=0.01)
-        self.drop1 = torch.nn.Dropout(p=dropout)
-        self.dense_layer2 = torch.nn.Linear(network_size, network_size)  
-
-    def forward(self,xoh):
-        xoh = self.dense_layer1(xoh)
-        xoh = self.relu1(xoh)
-        xoh = self.drop1(xoh)
-        xoh = self.dense_layer2(xoh)
-        return xoh
-
-def weighted_mse_loss(output, target):
-    # Initialize weights as ones
-    weights = torch.ones_like(target)
-    
-    # Define weights for specific ranges
-    weights = torch.where((target >= 0.9) & (target < 1.0), 20.0, weights)
-    weights = torch.where((target >= 0.8) & (target < 0.9), 10.0, weights)
-    weights = torch.where((target >= 0.7) & (target < 0.8), 9.0, weights)
-    weights = torch.where((target >= 0.6) & (target < 0.7), 8.0, weights)
-    weights = torch.where((target >= 0.5) & (target < 0.6), 7.0, weights)
-    weights = torch.where((target >= 0.4) & (target < 0.5), 6.0, weights)
-    weights = torch.where((target >= 0.3) & (target < 0.4), 5.0, weights)
-    weights = torch.where((target >= 0.2) & (target < 0.3), 4.0, weights)
-    weights = torch.where((target >= 0.1) & (target < 0.2), 3.0, weights)
-    weights = torch.where((target >= 0.0) & (target < 0.1), 9.0, weights)
-    weights = torch.where((target < 0.0), 1.0, weights)
-    
-    # Compute weighted MSE loss
-    loss = weights * (output - target)**2
-    return torch.mean(loss)
-
 """ Primary analysis pipeline for training, testing and debugging ANN """
 class weightmodel_pipeline():
     """ Builds pipeline needed to train network """
-    def __init__(self, data, model=[], num_data_points=100, epochs=300, print_training=True,
-                 print_training_epoch=50, plot_neurons=False, run_study=False, cheat_mode=False, 
+    def __init__(self, data, model=[], num_data_points=100, epochs=100, print_training=True,
+                 print_training_epoch=1, plot_neurons=False, run_study=False, cheat_mode=False, 
                  device='cuda',learning_rate=0.002, weight_decay=1e-4, 
                  neuron_fig_path=r'C:\Users\listo\Sweet2Plus\my_figs\neuron_predictions',
                  main_fig_path=r'C:\Users\listo\Sweet2Plus\my_figs'):
@@ -229,16 +154,18 @@ class weightmodel_pipeline():
 
     def __call__(self):
         """ General protocol for pipeline """
-        if not self.model and not self.run_study:
-            user_answer=input('No model was given and run_study is false, \
-                              would you like to run a study (yes or no)? \
-                              If no, please re-run with model.','yes','no')
+        # if not self.model and not self.run_study:
+        #     user_answer=input('No model was given and run_study is false, \
+        #                       would you like to run a study (yes or no)? \
+        #                       If no, please re-run with model.','yes','no')
 
-            if user_answer=='yes':
-                self.run_study=True
-            else:
-                print('Without a model included and no study chosen, there is nothing to run. Terminating code... :(')
-                return
+        #     if user_answer=='yes':
+        #         self.run_study=True
+        #     else:
+        #         print('Without a model included and no study chosen, there is nothing to run. Terminating code... :(')
+        #         return
+        if self.model is None:
+            self.simple_run()
 
         # Determine if NN should be run via a study to find best hyperparmeters
         if self.run_study:
@@ -256,7 +183,9 @@ class weightmodel_pipeline():
             print("Setting up loss function, optimizer and scheduler ... ")
             self.criterion = nn.MSELoss()
             self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-            self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.1)
+            optimizer = optim.Adam(model.parameters(), lr=0.001)  # Example optimizer
+            self.scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
+            #self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.1)
 
             print("Starting training on model ... ")
             model, loss_history = self.train(self.model, train_loader, val_loader, self.criterion, self.optimizer, self.scheduler)
@@ -296,6 +225,40 @@ class weightmodel_pipeline():
             print(f'There was a correlation of {coroh} for this models predicted vs real data')
             return
 
+    def simple_run(self):
+        learning_rate = 0.001
+        # weight_decay = 1e-4
+        # dropout_rate = 0.1
+        numberXpoints = 300
+
+        # Get neural data from file and seperate into X_train, y_train, etc
+        X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=numberXpoints)
+        train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
+        
+        # Build model
+        model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
+                                  hidden_size = 64, 
+                                  num_layers = 3, 
+                                  num_neurons = np.array(X_train).shape[2], 
+                                  output_size = np.array(X_train).shape[2])
+
+        # Set up criterion and optimizers
+        criterion_oh = nn.MSELoss()
+        self.optimizer = optim.Adam(model_oh.parameters(), lr=learning_rate)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
+
+        # Run training and get loss history
+        trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, self.optimizer, self.scheduler)
+
+        # Run testing and get correlation between signals
+        corroh = self.test(model_oh, original_loader)
+        ipdb.set_trace()
+
+        weights = model_oh.state_dict()
+        for param_name, param_tensor in weights.items():
+            print(f"Layer: {param_name} | Shape: {param_tensor.shape}")
+
+
     def get_data(self,num_data_points):
         arranged_data = datawrangler(z_scored_neural_data=self.data,X_points=num_data_points,cheat_mode=self.cheat_mode)
         X_train, y_train, X_test, y_test = arranged_data()
@@ -328,53 +291,60 @@ class weightmodel_pipeline():
         # Record training and validation loss
         loss_history = {'train': [], 'val': []}
 
+        # Train across epochs
         for epoch in range(self.epochs):
             model.train()
-            train_loss = 0.0
+
+            # Create empty variables 
+            total_train_loss = 0.0
+            num_batches_train = 0
             for inputs, targets in train_loader:
-                try:
-                    inputs = inputs.transpose(1, 2).contiguous() # Reconfigure input shape
-                except:
-                    inputs = inputs
+                inputs = inputs.transpose(1, 2).contiguous() # Reconfigure input shape
                 inputs, targets = inputs.to(self.device), targets.to(self.device) # Send data to gpu
+                
+                # Run training
                 optimizer.zero_grad()
                 outputs = model(inputs)
-                loss = weighted_mse_loss(outputs, targets)
+                loss = criterion(outputs, targets)
+
+                # Calculate total loss
+                total_train_loss += loss.item()  
+                num_batches_train += 1 
+
+                # Backprop 
                 loss.backward()
                 optimizer.step()
-                train_loss += loss.item() * inputs.size(0)
-
-            if epoch==199:
-                for name, param in model.named_parameters():
-                    print(f"{name} gradient:\n{param.grad}")
+            
+            # Get current lr
+            current_lr = optimizer.param_groups[0]['lr']
 
             # Update learning rate via scheduler
-            scheduler.step() 
+            avg_train_loss = total_train_loss / num_batches_train
+            scheduler.step(avg_train_loss)
 
             # Update training loss
-            train_loss /= len(train_loader.dataset)
-            loss_history['train'].append(train_loss)
+            loss_history['train'].append(avg_train_loss)
 
             # Validation phase
             model.eval()
-            val_loss = 0.0
+            total_validation_loss = 0.0
+            num_batches_validation = 0
             with torch.no_grad():
                 for inputs, targets in val_loader:
-                    try:
-                        inputs = inputs.transpose(1, 2).contiguous() # Reconfigure input shape
-                    except:
-                        inputs = inputs
+                    inputs = inputs.transpose(1, 2).contiguous() # Reconfigure input shape
                     inputs, targets = inputs.to(self.device), targets.to(self.device)
                     outputs = model(inputs)
-                    loss = weighted_mse_loss(outputs, targets)
-                    val_loss += loss.item() * inputs.size(0)
+                    loss = criterion(outputs, targets)
+                    total_validation_loss += loss.item()  
+                    num_batches_validation += 1 
 
-            val_loss /= len(val_loader.dataset)
-            loss_history['val'].append(val_loss)
+            avg_validation_loss = total_validation_loss / num_batches_validation
+            loss_history['val'].append(avg_validation_loss)
 
             if self.print_training:
                 if epoch%self.print_training_epoch==0:
-                    print(f"Epoch {epoch}/{self.epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+                    print(f"Epoch {epoch}/{self.epochs}, LR: {current_lr}, Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_validation_loss:.4f}")
+                    plot_loss(loss_history['train'],loss_history['val'], os.path.join(self.main_fig_path,"current_training_loss_results.jpg"))
 
         return model, loss_history
 
@@ -382,10 +352,7 @@ class weightmodel_pipeline():
         real_data=[]
         predict_data=[]
         for inputs, targets in test_loader:
-            try:
-                inputs = inputs.transpose(1, 2).contiguous() # Reconfigure input shape
-            except:
-                inputs = inputs
+            inputs = inputs.transpose(1, 2).contiguous() # Reconfigure input shape
             inputs = inputs.to(self.device)
             outputs = modeloh(inputs)
             outputs_numpy = outputs.cpu().detach().numpy()
@@ -404,8 +371,8 @@ class weightmodel_pipeline():
         if self.plot_neurons:
             for neuron_id in range(len(real_data)):
                 plt.figure(figsize=(10,10))
-                plt.plot(real_data[:,neuron_id], linewidth=3, alpha=0.5, label='Real Output')
-                plt.plot(predict_data[:,neuron_id], linewidth=3, alpha=0.5, label='Model Output')
+                plt.plot(real_data[neuron_id,:], linewidth=3, alpha=0.5, label='Real Output')
+                plt.plot(predict_data[neuron_id,:], linewidth=3, alpha=0.5, label='Model Output')
                 plt.xlabel('time')
                 plt.ylabel('Z_F')
                 filepath = os.path.join(self.neuron_fig_path,f"neuron{neuron_id}.jpg")
@@ -413,6 +380,27 @@ class weightmodel_pipeline():
                 plt.close()
         
         return correlation
+    
+    def generate_pseudo_data(self, modeloh, test_loader, pseudo_frames = 4500):
+        ipdb.set_trace()
+        random_index = random.randit(0,len(test_loader))
+        random_data = test_loader[random_index]
+        random_index = random.randit(0,len(random_data))
+        activity_series = test_loader[random_index]
+
+        pseudo_activity_data = []
+        for idx in range(pseudo_frames):
+            output = self.modeloh(activity_series) 
+
+            # Update activity series data
+            activity_series = activity_series[:-1,:]
+            activity_series[len(activity_series)+1,:] = output 
+
+            # Append output to pseudo_activity_data
+            pseudo_activity_data.append(output)
+
+        ipdb.set_trace()
+
 
     def plot_learning_curve(self,data,filename):
         plt.figure()
@@ -435,7 +423,7 @@ class weightmodel_pipeline():
             train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
             
             # Build model
-            model_oh = SingleLayerNetwork(network_size=np.array(X_train).shape[2],inputs_per_neuron=np.array(X_train).shape[1],dropout=dropout_rate)
+            model_oh = SingleSampleNN(input_size=np.array(X_train).shape[2],inputs_per_neuron=np.array(X_train).shape[1],dropout=dropout_rate)
 
             # Set up criterion and optimizers
             criterion_oh = nn.MSELoss()
@@ -478,7 +466,5 @@ def cli_parser():
 if __name__=='__main__':
     args = cli_parser()
     zdataoh = zscore_data_from_obj(args.s2p_object_file)
-    #zdataoh=zdataoh[:30,:]
-    modeloh = SingleLayerNetwork()
-    objoh = weightmodel_pipeline(zdataoh, model=modeloh, plot_neurons=True, run_study=False, cheat_mode=False)
+    objoh = weightmodel_pipeline(zdataoh, model=None, plot_neurons=True, run_study=False, cheat_mode=False)
     ans=objoh()

@@ -29,27 +29,79 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, confusion_matrix
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from sklearn.model_selection import train_test_split
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import seaborn as sns
+import matplotlib
 import optuna
 import tqdm
 import random
 import ipdb
 
+def sampling(X,y):
+    """ Sampling -- 
+     Takes data, finds smallest class and makes sure the data is equally sampled across all classes """
+    unique_classes, class_counts = np.unique(y, return_counts=True)
+    max_count = np.max(class_counts)
+    minority_class_index = np.argmin(class_counts) 
+    minority_class = unique_classes[minority_class_index]
+    X_minority = X[y == minority_class]
+    y_minority = y[y == minority_class]
+    n_minority_samples = X_minority.shape[0]
+    n_upsampled = max_count - n_minority_samples 
+    indices = np.random.choice(n_minority_samples, n_upsampled, replace=True)
+    X_upsampled = np.vstack([X_minority, X_minority[indices]])
+    y_upsampled = np.hstack([y_minority, y_minority[indices]])
+    X_balanced = np.vstack([X[y != minority_class], X_upsampled])
+    y_balanced = np.hstack([y[y != minority_class], y_upsampled])
+    return X_balanced, y_balanced
+
+def zero_samples(X):
+    X_zeroed = X - np.tile(X[:,0],(X.shape[1],1)).T
+    return X_zeroed
+
+def quick_plot_df(X,y):
+    average_traces = []
+    for trial in np.unique(y):
+        indexs = np.where(trial==y)
+        pull_indexes = np.random.randint(0,indexs[0].shape,10000)
+        x_pull = X[indexs[0][pull_indexes]]
+        x_pull = x_pull - np.tile(x_pull[:,0],(x_pull.shape[1],1)).T
+        average_traces.append(x_pull.mean(axis=0))
+
+    plt.figure()
+    for trace in average_traces:
+        plt.plot(trace)
+    plt.savefig('average_x_data_by_trial.jpg')
+    return 
+
+gradient_history = {}
+
+def track_gradients(model, epoch):
+    """ Store gradients for each layer at each epoch """
+    global gradient_history
+    for name, param in model.named_parameters():
+        if param.grad is not None:
+            grad_norm = param.grad.norm().item()
+            if name not in gradient_history:
+                gradient_history[name] = []
+            gradient_history[name].append((epoch, grad_norm))
+
 class format_data(heatmap):
     def __init__(self, drop_directory, neuronal_activity, behavioral_timestamps, neuron_info, 
                  trial_list=['Vanilla', 'PeanutButter', 'Water', 'FoxUrine'],
                  normalize_neural_activity=False, regression_type='ridge', 
-                 hyp_batch_size=64, preprocessed = None):
+                 hyp_batch_size=64, preprocessed = None, percentage_ds = 1 ):
         super().__init__(drop_directory, neuronal_activity, behavioral_timestamps, neuron_info,
                          trial_list, normalize_neural_activity, regression_type)
         
         self.batch_size = hyp_batch_size
         self.preprocessed = preprocessed
+        self.percentage_ds = percentage_ds
 
     def __call__(self):
         if self.preprocessed:
@@ -57,6 +109,10 @@ class format_data(heatmap):
             X_path, y_path = self.preprocessed
             self.X_original = np.load(X_path)
             self.y_one_hot = np.load(y_path)
+            num_samples = int(len(self.X_original) * self.percentage_ds)
+            selected_indices = np.random.choice(len(self.X_original), size=num_samples, replace=False)
+            self.X_original = self.X_original[selected_indices]
+            self.y_one_hot  = self.y_one_hot[selected_indices]
             self.normalize_for_neural_network()
             self.quick_plot()
         else:
@@ -90,6 +146,12 @@ class format_data(heatmap):
         # Convert one hot to arg max
         self.y = np.argmax(y_one_hot, axis=1)
 
+        # Oversample minority classes that are too small
+        self.X, self.y = sampling(X=self.X, y=self.y)
+        
+        # Zero the data by first point
+        self.X = zero_samples(self.X)
+
         # Split the data into training and testing
         X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.2, random_state=42)
 
@@ -113,14 +175,14 @@ class ResidualBlock(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(input_size, output_size),
             nn.BatchNorm1d(output_size),
-            nn.LeakyReLU(0.1),
+            nn.LeakyReLU(0.2),
             nn.Dropout(dropout_rate)
         )
 
         # Linear layer to match the input and output size for the residual connection
         self.match_input = nn.Linear(input_size, output_size)
 
-        self.last_activation = nn.LeakyReLU(0.1)
+        self.last_activation = nn.LeakyReLU(0.2)
     def forward(self, x):
         residual = self.match_input(x)
         out = self.fc(x)
@@ -164,6 +226,66 @@ class NeuronalActivity_Encoder_Decoder(nn.Module):
                 if layer.bias is not None:
                     nn.init.constant_(layer.bias, 0)
 
+class LSTMResidualBlock(nn.Module):
+    def __init__(self, input_size, hidden_size, dropout=0.1):
+        super(LSTMResidualBlock, self).__init__()
+        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
+        self.dropout = nn.Dropout(dropout)
+        self.linear = nn.Linear(input_size, hidden_size)  # For matching input size to hidden size
+
+    def forward(self, x):
+        out, _ = self.lstm(x)  # LSTM output
+        out = self.dropout(out)  # Apply dropout
+        residual = self.linear(x)  # Residual connection
+        return out + residual  # Add residual connection
+
+class LSTMEncoder(nn.Module):
+    def __init__(self, input_size=46, hidden_size=256, num_layers=2, dropout=0.1):
+        super(LSTMEncoder, self).__init__()
+        self.residual_blocks = nn.ModuleList([
+            LSTMResidualBlock(input_size if i == 0 else hidden_size, hidden_size, dropout)
+            for i in range(num_layers)
+        ])
+
+    def forward(self, x):
+        for block in self.residual_blocks:
+            x = block(x)  # Pass through residual blocks
+        return x
+
+class LSTMDecoder(nn.Module):
+    def __init__(self, hidden_size=256, output_size=4, num_layers=2, dropout=0.1):
+        super(LSTMDecoder, self).__init__()
+        self.residual_blocks = nn.ModuleList([
+            LSTMResidualBlock(hidden_size, hidden_size, dropout)
+            for i in range(num_layers)
+        ])
+        self.fc = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        # Ensure x is three-dimensional (batch_size, seq_length, hidden_size)
+        # Here, we assume you want the last hidden state of the last layer
+        for block in self.residual_blocks:
+            x = block(x)  # Pass through residual blocks
+
+        # If x is two-dimensional, you can expand it like this:
+        if x.dim() == 2:  # If it's (batch_size, hidden_size)
+            x = x.unsqueeze(1)  # Expand to (batch_size, 1, hidden_size)
+
+        # Use only the last time step for the output
+        return self.fc(x[:, -1, :])  # Output from the last time step
+
+
+class LSTMEncoderDecoder(nn.Module):
+    def __init__(self, input_size=46, hidden_size=256, output_size=4, num_layers=2, dropout=0.1):
+        super(LSTMEncoderDecoder, self).__init__()
+        self.encoder = LSTMEncoder(input_size, hidden_size, num_layers, dropout)
+        self.decoder = LSTMDecoder(hidden_size, output_size, num_layers, dropout)
+
+    def forward(self, x):
+        encoded = self.encoder(x)
+        decoded_output = self.decoder(encoded)  # Use the final encoded representation
+        return decoded_output
+
 class NeuralNetworkFigures():
     def __init__(self,name):
         self.name = name
@@ -175,7 +297,7 @@ class NeuralNetworkFigures():
         plt.savefig(output_file)
 
 class Education:
-    def __init__(self, data_obj, neural_network_obj, figures_obj, hyp_total_epochs = 100, hyp_learning_rate = 0.1, hyp_gamma=0.9, show_results = 2):
+    def __init__(self, data_obj, neural_network_obj, figures_obj, hyp_total_epochs = 100, hyp_learning_rate = 0.0003906, hyp_gamma=0.9, show_results = 2):
         self.total_epochs = hyp_total_epochs
         self.learning_rate = hyp_learning_rate
         self.gamma = hyp_gamma
@@ -202,16 +324,19 @@ class Education:
     def training(self):
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.AdamW(self.model_oh.parameters(), lr=self.learning_rate)
-        scheduler = StepLR(optimizer=optimizer, step_size=1, gamma=0.5)
+        # scheduler = StepLR(optimizer=optimizer, step_size=1, gamma=0.5)
         #scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True, min_lr=1e-9) 
         print(f'total epochs: {self.total_epochs}')
+
+        # Save gradient data for analysis 
+        gradient_data = {name: [] for name, param in self.model_oh.named_parameters() if param.requires_grad}
 
         for epoch in range(self.total_epochs):
             self.model_oh.train()  # Set model to training mode
             total_loss = 0
             all_preds = []
             all_labels = []
-            print(f'Current learning rate: {scheduler.get_last_lr()}')
+            #print(f'Current learning rate: {scheduler.get_last_lr()}')
 
             for batch_X, batch_y in tqdm.tqdm(self.train_loader):
                 optimizer.zero_grad()
@@ -220,6 +345,7 @@ class Education:
                 if torch.isnan(loss):
                     ipdb.set_trace()
                 loss.backward()  # Backward pass
+                track_gradients(self.model_oh, epoch)
                 torch.nn.utils.clip_grad_norm_(self.model_oh.parameters(), max_norm=1.0) # Clip the gradients
 
                 optimizer.step()  # Update weights
@@ -229,9 +355,10 @@ class Education:
                 all_labels.extend(batch_y.cpu().numpy())
 
             # Calculate average loss and F1 score for the epoch
-            scheduler.step()
+            #scheduler.step()
             avg_loss = total_loss / len(self.train_loader)
             avg_f1 = f1_score(all_labels, all_preds, average='macro')
+            self.confusion_matrix(labels=all_labels, predictions=all_preds, number_classes=4, trial=epoch)
             
             # Store stats for graphing
             self.training_loss.append(avg_loss)
@@ -267,6 +394,19 @@ class Education:
 
         return self.testing_f1
     
+    def confusion_matrix(self, labels, predictions, number_classes, trial):
+        confusion_matrix_oh = confusion_matrix(labels, predictions, labels=np.arange(number_classes))
+    
+        # Plot confusion matrix
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(confusion_matrix_oh, annot=True, fmt='d', cmap='Blues', 
+                    xticklabels=np.arange(number_classes), 
+                    yticklabels=np.arange(number_classes))
+        plt.title(f'Confusion Matrix for Trial {trial + 1}')
+        plt.xlabel('Predicted Label')
+        plt.ylabel('True Label')
+        plt.savefig(os.path.join(self.drop_directory,f'confusion_matrix_epcoh_{trial+1}.jpg'))
+        
 def hyperparameter_search_wrapper(data_directory, drop_directory, ntrials=1000):
     """ Utalizes optuna to find the best hyperparmeter results """
     def objective(trial):
@@ -275,7 +415,6 @@ def hyperparameter_search_wrapper(data_directory, drop_directory, ntrials=1000):
         hyp_middle_dimension = trial.suggest_int("middle_dimension", 16, 512, log=True)  # Log scale for larger ranges
         hype_batch_size = trial.suggest_categorical("batch_size", [16, 32, 64, 128, 256, 512])
         hyp_total_epochs = trial.suggest_int("total_epochs", 10, 200)  # Reasonable range for training epochs
-
 
         # Preprocess and structure the data
         neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
@@ -334,19 +473,25 @@ if __name__=='__main__':
     
     else:
         # Preprocess and structure the data
-        # neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
+        #neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
         preprossesed_oh = (os.path.join(drop_directory,"X_original.npy"),os.path.join(drop_directory,"y_one_hot.npy"))
         data_obj_oh = format_data(drop_directory=drop_directory,
                             neuronal_activity=None,
                             behavioral_timestamps=None,
                             neuron_info=None,
-                            preprocessed=preprossesed_oh)
+                            preprocessed=preprossesed_oh,
+                            percentage_ds = 0.1)
         data_obj_oh()
 
         # Build neural network model
-        current_model_oh = NeuronalActivity_Encoder_Decoder(input_size=data_obj_oh.X.shape[1], 
-                                                            hyp_middle_dimension = 16, 
-                                                            output_size=data_obj_oh.y_one_hot.shape[1])
+        # current_model_oh = NeuronalActivity_Encoder_Decoder(input_size=data_obj_oh.X.shape[1], 
+        #                                                     hyp_middle_dimension = 16, 
+        #                                                     output_size=data_obj_oh.y_one_hot.shape[1])
+
+        # Example usage:
+        current_model_oh = LSTMEncoderDecoder(input_size=data_obj_oh.X.shape[1], 
+                                              hidden_size=256, 
+                                              output_size=data_obj_oh.y_one_hot.shape[1])
 
         # Build figures object
         figures_object_oh = NeuralNetworkFigures(name='learningcurvefigs')

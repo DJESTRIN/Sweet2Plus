@@ -137,7 +137,7 @@ class regression_coeffecient_pca_clustering:
             silhouette_scores[idx] = silhouette_score(self.values_to_be_clustered,labels)
         lowest_sil = silhouette_scores.argmax()
         final_cluster_number = list(cluster_range)[lowest_sil]
-        print(f'The final cluster number is {final_cluster_number} clusters')
+        print(f'The final cluster number is {final_cluster_number} clusters with a silhouette score of {lowest_sil}.')
 
         # Perform final kmeans clustering via correct number of clusters
         final_clusters = kmeans(n_clusters=final_cluster_number).fit(pca_results)
@@ -444,7 +444,7 @@ def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
     # else:
     # Get full path to object files
     objfiles=glob.glob(os.path.join(parent_data_directory,f'**/{file_indicator}*.json'),recursive=True)
-
+ 
     # Grab relevant data from files and create lists
     neuronal_activity=[]
     behavioral_timestamps=[]
@@ -466,7 +466,6 @@ def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
         #     json.dump(behavioral_timestamps, file)
 
         # neuron_info.to_json(os.path.join(drop_directory,"org_neuron_info.json"), orient="records", lines=True) 
-
     return neuronal_activity, behavioral_timestamps, neuron_info
 
 def cli_parser():
