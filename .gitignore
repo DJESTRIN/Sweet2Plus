@@ -5,3 +5,4 @@ kmeans_radar.pdf
 \json_files
 Repeated_Measures_Correlations.csv
 *.pdf
+**/__pycache__/
