@@ -61,14 +61,15 @@ class datawrangler(torch.utils.data.Dataset):
     """ datawrangler 
     Puts neuronal activity data into a torch dataset format    
     """
-    def __init__(self,z_scored_neural_data,test_size=0.2,random_state=43,X_points=100,cheat_mode=False):
+    def __init__(self,z_scored_neural_data,test_size=0.2,random_state=43,X_points=100):
         self.zdata=z_scored_neural_data
         self.test_size=test_size
         self.random_state=random_state
         self.X_points=X_points
-        self.cheat_mode=cheat_mode
         self.normalize_data()
         self.X,self.y=self.rearrange_data()
+
+    def __call__(self):
         X_train, y_train, X_test, y_test = self.split()
         return X_train, y_train, X_test, y_test
     
@@ -189,7 +190,7 @@ class weightmodel_pipeline():
         return 
 
     def get_data(self,num_data_points):
-        arranged_data = datawrangler(z_scored_neural_data=self.data,X_points=num_data_points,cheat_mode=self.cheat_mode)
+        arranged_data = datawrangler(z_scored_neural_data=self.data,X_points=num_data_points)
         X_train, y_train, X_test, y_test = arranged_data()
         X_original, y_original=arranged_data.get_original_data()
         return X_train, y_train, X_test, y_test, X_original, y_original
@@ -323,7 +324,7 @@ class weightmodel_pipeline():
         def objective(trial):
             # Hyperparameter suggestions
             learning_rate = trial.suggest_loguniform('learning_rate', 0.0001, 0.01)
-            weight_decay = trial.suggest_loguniform('weight_decay', 1e-6, 0)
+            weight_decay = trial.suggest_float('weight_decay', 0, 1e-2)
             num_data_points = trial.suggest_int('num_data_points', 2, 300)
             hidden_suggested = trial.suggest_int('hidden_suggested', 4, 128)
             layers_suggested = trial.suggest_int('layers_suggested', 1, 5)
@@ -344,7 +345,7 @@ class weightmodel_pipeline():
             # Set up criterion and optimizers
             criterion_oh = nn.MSELoss()
             optimizer = optim.Adam(model_oh.parameters(), lr=learning_rate, weight_decay=weight_decay)
-            scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
+            scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
 
             # Run training and get loss history
             trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, optimizer, scheduler)
@@ -383,7 +384,6 @@ def cli_parser():
     # Get command line arguments
     parser=argparse.ArgumentParser()
     parser.add_argument('--s2p_object_file',type=str,help='Directory to a custom s2p object')
-    parser.add_argument('--cheat_mode',action='store_true',help='When included, model will be given easy data that it should be able to get 100 accuracy')
     parser.add_argument('--hypertuning_study',action='store_true',help='Run hyperparameter study with optuna')
     args = parser.parse_args()
     return args
@@ -391,8 +391,8 @@ def cli_parser():
 if __name__=='__main__':
     args = cli_parser()
     zdataoh = zscore_data_from_obj(args.s2p_object_file)
-    objoh = weightmodel_pipeline(zdataoh, model=None, plot_neurons=True, run_study=False, cheat_mode=False)
-    ans=objoh()
+    objoh = weightmodel_pipeline(zdataoh, model=None, plot_neurons=True, run_study=args.hypertuning_study)
+    result_oh = objoh()
 
 
 # def generate_pseudo_data(self, modeloh, test_loader, pseudo_frames = 4500):
