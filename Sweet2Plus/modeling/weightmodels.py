@@ -101,7 +101,7 @@ class weightmodel_pipeline():
     """ Builds pipeline needed to train network """
     def __init__(self, data, model=[], num_data_points=300, epochs=100, print_training=True,
                  print_training_epoch=1, plot_neurons=False, run_study=False, device='cuda', 
-                 study_trials = 50, learning_rate=0.001, drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs'):
+                 study_trials = 50, learning_rate=0.001, weight_decay = 0, drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs'):
         # Set initial attributes
         self.data = data
         self.model = model
@@ -116,6 +116,7 @@ class weightmodel_pipeline():
         self.run_study = run_study
         self.learning_rate=learning_rate
         self.study_trials = study_trials
+        self.weight_decay = weight_decay
 
     def __call__(self):
         if self.run_study:
@@ -133,15 +134,14 @@ class weightmodel_pipeline():
             
             print("Setting up loss function, optimizer and scheduler ... ")
             self.criterion = nn.MSELoss()
-            self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-            optimizer = optim.Adam(model.parameters(), lr=0.001)  # Example optimizer
-            self.scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
  
             print("Starting training on model ... ")
             model, loss_history = self.train(self.model, train_loader, val_loader, self.criterion, self.optimizer, self.scheduler)
             
             print('Plotting loss results')
-            self.plot_learning_curve(data=loss_history, filename=self.main_fig_path)
+            self.plot_learning_curve(data=loss_history, filename=os.path.join(self.drop_directory,'best_hyper_loss_curve.jpg'))
             
             # Run testing and get correlation between signals
             print('Testing model ....')
@@ -168,7 +168,7 @@ class weightmodel_pipeline():
             
             # Set criterion and loss
             criterion_oh = nn.MSELoss()
-            self.optimizer = optim.Adam(model_oh.parameters(), lr=self.learning_rate)
+            self.optimizer = optim.Adam(model_oh.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
             self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
 
             # Run training and get loss history
@@ -340,10 +340,11 @@ class weightmodel_pipeline():
                                   output_size = np.array(X_train).shape[2])
 
 
+
             # Set up criterion and optimizers
             criterion_oh = nn.MSELoss()
             optimizer = optim.Adam(model_oh.parameters(), lr=learning_rate, weight_decay=weight_decay)
-            scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+            scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
 
             # Run training and get loss history
             trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, optimizer, scheduler)
