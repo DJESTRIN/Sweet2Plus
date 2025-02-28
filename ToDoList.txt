@@ -29,9 +29,6 @@ There are 99 Recording folders, but only 88 obj*.json files for the final analys
 02/24/2025 notes
 - Add heatmaps to plot. how should it be organized? for all trials
 - individual neuron auc graphs...
-- Remove -15 to -10 data from graphs... 
-- Run glm or lm and talk with kenneth about organization ... 
-- clean up current graphs for activity by group by day 
 
 
 Notes on modeling:

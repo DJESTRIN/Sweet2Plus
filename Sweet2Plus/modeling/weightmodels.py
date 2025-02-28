@@ -47,39 +47,30 @@ import matplotlib.pyplot as plt
 import optuna
 import os
 import random
+import json 
 import ipdb
 
-""" Data wrangling and set up functions and classes """
+# Custom functions and classes 
 def zscore_data_from_obj(obj_file_oh):
+    """ Load in ztrace data from Sweet2Plus obj file """
     # Pull z scored neuronal trace data from object and load into numpy array
     objoh = LoadObj(FullPath=obj_file_oh)
     return np.asarray(objoh.ztraces).T
 
-def plot_loss(training_loss,validation_loss, full_output_file):
-    """ Quickly plots training and validation loss for monitoring """
-    if len(training_loss)<3:
-        return
-    else:
-        plt.figure(figsize=(10,10))
-        plt.plot(training_loss)
-        plt.plot(validation_loss)
-        plt.savefig(full_output_file)
-
 class datawrangler(torch.utils.data.Dataset):
-    """ Wrangles data from z score neuronal trace data into the correct format for ANN """
+    """ datawrangler 
+    Puts neuronal activity data into a torch dataset format    
+    """
     def __init__(self,z_scored_neural_data,test_size=0.2,random_state=43,X_points=100,cheat_mode=False):
         self.zdata=z_scored_neural_data
         self.test_size=test_size
         self.random_state=random_state
         self.X_points=X_points
         self.cheat_mode=cheat_mode
-
-        # Default methods
         self.normalize_data()
-        if self.cheat_mode:
-            self.X,self.y=self.get_cheating_data()
-        else:
-            self.X,self.y=self.rearrange_data()
+        self.X,self.y=self.rearrange_data()
+        X_train, y_train, X_test, y_test = self.split()
+        return X_train, y_train, X_test, y_test
     
     def normalize_data(self):
         zdatanorm=[]
@@ -88,31 +79,13 @@ class datawrangler(torch.utils.data.Dataset):
             zdatanorm.append(neuron_data)
         self.zdata=np.array(zdatanorm).T
 
-    def __call__(self):
-        X_train, y_train, X_test, y_test = self.split()
-        return X_train, y_train, X_test, y_test
-
     def rearrange_data(self):
         X, y = [], []
-        
         # Iterate over the data with a sliding window
         for i in range(len(self.zdata) - (self.X_points + 1)):
             # Select X_points for input and the subsequent value for output
-            stackoh = np.vstack(self.zdata[i:i + self.X_points])
+            stackoh = np.vstack(self.zdata[i:(i + self.X_points)])
             target = self.zdata[i + self.X_points + 1]
-
-            X.append(stackoh)
-            y.append(target)
-        
-        return X, y
-    
-    def get_cheating_data(self):
-        # Set X and y to the exact same value
-        X, y = [], []
-        for i in range(len(self.zdata) - (self.X_points + 1)):
-            stackoh = self.zdata[i + self.X_points] # Set X and Y to the exact same value
-            target = self.zdata[i + self.X_points + 1]
-
             X.append(stackoh)
             y.append(target)
         return X, y
@@ -124,18 +97,11 @@ class datawrangler(torch.utils.data.Dataset):
         X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=self.test_size,random_state=self.random_state)
         return X_train, y_train, X_test, y_test
 
-""" Primary analysis pipeline for training, testing and debugging ANN """
 class weightmodel_pipeline():
     """ Builds pipeline needed to train network """
-    def __init__(self, data, model=[], num_data_points=100, epochs=100, print_training=True,
-                 print_training_epoch=1, plot_neurons=False, run_study=False, cheat_mode=False, 
-                 device='cuda',learning_rate=0.002, weight_decay=1e-4, 
-                 neuron_fig_path=r'C:\Users\listo\Sweet2Plus\my_figs\neuron_predictions',
-                 main_fig_path=r'C:\Users\listo\Sweet2Plus\my_figs'):
-        """
-        Inputs:
-
-        """
+    def __init__(self, data, model=[], num_data_points=300, epochs=100, print_training=True,
+                 print_training_epoch=1, plot_neurons=False, run_study=False, device='cuda', 
+                 study_trials = 50, learning_rate=0.001, drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs'):
         # Set initial attributes
         self.data = data
         self.model = model
@@ -145,33 +111,18 @@ class weightmodel_pipeline():
         self.print_training_epoch = print_training_epoch
         self.print_training = print_training
         self.plot_neurons = plot_neurons
-        self.neuron_fig_path = neuron_fig_path
-        self.main_fig_path=main_fig_path
+        self.neuron_drop_directory = os.path.join(drop_directory,r'traces/')
+        self.drop_directory=drop_directory
         self.run_study = run_study
-        self.cheat_mode = cheat_mode
         self.learning_rate=learning_rate
-        self.weight_decay=weight_decay
+        self.study_trials = study_trials
 
     def __call__(self):
-        """ General protocol for pipeline """
-        # if not self.model and not self.run_study:
-        #     user_answer=input('No model was given and run_study is false, \
-        #                       would you like to run a study (yes or no)? \
-        #                       If no, please re-run with model.','yes','no')
-
-        #     if user_answer=='yes':
-        #         self.run_study=True
-        #     else:
-        #         print('Without a model included and no study chosen, there is nothing to run. Terminating code... :(')
-        #         return
-        if self.model is None:
-            self.simple_run()
-
-        # Determine if NN should be run via a study to find best hyperparmeters
         if self.run_study:
             print("Running a hyperparameter study via optuna ... ")
             print(" Relax, this might take a while ... ")
-           
+            self.epochs = 20 # Set to a low number just for study
+
             # Run optuna study and get best hyperparameters
             self.hypertuning_study()
             
@@ -185,79 +136,57 @@ class weightmodel_pipeline():
             self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
             optimizer = optim.Adam(model.parameters(), lr=0.001)  # Example optimizer
             self.scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
-            #self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.1)
-
+ 
             print("Starting training on model ... ")
             model, loss_history = self.train(self.model, train_loader, val_loader, self.criterion, self.optimizer, self.scheduler)
             
             print('Plotting loss results')
             self.plot_learning_curve(data=loss_history, filename=self.main_fig_path)
             
-            print('Testing model ...')
-            coroh = self.test(self.model, original_loader)
+            # Run testing and get correlation between signals
+            print('Testing model ....')
+            corroh = self.test(model_oh, original_loader)
+            print(f'The average correlation of prediction to real data for all neurons is {corroh}')
 
-            print(f'There was a correlation of {coroh} for this models predicted vs real data')
-            return 
+            # Save model for later use
+            print('Saving model to file ...')
+            torch.save(model_oh, os.path.join(self.drop_directory,"best_tuned_model.pth"))
         
-        # Run a regular model
-        if not self.run_study:
-            if self.cheat_mode:
-                print("Running a model in cheat mode! Results should be nearly perfrect")
-
-            print("Converting wrangled data into torch format ... ")
-            X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(self.num_data_points)
+        else:
+            print('Running single model with given learning rates and Xpoints')
+            print('Setting up data structure into torch dataset and model parameters')
+            # Set up datasets
+            X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=self.num_data_points)
             train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
-            
-            print("Setting up loss function, optimizer and scheduler ... ")
-            self.criterion = nn.MSELoss()
-            self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
-            self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.1)
 
-            print("Starting training on model ... ")
-            model, loss_history = self.train(self.model, train_loader, val_loader, self.criterion, self.optimizer, self.scheduler)
-            
-            print('Plotting loss results')
-            self.plot_learning_curve(data=loss_history, filename=self.main_fig_path)
-            
-            print('Testing model ...')
-            coroh = self.test(self.model, original_loader)
-
-            print(f'There was a correlation of {coroh} for this models predicted vs real data')
-            return
-
-    def simple_run(self):
-        learning_rate = 0.001
-        # weight_decay = 1e-4
-        # dropout_rate = 0.1
-        numberXpoints = 300
-
-        # Get neural data from file and seperate into X_train, y_train, etc
-        X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=numberXpoints)
-        train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
-        
-        # Build model
-        model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
+            # Build model            
+            model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
                                   hidden_size = 64, 
                                   num_layers = 3, 
                                   num_neurons = np.array(X_train).shape[2], 
                                   output_size = np.array(X_train).shape[2])
+            
+            # Set criterion and loss
+            criterion_oh = nn.MSELoss()
+            self.optimizer = optim.Adam(model_oh.parameters(), lr=self.learning_rate)
+            self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
 
-        # Set up criterion and optimizers
-        criterion_oh = nn.MSELoss()
-        self.optimizer = optim.Adam(model_oh.parameters(), lr=learning_rate)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
+            # Run training and get loss history
+            print('Training model ....')
+            trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, self.optimizer, self.scheduler)
 
-        # Run training and get loss history
-        trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, self.optimizer, self.scheduler)
+            print('Plotting loss results')
+            self.plot_learning_curve(data=history, filename=os.path.join(self.drop_directory,"FinalLossCurve.jpg"))
+            
+            # Run testing and get correlation between signals
+            print('Testing model ....')
+            corroh = self.test(model_oh, original_loader)
+            print(f'The average correlation of prediction to real data for all neurons is {corroh}')
 
-        # Run testing and get correlation between signals
-        corroh = self.test(model_oh, original_loader)
-        ipdb.set_trace()
-
-        weights = model_oh.state_dict()
-        for param_name, param_tensor in weights.items():
-            print(f"Layer: {param_name} | Shape: {param_tensor.shape}")
-
+            # Save model for later use
+            print('Saving model to file ...')
+            torch.save(model_oh, os.path.join(self.drop_directory,"solo_model.pth"))
+        return 
 
     def get_data(self,num_data_points):
         arranged_data = datawrangler(z_scored_neural_data=self.data,X_points=num_data_points,cheat_mode=self.cheat_mode)
@@ -285,10 +214,7 @@ class weightmodel_pipeline():
     
     def train(self, model, train_loader, val_loader, criterion, optimizer, scheduler):
         """ Run training on given model """
-        # Send model to gpu
         model.to(self.device)
-
-        # Record training and validation loss
         loss_history = {'train': [], 'val': []}
 
         # Train across epochs
@@ -344,7 +270,7 @@ class weightmodel_pipeline():
             if self.print_training:
                 if epoch%self.print_training_epoch==0:
                     print(f"Epoch {epoch}/{self.epochs}, LR: {current_lr}, Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_validation_loss:.4f}")
-                    plot_loss(loss_history['train'],loss_history['val'], os.path.join(self.main_fig_path,"current_training_loss_results.jpg"))
+                    self.plot_learning_curve(data = loss_history, filename=os.path.join(self.drop_directory,"current_training_loss_results.jpg"))
 
         return model, loss_history
 
@@ -370,38 +296,21 @@ class weightmodel_pipeline():
 
         if self.plot_neurons:
             for neuron_id in range(len(real_data)):
+                # Generate output file path
+                filepath = os.path.join(self.neuron_drop_directory,f"neuron{neuron_id}.jpg")
+
+                # Create figure and save
                 plt.figure(figsize=(10,10))
                 plt.plot(real_data[neuron_id,:], linewidth=3, alpha=0.5, label='Real Output')
                 plt.plot(predict_data[neuron_id,:], linewidth=3, alpha=0.5, label='Model Output')
-                plt.xlabel('time')
-                plt.ylabel('Z_F')
-                filepath = os.path.join(self.neuron_fig_path,f"neuron{neuron_id}.jpg")
+                plt.legend()
+                plt.xlabel('Time')
+                plt.ylabel('Normalized dF')
                 plt.savefig(filepath)
                 plt.close()
         
         return correlation
     
-    def generate_pseudo_data(self, modeloh, test_loader, pseudo_frames = 4500):
-        ipdb.set_trace()
-        random_index = random.randit(0,len(test_loader))
-        random_data = test_loader[random_index]
-        random_index = random.randit(0,len(random_data))
-        activity_series = test_loader[random_index]
-
-        pseudo_activity_data = []
-        for idx in range(pseudo_frames):
-            output = self.modeloh(activity_series) 
-
-            # Update activity series data
-            activity_series = activity_series[:-1,:]
-            activity_series[len(activity_series)+1,:] = output 
-
-            # Append output to pseudo_activity_data
-            pseudo_activity_data.append(output)
-
-        ipdb.set_trace()
-
-
     def plot_learning_curve(self,data,filename):
         plt.figure()
         plt.plot(data['train'])
@@ -413,17 +322,23 @@ class weightmodel_pipeline():
         """Utalize Optuna to run a study to find best hyperparameters """
         def objective(trial):
             # Hyperparameter suggestions
-            learning_rate = trial.suggest_loguniform('learning_rate', 1e-6, 1e-1)
-            weight_decay = trial.suggest_loguniform('weight_decay', 1e-6, 1e-2)
-            dropout_rate = trial.suggest_uniform('dropout_rate', 0.0, 0.5)
-            numberXpoints = trial.suggest_int('numberXpoints', 2, 300)
+            learning_rate = trial.suggest_loguniform('learning_rate', 0.0001, 0.01)
+            weight_decay = trial.suggest_loguniform('weight_decay', 1e-6, 0)
+            num_data_points = trial.suggest_int('num_data_points', 2, 300)
+            hidden_suggested = trial.suggest_int('hidden_suggested', 4, 128)
+            layers_suggested = trial.suggest_int('layers_suggested', 1, 5)
 
             # Get neural data from file and seperate into X_train, y_train, etc
-            X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=numberXpoints)
+            X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=num_data_points)
             train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
             
             # Build model
-            model_oh = SingleSampleNN(input_size=np.array(X_train).shape[2],inputs_per_neuron=np.array(X_train).shape[1],dropout=dropout_rate)
+            model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
+                                  hidden_size = hidden_suggested, 
+                                  num_layers = layers_suggested, 
+                                  num_neurons = np.array(X_train).shape[2], 
+                                  output_size = np.array(X_train).shape[2])
+
 
             # Set up criterion and optimizers
             criterion_oh = nn.MSELoss()
@@ -441,17 +356,26 @@ class weightmodel_pipeline():
 
         # Run Optuna study
         self.study = optuna.create_study(direction='maximize')
-        self.study.optimize(objective, n_trials=30, n_jobs=1)
+        self.study.optimize(objective, n_trials=self.study_trials, n_jobs=-1)
 
         best_hyperparameters = self.study.best_params
         self.learning_rate = best_hyperparameters['learning_rate']
         self.weight_decay = best_hyperparameters['weight_decay']
-        self.dropout_rate = best_hyperparameters['dropout_rate']
-        self.num_data_points = best_hyperparameters['numberXpoints']
-        print(f"The best hyperparmeters are, \
-               lr: {self.learning_rate}, \
-               wd {self.weight_decay}, \
-               drop: {self.dropout_rate}, dataponts: {self.num_data_points}")
+        self.hidden_suggested = best_hyperparameters['hidden_suggested']
+        self.layers_suggested = best_hyperparameters['layers_suggested']
+        self.num_data_points = best_hyperparameters['num_data_points']
+
+        # Save hyperparameter data to a file
+        best_hyperparameters = {"learning_rate": self.learning_rate,
+                "weight_decay": self.weight_decay,
+                "hidden_suggested": self.hidden_suggested,
+                "layers_suggested": self.layers_suggested,
+                "num_data_points":self.num_data_points}
+
+        with open(os.path.join(self.drop_directory,"best_hyperparameters.json"), "w") as f:
+            json.dump(best_hyperparameters, f)
+
+        print(f"The best hyperparmeters are: \n learning rate: {self.learning_rate} \n weight decay: {self.weight_decay} \n datapoints: {self.num_data_points}, hidden: {self.hidden_suggested}, \n layers: {self.layers_suggested}")
         return 
 
 def cli_parser():
@@ -468,3 +392,24 @@ if __name__=='__main__':
     zdataoh = zscore_data_from_obj(args.s2p_object_file)
     objoh = weightmodel_pipeline(zdataoh, model=None, plot_neurons=True, run_study=False, cheat_mode=False)
     ans=objoh()
+
+
+# def generate_pseudo_data(self, modeloh, test_loader, pseudo_frames = 4500):
+#     ipdb.set_trace()
+#     random_index = random.randit(0,len(test_loader))
+#     random_data = test_loader[random_index]
+#     random_index = random.randit(0,len(random_data))
+#     activity_series = test_loader[random_index]
+
+#     pseudo_activity_data = []
+#     for idx in range(pseudo_frames):
+#         output = self.modeloh(activity_series) 
+
+#         # Update activity series data
+#         activity_series = activity_series[:-1,:]
+#         activity_series[len(activity_series)+1,:] = output 
+
+#         # Append output to pseudo_activity_data
+#         pseudo_activity_data.append(output)
+
+#     ipdb.set_trace()

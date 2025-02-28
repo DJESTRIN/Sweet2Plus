@@ -337,10 +337,9 @@ class heatmap(regression_coeffecient_pca_clustering):
         plt.savefig(os.path.join(self.drop_directory, output_filename), bbox_inches='tight')
 
     def violin_plot(self):
-        ipdb.set_trace()
-        # colors = ['#E0C68D', '#D19A6A', '#A4D7E1', '#E74C3C']
         colors = ['red', 'blue']
-        palette_dict = {trial: color for trial, color in zip(self.final_dataframe['trialtype'].unique(), colors)}
+        palette_dict = {group: color for group, color in zip(self.final_dataframe['group'].unique(), colors)}
+
 
         # Create FacetGrid to separate by 'day'
         g = sns.FacetGrid(self.final_dataframe, col="day", col_wrap=2, height=5, sharey=True)  # 2 plots per row
@@ -351,7 +350,7 @@ class heatmap(regression_coeffecient_pca_clustering):
         g.add_legend(title="Group")
 
         plt.xticks(rotation=45)  
-        plt.savefig(os.path.join(self.drop_directory, "violin_all_data.jpg"))
+        plt.savefig(os.path.join(self.drop_directory, "violin_all_data_day.jpg"))
         ipdb.set_trace()
 
     def generate_singular_neuronal_onehot(self):

@@ -151,7 +151,6 @@ class regression_coeffecient_pca_clustering:
         self.sort_indices=sort_indices
 
     def plot_cluster_results(self,plot_label='Coeffecients'):
-
         # Create horizontal lines
         hlines = [x_idx-0.5 for x_idx, x in enumerate(self.sorted_final_labels[1:]) if x!=self.sorted_final_labels[x_idx]]
         hlines.append(len(self.sorted_final_labels)-0.5)
