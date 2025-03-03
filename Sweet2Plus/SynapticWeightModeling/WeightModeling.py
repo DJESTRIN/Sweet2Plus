@@ -2,40 +2,19 @@
 # -*- coding: utf-8 -*-
 """
 Module name: weightmodels.py
-Description: Model weights 
+Description: The purpose of this code is to study the merrit of synthetic weights developed by a NN which are used to map 
+    prior neuron activity to current neuron activity. Weights will be studied w.r.t various experimental conditions to determine
+    whether certain conditions modify weight values. Additionally, weights will be analyzed to determine whether there is a correlation
+    between neuronal activity and weight distribution. 
 Author: David James Estrin
-Version: 1.0
-Date: 11-25-2024
-"""
-
-"""
-purpose: We are interested in determining how synaptic weights change across stress. 
-Validations:
-(1) For this shallow network (N input => N output), can it predict neural activity with good MSE.
-
-Questions:
-(1) Is there a difference in weight values across stress and non-stress groups on day 30 vs day 1. 
-(2) If there is a difference in weight values, is there a feature regarding these neuron's activities that make them distinct?
-(3) What is the distribution of theta weights across input neurons? Do certain neurons have more low theta weights than others? 
-    Or does every neuron have at least one high theta weight
-    (3) Can low or high theta inputs be 
-(4) How is bias effected during all this for each input neuron?
-
-# Psuedocode
-(1) Arrange data
-    timepoint x neurons.. network is trained on only one mouse at a time... New network for new mouse... 
-    neural acitivity Y[t] = leakyReLu((W*X[t-1])+b)
-    Maybe it should only be one neuron at a time. Cannot use previous neuron's activity ?
-(2) Build NN
-(3) Train neural network
-(4) Plotting code to show predicted vs reality for randomly sampled neurons
-(5) Plot weights across neurons across conditions ...
+Version: 2.0
+Date: 02-27-2025
 """
 
 # Import dependencies
 import argparse
 from Sweet2Plus.core.SaveLoadObjs import LoadObj
-from Sweet2Plus.modeling.network_archs import SingleSampleNN, weighted_mse_loss
+from Sweet2Plus.SynapticWeightModeling.NetworkArchitectures import SingleSampleNN, weighted_mse_loss
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -46,6 +25,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import optuna
 import os
+import scipy
 import random
 import json 
 import ipdb
@@ -102,7 +82,8 @@ class Education():
     """ Builds pipeline needed to train network """
     def __init__(self, data, model=[], num_data_points=300, epochs=100, print_training=True,
                  print_training_epoch=1, plot_neurons=False, run_study=False, device='cuda', 
-                 study_trials = 50, learning_rate=0.001, weight_decay = 0, drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs'):
+                 study_trials = 50, learning_rate=0.001, weight_decay = 0, default_hidden = 64, 
+                 default_layers = 3, drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs'):
         # Set initial attributes
         self.data = data
         self.model = model
@@ -118,52 +99,82 @@ class Education():
         self.learning_rate=learning_rate
         self.study_trials = study_trials
         self.weight_decay = weight_decay
+        self.hidden_suggested = default_hidden 
+        self.layers_suggested = default_layers
 
     def __call__(self):
+        # Load in best parameters if file exists
+        best_params_file = os.path.join(self.drop_directory,"best_hyperparameters.json")
+        if os.path.isfile(best_params_file):
+            print('Best parameters found from previous study. Loading parameters and skipping study...')
+            with open(best_params_file, "r") as f:
+                best_hyperparameters = json.load(f)
+                self.learning_rate = best_hyperparameters['learning_rate']
+                self.weight_decay = best_hyperparameters['weight_decay']
+                self.hidden_suggested = best_hyperparameters['hidden_suggested']
+                self.layers_suggested = best_hyperparameters['layers_suggested']
+                self.num_data_points = best_hyperparameters['num_data_points']
+                self.run_study = False
+
         if self.run_study:
             print("Running a hyperparameter study via optuna ... ")
             print(" Relax, this might take a while ... ")
-            self.epochs = 20 # Set to a low number just for study
+
+            # Temporarily change the number of epochs
+            original_epochs = self.epochs
+            self.epochs = 10
 
             # Run optuna study and get best hyperparameters
             self.hypertuning_study()
+            
+            # Set epochs back to original value
+            self.epochs = original_epochs
             
             # run training
             print("Converting wrangled data into torch format ... ")
             X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(self.num_data_points)
             train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
-            
+
+            # Build model           
+            model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
+                                  hidden_size = self.hidden_suggested, 
+                                  num_layers = self.layers_suggested, 
+                                  num_neurons = np.array(X_train).shape[2], 
+                                  output_size = np.array(X_train).shape[2])
+
             print("Setting up loss function, optimizer and scheduler ... ")
             self.criterion = nn.MSELoss()
-            self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            self.optimizer = optim.Adam(model_oh.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
             self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
  
             print("Starting training on model ... ")
-            model, loss_history = self.train(self.model, train_loader, val_loader, self.criterion, self.optimizer, self.scheduler)
+            self.trained_model, loss_history = self.train(model_oh, train_loader, val_loader, self.criterion, self.optimizer, self.scheduler)
             
             print('Plotting loss results')
             self.plot_learning_curve(data=loss_history, filename=os.path.join(self.drop_directory,'best_hyper_loss_curve.jpg'))
             
             # Run testing and get correlation between signals
             print('Testing model ....')
-            corroh = self.test(model_oh, original_loader)
-            print(f'The average correlation of prediction to real data for all neurons is {corroh}')
+            self.corroh = self.test(model_oh, original_loader)
+            print(f'The average correlation of prediction to real data for all neurons is {self.corroh}')
 
             # Save model for later use
             print('Saving model to file ...')
-            torch.save(model_oh, os.path.join(self.drop_directory,"best_tuned_model.pth"))
+            self.torch_file = os.path.join(self.drop_directory,"solo_model.pth")
+            torch.save(model_oh, self.torch_file)
         
         else:
             print('Running single model with given learning rates and Xpoints')
             print('Setting up data structure into torch dataset and model parameters')
+  
             # Set up datasets
             X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=self.num_data_points)
             train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
 
             # Build model            
             model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
-                                  hidden_size = 64, 
-                                  num_layers = 3, 
+                                  hidden_size = self.hidden_suggested, 
+                                  num_layers = self.layers_suggested, 
                                   num_neurons = np.array(X_train).shape[2], 
                                   output_size = np.array(X_train).shape[2])
             
@@ -174,19 +185,20 @@ class Education():
 
             # Run training and get loss history
             print('Training model ....')
-            trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, self.optimizer, self.scheduler)
+            self.trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, self.optimizer, self.scheduler)
 
             print('Plotting loss results')
             self.plot_learning_curve(data=history, filename=os.path.join(self.drop_directory,"FinalLossCurve.jpg"))
             
             # Run testing and get correlation between signals
             print('Testing model ....')
-            corroh = self.test(model_oh, original_loader)
-            print(f'The average correlation of prediction to real data for all neurons is {corroh}')
+            self.corroh = self.test(model_oh, original_loader)
+            print(f'The average correlation of prediction to real data for all neurons is {self.corroh}')
 
             # Save model for later use
             print('Saving model to file ...')
-            torch.save(model_oh, os.path.join(self.drop_directory,"solo_model.pth"))
+            self.torch_file = os.path.join(self.drop_directory,"solo_model.pth")
+            torch.save(model_oh, self.torch_file)
         return 
 
     def get_data(self,num_data_points):
@@ -213,7 +225,7 @@ class Education():
         original_loader = DataLoader(od, batch_size=1, shuffle=False)
         return train_loader, val_loader, original_loader
     
-    def train(self, model, train_loader, val_loader, criterion, optimizer, scheduler):
+    def train(self, model, train_loader, val_loader, criterion, optimizer, scheduler,plot_mode=True):
         """ Run training on given model """
         model.to(self.device)
         loss_history = {'train': [], 'val': []}
@@ -271,7 +283,10 @@ class Education():
             if self.print_training:
                 if epoch%self.print_training_epoch==0:
                     print(f"Epoch {epoch}/{self.epochs}, LR: {current_lr}, Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_validation_loss:.4f}")
-                    self.plot_learning_curve(data = loss_history, filename=os.path.join(self.drop_directory,"current_training_loss_results.jpg"))
+                    
+                    # Plot current training and validation loss history
+                    if plot_mode:
+                        self.plot_learning_curve(data = loss_history, filename=os.path.join(self.drop_directory,"current_training_loss_results.jpg"))
        
         return model, loss_history
 
@@ -291,9 +306,9 @@ class Education():
         predict_data=np.squeeze(np.asarray(predict_data)).T
         
         all_correlations=[]
-        for r,p in zip(real_data,predict_data):
-            all_correlations.append(np.corrcoef(r, p)[0, 1])
-        correlation = np.asarray(all_correlations).mean()
+        for real,predict in zip(real_data,predict_data):
+            all_correlations.append(np.corrcoef(real, predict)[0, 1])
+        correlation = np.nanmean(np.asarray(all_correlations))
 
         if self.plot_neurons:
             for neuron_id in range(len(real_data)):
@@ -329,6 +344,9 @@ class Education():
             hidden_suggested = trial.suggest_int('hidden_suggested', 4, 128)
             layers_suggested = trial.suggest_int('layers_suggested', 1, 5)
 
+            # Set plotting to false for study, because too many results and waste of time
+            self.plot_neurons = False
+
             # Get neural data from file and seperate into X_train, y_train, etc
             X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=num_data_points)
             train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
@@ -346,17 +364,16 @@ class Education():
             scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
 
             # Run training and get loss history
-            trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, optimizer, scheduler)
+            trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, optimizer, scheduler,plot_mode=False)
 
             # Run testing and get correlation between signals
-            corroh = self.test(model_oh, original_loader)
-
-            # Maximize correlation
-            return corroh
+            predicted_validation_loss = self.predicted_loss(epochs_oh=range(len(history['val'])),loss_values_oh=history['val'])
+            print(f'The predicted validation loss at epoch 100 is {predicted_validation_loss}')
+            return predicted_validation_loss
 
         # Run Optuna study
-        self.study = optuna.create_study(direction='maximize')
-        self.study.optimize(objective, n_trials=self.study_trials, n_jobs=-1)
+        self.study = optuna.create_study(direction='minimize')
+        self.study.optimize(objective, n_trials=self.study_trials, n_jobs=3)
 
         best_hyperparameters = self.study.best_params
         self.learning_rate = best_hyperparameters['learning_rate']
@@ -367,22 +384,39 @@ class Education():
 
         # Save hyperparameter data to a file
         best_hyperparameters = {"learning_rate": self.learning_rate,
-                "weight_decay": self.weight_decay,
-                "hidden_suggested": self.hidden_suggested,
-                "layers_suggested": self.layers_suggested,
-                "num_data_points":self.num_data_points}
+                                "weight_decay": self.weight_decay,
+                                "hidden_suggested": self.hidden_suggested,
+                                "layers_suggested": self.layers_suggested,
+                                "num_data_points":self.num_data_points}
 
         with open(os.path.join(self.drop_directory,"best_hyperparameters.json"), "w") as f:
             json.dump(best_hyperparameters, f)
 
         print(f"The best hyperparmeters are: \n learning rate: {self.learning_rate} \n weight decay: {self.weight_decay} \n datapoints: {self.num_data_points}, hidden: {self.hidden_suggested}, \n layers: {self.layers_suggested}")
         return 
+    
+    def loss_decay(self,x,a,b):
+        return a * np.exp(-b * x)
+
+    def predicted_loss(self,epochs_oh,loss_values_oh):
+        """ Try to estimate loss"""
+        epochs_oh = np.array(epochs_oh)
+        loss_values_oh = np.array(loss_values_oh)
+        popt, _ = scipy.optimize.curve_fit(self.loss_decay, epochs_oh, loss_values_oh, maxfev=10000)
+        predicted_loss = self.loss_decay(100, *popt)
+        return predicted_loss
 
 class capture_model_weights():
-    def __init__(self, torch_file, drop_directory):
+    """ capture_model_weights
+    Takes synaptic weights from model and performs basic analyses on it.
+    Converts data into a dataframe for later use. 
+    """
+    def __init__(self, torch_file, drop_directory, activity_data, correlation_result):
         # Set up attributes
         self.torch_file = torch_file
         self.drop_directory = drop_directory
+        self.activity_data = activity_data
+        self.correlation_result = correlation_result
 
         # Load in model and set to evaludation
         model = torch.load(self.torch_file)
@@ -394,6 +428,27 @@ class capture_model_weights():
         # Get weights and biases of the fully connected layer
         self.connected_weights = model.final_fc.weight 
         self.connected_bias = model.final_fc.bias  
+
+    def __call__(self):
+        # Strip file information
+        self.strip_filename()
+
+        # Put data into a dataframe
+        self.to_dataframes()
+        self.generate_heatmap()
+
+    def strip_filename(self):
+        ipdb.set_trace()
+        # Get suid, session, group from filename
+        self.suid = None
+        self.day = None
+        self.group = None
+
+    def to_dataframes(self):
+        """ Creates two dataframes
+            one containing only weights, 
+            The other containing weights and neuronal activity """
+        ipdb.set_trace()
 
     def generate_heatmap(self):
         plt.figure(figsize=(20,20))
@@ -441,11 +496,23 @@ def cli_parser():
     parser.add_argument('--s2p_object_file',type=str,help='Directory to a custom s2p object')
     parser.add_argument('--hypertuning_study',action='store_true',help='Run hyperparameter study with optuna')
     parser.add_argument('--full_model_path',type=str,help='Directory to pre-trained model')
+    parser.add_argument('--best_parameters_path',type=str,help='Directory to json file containing best hyperparameters')
+    parser.add_argument('--drop_directory',type=str,help='Directory to model outputs')
     args = parser.parse_args()
     return args
 
 if __name__=='__main__':
+    # Parse cli inputs
     args = cli_parser()
+
+    # Get neuronal data
     zdataoh = zscore_data_from_obj(args.s2p_object_file)
-    objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=args.hypertuning_study)
+
+    # Build, train and test best model
+    objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=args.hypertuning_study, drop_directory=args.drop_directory)
     result_oh = objoh()
+
+    # Pull model weight data, generate basic graphs, save to dataframe
+    capture_obj = capture_model_weights(torch_file = objoh.torch_file, drop_directory = objoh.drop_directory, 
+                                        activity_data = zdataoh, correlation_result = objoh.corroh)
+    capture_obj()
