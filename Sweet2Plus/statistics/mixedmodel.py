@@ -72,7 +72,7 @@ class mixedmodels():
                                  vc_formula={self.nested_effects: "1"})
         self.full_model_result = self.full_model.fit()
 
-        self.formula_reduced = 'auc~group+day+trialtype+period'
+        self.formula_reduced = "auc ~ group * day * trialtype + group * day * period + group * trialtype * period + day * trialtype * period"
         print(f'Fitting reduced model with formula: {self.formula_reduced}')
         self.reduced_model = smf.mixedlm(self.formula_reduced,
                                  self.dataframe,
