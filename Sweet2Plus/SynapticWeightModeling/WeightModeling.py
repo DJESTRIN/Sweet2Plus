@@ -23,6 +23,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.model_selection import train_test_split
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 import optuna
 import os
 import scipy
@@ -103,103 +104,135 @@ class Education():
         self.layers_suggested = default_layers
 
     def __call__(self):
-        # Load in best parameters if file exists
-        best_params_file = os.path.join(self.drop_directory,"best_hyperparameters.json")
-        if os.path.isfile(best_params_file):
-            print('Best parameters found from previous study. Loading parameters and skipping study...')
-            with open(best_params_file, "r") as f:
-                best_hyperparameters = json.load(f)
-                self.learning_rate = best_hyperparameters['learning_rate']
-                self.weight_decay = best_hyperparameters['weight_decay']
-                self.hidden_suggested = best_hyperparameters['hidden_suggested']
-                self.layers_suggested = best_hyperparameters['layers_suggested']
-                self.num_data_points = best_hyperparameters['num_data_points']
-                self.run_study = False
 
-        if self.run_study:
-            print("Running a hyperparameter study via optuna ... ")
-            print(" Relax, this might take a while ... ")
+        self.torch_file = os.path.join(self.drop_directory,"solo_model.pth")
+        if not os.path.isfile(self.torch_file):
+            # Load in best parameters if file exists
+            best_params_file = os.path.join(self.drop_directory,"best_hyperparameters.json")
+            if os.path.isfile(best_params_file):
+                print('Best parameters found from previous study. Loading parameters and skipping study...')
+                with open(best_params_file, "r") as f:
+                    best_hyperparameters = json.load(f)
+                    self.learning_rate = best_hyperparameters['learning_rate']
+                    self.weight_decay = best_hyperparameters['weight_decay']
+                    self.hidden_suggested = best_hyperparameters['hidden_suggested']
+                    self.layers_suggested = best_hyperparameters['layers_suggested']
+                    self.num_data_points = best_hyperparameters['num_data_points']
+                    self.run_study = False
 
-            # Temporarily change the number of epochs
-            original_epochs = self.epochs
-            self.epochs = 10
+            if self.run_study:
+                print("Running a hyperparameter study via optuna ... ")
+                print(" Relax, this might take a while ... ")
 
-            # Run optuna study and get best hyperparameters
-            self.hypertuning_study()
+                # Temporarily change the number of epochs
+                original_epochs = self.epochs
+                self.epochs = 10
+
+                # Run optuna study and get best hyperparameters
+                self.hypertuning_study()
+                
+                # Set epochs back to original value
+                self.epochs = original_epochs
+                
+                # run training
+                print("Converting wrangled data into torch format ... ")
+                X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(self.num_data_points)
+                train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
+
+                # Build model           
+                model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
+                                    hidden_size = self.hidden_suggested, 
+                                    num_layers = self.layers_suggested, 
+                                    num_neurons = np.array(X_train).shape[2], 
+                                    output_size = np.array(X_train).shape[2])
+
+                print("Setting up loss function, optimizer and scheduler ... ")
+                self.criterion = nn.MSELoss()
+                self.optimizer = optim.Adam(model_oh.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+                self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
+    
+                print("Starting training on model ... ")
+                self.trained_model, loss_history = self.train(model_oh, train_loader, val_loader, self.criterion, self.optimizer, self.scheduler)
+                
+                print('Plotting loss results')
+                self.plot_learning_curve(data=loss_history, filename=os.path.join(self.drop_directory,'best_hyper_loss_curve.jpg'))
+                
+                # Run testing and get correlation between signals
+                print('Testing model ....')
+                self.corroh = self.test(model_oh, original_loader)
+                print(f'The average correlation of prediction to real data for all neurons is {self.corroh}')
+
+                # Save model for later use
+                print('Saving model to file ...')
+                self.torch_file = os.path.join(self.drop_directory,"solo_model.pth")
+                torch.save(model_oh, self.torch_file)
             
-            # Set epochs back to original value
-            self.epochs = original_epochs
-            
-            # run training
-            print("Converting wrangled data into torch format ... ")
-            X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(self.num_data_points)
-            train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
+            else:
+                print('Running single model with given learning rates and Xpoints')
+                print('Setting up data structure into torch dataset and model parameters')
+    
+                # Set up datasets
+                X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=self.num_data_points)
+                train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
 
-            # Build model           
-            model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
-                                  hidden_size = self.hidden_suggested, 
-                                  num_layers = self.layers_suggested, 
-                                  num_neurons = np.array(X_train).shape[2], 
-                                  output_size = np.array(X_train).shape[2])
+                # Build model            
+                model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
+                                    hidden_size = self.hidden_suggested, 
+                                    num_layers = self.layers_suggested, 
+                                    num_neurons = np.array(X_train).shape[2], 
+                                    output_size = np.array(X_train).shape[2])
+                
+                # Set criterion and loss
+                criterion_oh = nn.MSELoss()
+                self.optimizer = optim.Adam(model_oh.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+                self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
 
-            print("Setting up loss function, optimizer and scheduler ... ")
-            self.criterion = nn.MSELoss()
-            self.optimizer = optim.Adam(model_oh.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-            self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
- 
-            print("Starting training on model ... ")
-            self.trained_model, loss_history = self.train(model_oh, train_loader, val_loader, self.criterion, self.optimizer, self.scheduler)
-            
-            print('Plotting loss results')
-            self.plot_learning_curve(data=loss_history, filename=os.path.join(self.drop_directory,'best_hyper_loss_curve.jpg'))
-            
-            # Run testing and get correlation between signals
-            print('Testing model ....')
-            self.corroh = self.test(model_oh, original_loader)
-            print(f'The average correlation of prediction to real data for all neurons is {self.corroh}')
+                # Run training and get loss history
+                print('Training model ....')
+                self.trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, self.optimizer, self.scheduler)
 
-            # Save model for later use
-            print('Saving model to file ...')
-            self.torch_file = os.path.join(self.drop_directory,"solo_model.pth")
-            torch.save(model_oh, self.torch_file)
+                print('Plotting loss results')
+                self.plot_learning_curve(data=history, filename=os.path.join(self.drop_directory,"FinalLossCurve.jpg"))
+                
+                # Run testing and get correlation between signals
+                print('Testing model ....')
+                self.corroh = self.test(model_oh, original_loader)
+                print(f'The average correlation of prediction to real data for all neurons is {self.corroh}')
+
+                # Save model for later use
+                print('Saving model to file ...')
+                self.torch_file = os.path.join(self.drop_directory,"solo_model.pth")
+                torch.save(model_oh, self.torch_file)
+            return 
         
         else:
-            print('Running single model with given learning rates and Xpoints')
-            print('Setting up data structure into torch dataset and model parameters')
-  
-            # Set up datasets
+            print('Pretrained model was found!!!')
+            # Load in best parameters if file exists
+            best_params_file = os.path.join(self.drop_directory,"best_hyperparameters.json")
+            if os.path.isfile(best_params_file):
+                print('Best parameters found from previous study. Loading parameters and skipping study...')
+                with open(best_params_file, "r") as f:
+                    best_hyperparameters = json.load(f)
+                    self.learning_rate = best_hyperparameters['learning_rate']
+                    self.weight_decay = best_hyperparameters['weight_decay']
+                    self.hidden_suggested = best_hyperparameters['hidden_suggested']
+                    self.layers_suggested = best_hyperparameters['layers_suggested']
+                    self.num_data_points = best_hyperparameters['num_data_points']
+                    self.run_study = False
+
+            # Get data
             X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=self.num_data_points)
             train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
 
-            # Build model            
-            model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
-                                  hidden_size = self.hidden_suggested, 
-                                  num_layers = self.layers_suggested, 
-                                  num_neurons = np.array(X_train).shape[2], 
-                                  output_size = np.array(X_train).shape[2])
-            
-            # Set criterion and loss
-            criterion_oh = nn.MSELoss()
-            self.optimizer = optim.Adam(model_oh.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-            self.scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.1, patience=5, verbose=True)
-
-            # Run training and get loss history
-            print('Training model ....')
-            self.trained_model, history = self.train(model_oh, train_loader, val_loader, criterion_oh, self.optimizer, self.scheduler)
-
-            print('Plotting loss results')
-            self.plot_learning_curve(data=history, filename=os.path.join(self.drop_directory,"FinalLossCurve.jpg"))
-            
+            # Load in the trained model        
+            model_oh = torch.load(self.torch_file, map_location=torch.device(self.device))
+            model_oh.eval()
+                
             # Run testing and get correlation between signals
             print('Testing model ....')
             self.corroh = self.test(model_oh, original_loader)
             print(f'The average correlation of prediction to real data for all neurons is {self.corroh}')
-
-            # Save model for later use
-            print('Saving model to file ...')
-            self.torch_file = os.path.join(self.drop_directory,"solo_model.pth")
-            torch.save(model_oh, self.torch_file)
-        return 
+            return 
 
     def get_data(self,num_data_points):
         arranged_data = datawrangler(z_scored_neural_data=self.data,X_points=num_data_points)
@@ -438,21 +471,44 @@ class capture_model_weights():
         self.generate_heatmap()
 
     def strip_filename(self):
-        ipdb.set_trace()
-        # Get suid, session, group from filename
-        self.suid = None
-        self.day = None
-        self.group = None
+        _,metadata = self.drop_directory.split('working_file')
+        _,subdata = metadata.split('24-')
+        subdata,_ = subdata.split('R')
+        _,day,self.cage,self.mouse,_ = subdata.split('_')
+        _,self.day=day.split('-')
+        
+        self.suid = f'{self.cage}_{self.mouse}'
+
+        if 'control' in self.drop_directory:
+            self.group = 'control'
+        else:
+            self.group = 'cort'
 
     def to_dataframes(self):
         """ Creates two dataframes
             one containing only weights, 
             The other containing weights and neuronal activity """
-        ipdb.set_trace()
+        # Create a dataframe in long format of just weight data
+        self.weights_df = pd.DataFrame(self.connected_weights.cpu().detach().numpy())
+        self.weights_df = self.weights_df.reset_index().melt(id_vars='index', var_name='neuron_id_2', value_name='synaptic_weight')
+        self.weights_df.rename(columns={'index': 'neuron_id_1'}, inplace=True)
+        self.weights_df["suid"] = self.suid
+        self.weights_df["day"] = self.day
+        self.weights_df["group"] = self.group
+        self.weights_df.to_csv(os.path.join(self.drop_directory,'weights_df.csv'))
+
+        # Create a dataframe that contains weight and activity data
+        weight_df_oh = pd.DataFrame(self.connected_weights.cpu().detach().numpy())
+        activity_df = pd.DataFrame(self.activity_data.T)
+        self.weight_activity_df = pd.concat([weight_df_oh, activity_df], axis=1)
+        activity_df_names = [f"t{i}" for i in range(activity_df.shape[1])] 
+        self.weight_activity_df.columns = list(weight_df_oh.columns) + activity_df_names
+        self.weight_activity_df.to_csv(os.path.join(self.drop_directory,'weight_activity_df.csv'))
+        return 
 
     def generate_heatmap(self):
         plt.figure(figsize=(20,20))
-        plt.imshow(self.connected_weights, vmax=0.7, vmin=-0.7,cmap="seismic",interpolation='none')
+        plt.imshow(self.connected_weights.cpu().detach().numpy(), vmax=0.7, vmin=-0.7,cmap="seismic",interpolation='none')
         plt.colorbar()
         plt.xlabel('Neurons')
         plt.ylabel('Neurons')
@@ -508,9 +564,13 @@ if __name__=='__main__':
     # Get neuronal data
     zdataoh = zscore_data_from_obj(args.s2p_object_file)
 
+    # make sure drop_dir has traces path
+    if not os.path.exists(os.path.join(args.drop_directory,r'/traces')):
+        os.mkdir(os.path.join(args.drop_directory,r'/traces'))
+
     # Build, train and test best model
     objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=args.hypertuning_study, drop_directory=args.drop_directory)
-    result_oh = objoh()
+    objoh()
 
     # Pull model weight data, generate basic graphs, save to dataframe
     capture_obj = capture_model_weights(torch_file = objoh.torch_file, drop_directory = objoh.drop_directory, 
