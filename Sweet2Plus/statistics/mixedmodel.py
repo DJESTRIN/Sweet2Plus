@@ -64,7 +64,6 @@ class mixedmodels():
 
     def generate_model(self):
         """ Build and run LinearMixed model based on attributes """
-        ipdb.set_trace()
         print(f'Fitting full model with formula:{self.formula}')
         self.full_model = smf.mixedlm(self.formula,
                                  self.dataframe,
@@ -85,7 +84,7 @@ class mixedmodels():
         # Calculate LRT
         lrt_stat_oh = 2 * (self.full_model_result.llf - self.full_reduced_result.llf) 
         df_diff_oh = (len(self.full_model_result.params) - len(self.full_reduced_result.params))
-        p_value = stats.chisquare([lrt_stat_oh], df_diff_oh)[1]
+        p_value = stats.chi2.sf(lrt_stat_oh, df_diff_oh)
         print(f"LRT Statistic: {lrt_stat_oh}, p-value: {p_value}")
         ipdb.set_trace()
 
