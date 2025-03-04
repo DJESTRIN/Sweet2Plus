@@ -18,9 +18,8 @@ import seaborn as sns
 import os
 import numpy as np
 import argparse 
-from itertools import chain, combinations, product
 import ipdb
-from statsmodels.stats.anova import anova_lm
+import itertools
 
 
 class mixedmodels():
@@ -60,6 +59,7 @@ class mixedmodels():
         """ General statistical protocol """
         self.generate_model()
         self.multiple_comparisons()
+        ipdb.set_trace()
         self.residual_evaluation()
 
     def generate_model(self):
@@ -86,25 +86,39 @@ class mixedmodels():
         df_diff_oh = (len(self.full_model_result.params) - len(self.full_reduced_result.params))
         p_value = stats.chi2.sf(lrt_stat_oh, df_diff_oh)
         print(f"LRT Statistic: {lrt_stat_oh}, p-value: {p_value}")
-        ipdb.set_trace()
-
-        # Perform Type III ANOVA for F-values and p-values
-        # anova_results = anova_lm(result, typ=3 )
-        # self.effect_p_values = self.model_results.pvalues
-        # ipdb.set_trace()
-        # if self.verbose:
-        #     print(self.model_results)
-        #     print(self.effect_p_values)
 
     def multiple_comparisons(self):
         """ Run multiple comparisons on significant interactions and/or main effects """
-        # Get p values
-        rejected, pvals_corrected, _, _ = multipletests(self.effect_p_values, method=self.multicompare_correction)
+        factor_levels = [self.dataframe[f].unique() for f in ["group", "day", "trialtype", "period"]]
+        all_comparisons = list(itertools.combinations(itertools.product(*factor_levels), 2))
 
-        # Convert p value results to table and save to csv
-        self.multiple_comparisons_results = pd.DataFrame({ "Effect": self.effect_p_values.index, "p_value": self.effect_p_values.values,
-                                                          "FDR_corrected_p": pvals_corrected, "Significant (FDR < 0.05)": rejected})
-        self.multiple_comparisons_results.to_csv(os.path.join(self.drop_directory,"multiple_comparison_results.csv"))
+        # Store p-values
+        p_values = []
+        t_stats = []
+        comparisons = []
+
+        for (a, b) in all_comparisons:
+            subset = self.dataframe[
+                (self.dataframe["group"] == a[0]) & (self.dataframe["day"] == a[1]) &
+                (self.dataframe["trialtype"] == a[2]) & (self.dataframe["period"] == a[3])
+            ]
+            subset_b = self.dataframe[
+                (self.dataframe["group"] == b[0]) & (self.dataframe["day"] == b[1]) &
+                (self.dataframe["trialtype"] == b[2]) & (self.dataframe["period"] == b[3])
+            ]
+            
+            # Run t-test
+            t_stat, p_val = sm.stats.ttest_ind(subset["auc"], subset_b["auc"])
+            p_values.append(p_val)
+            comparisons.append(f"{a} vs {b}")
+            t_stats.append(t_stat)
+
+        # Apply FDR correction (Benjamini-Hochberg)
+        _, p_corrected, _, _ = multipletests(p_values, method="fdr_bh")
+
+        # Show results
+        for comp, t_val, p_val, p_corr in zip(comparisons, t_stats, p_values, p_corrected):
+            print(f"{comp}: t={t_val:.4f}, p={p_val:.4f}, FDR-corrected p={p_corr:.4f}")
 
     def residual_evaluation(self):
         """ Generate common plots and stats for residuals to manaully evaluate model fit """
