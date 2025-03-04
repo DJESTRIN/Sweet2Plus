@@ -28,6 +28,9 @@ class spinup:
 
         # SLURM cluster information
         self.slurm_output_directory = slurm_output_directory
+        if not os.path.exists(self.slurm_output_directory):
+            os.mkdir(self.slurm_output_directory)
+
         self.job_name = job_name
         self.partition = partition
         self.gpus = gpus
@@ -50,16 +53,19 @@ class spinup:
         """ Builds and executes slurm commands via subprocess """
         # Loop over all calls that were generate per s2p file
         all_job_ids = []
+        full_commands = []
         for wrap_oh in full_wrap_calls:
             # Build command
             sbatch_command = f"sbatch --job-name={self.job_name} \
                                 --partition={self.partition} \
-                                --output={self.slurm_output_directory} \
+                                --output={self.slurm_output_directory}/output_%j.log \
+                                --error={self.slurm_output_directory}/error_%j.log \
                                 --gres=gpu:{self.gpus} \
                                 --mem={self.memory}GB \
                                 --wrap='sourece ~/.bashrc && \
                                     conda activate {self.conda_environment} && \
                                         {wrap_oh}'"
+            full_commands.append(sbatch_command)
 
             # Run command
             result = subprocess.run(sbatch_command, capture_output=True, text=True, shell=True)
@@ -71,7 +77,7 @@ class spinup:
                 print(f'Job ID: {result.stdout} FAILED to submit')
             
             all_job_ids.append(result.stdout)
-        return all_job_ids
+        return all_job_ids, full_commands
 
     def check_jobs_status(self, job_ids):
         job_status = {}
@@ -104,7 +110,8 @@ class spinup:
         # Run statistics code
         path_to_python_script = os.path.join(os.path.abspath(__file__).split('WeighModelingSpinup')[0],'WeightModelingStats.py')
         run_stats_command = f"sbatch --job-name=StatsWeightModeling \
-                        --output=output.log \
+                        --output={self.slurm_output_directory}/output_%j.log \
+                        --error={self.slurm_output_directory}/error_%j.log \
                         --ntasks=2 \
                         --cpus-per-task=4 \
                         --mem=128GB \
@@ -137,7 +144,8 @@ class spinup:
 
         # Run all s2p through models and save weight dataframes
         output_wraps = self.build_wrap(basepath = os.path.abspath(__file__), filelist = objfiles, droplist = drop_directories)
-        jobs_oh = self.call_slurm(full_wrap_calls=output_wraps)
+        jobs_oh, full_commands = self.call_slurm(full_wrap_calls=output_wraps)
+        ipdb.set_trace()
 
         # Determine when jobs are finished
         self.wait_for_jobs_to_finish(job_ids=jobs_oh)
@@ -147,5 +155,5 @@ class spinup:
         
 if __name__=='__main__':
     args = parse_cli_inputs()
-    spinobj = spinup(parent_input_directory = args.parent_input_directory)
+    spinobj = spinup(parent_input_directory = args.parent_input_directory, slurm_output_directory = args.slurm_output_directory)
     spinobj()
