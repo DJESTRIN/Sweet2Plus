@@ -59,6 +59,7 @@ class mixedmodels():
         self.dataframe['neuid'] = self.dataframe['neuid'].astype('category')
         self.dataframe['trialid'] = self.dataframe['trialid'].astype('category')
         self.dataframe['auc'] = self.dataframe['auc'].astype('float')
+        self.dataframe = self.dataframe.groupby(['group', 'day', 'trialtype', 'period', 'suid','neuid'])['auc'].transform('mean')
 
         assert self.model_type=='lmm'
 
@@ -95,7 +96,7 @@ class mixedmodels():
 
         # Calculate emmeans
         ipdb.set_trace()
-        emmeans_oh = self.full_model.predict(self.dataframe)
+        emmeans_oh = self.full_model.predict( self.dataframe)
         # self.dataframe['auc_emm'] = emmeans_oh
 
     def multiple_comparisons(self):
@@ -259,7 +260,7 @@ def main(arguments):
 
     # Create mixed models
     all_model_obj = mixedmodels(drop_directory=arguments.drop_directory, dataframe=df, model_type='lmm', 
-                                fixed_effects_formula = "auc ~ group*day*trialtype*period", 
+                                fixed_effects_formula = "auc ~ group * day * trialtype * period", 
                                 random_effects='suid',nested_effects='neuid', multicompare_correction = 'fdr_bh',
                                 verbose=True)
     all_model_obj()
