@@ -59,8 +59,7 @@ class mixedmodels():
         self.dataframe['neuid'] = self.dataframe['neuid'].astype('category')
         self.dataframe['trialid'] = self.dataframe['trialid'].astype('category')
         self.dataframe['auc'] = self.dataframe['auc'].astype('float')
-        ipdb.set_trace()
-        self.dataframe = self.dataframe.groupby(['suid','neuid','group', 'day', 'trialtype', 'period'])['auc'].transform('mean')
+        self.dataframe['auc_avg'] = self.dataframe.groupby(['suid','neuid','group', 'day', 'trialtype', 'period'])['auc'].transform('mean')
 
         assert self.model_type=='lmm'
 
@@ -80,7 +79,7 @@ class mixedmodels():
                                  vc_formula={self.nested_effects: "1"})
         self.full_model_result = self.full_model.fit()
 
-        self.formula_reduced = "auc ~ group * day * trialtype + group * day * period + group * trialtype * period + day * trialtype * period"
+        self.formula_reduced = "auc_avg ~ group * day * trialtype + group * day * period + group * trialtype * period + day * trialtype * period"
         print(f'Fitting reduced model with formula: {self.formula_reduced}')
         self.reduced_model = smf.mixedlm(self.formula_reduced,
                                  self.dataframe,
@@ -261,7 +260,7 @@ def main(arguments):
 
     # Create mixed models
     all_model_obj = mixedmodels(drop_directory=arguments.drop_directory, dataframe=df, model_type='lmm', 
-                                fixed_effects_formula = "auc ~ group * day * trialtype * period", 
+                                fixed_effects_formula = "auc_avg ~ group * day * trialtype * period", 
                                 random_effects='suid',nested_effects='neuid', multicompare_correction = 'fdr_bh',
                                 verbose=True)
     all_model_obj()
