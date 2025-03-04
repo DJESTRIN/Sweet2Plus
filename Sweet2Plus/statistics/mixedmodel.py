@@ -51,7 +51,12 @@ class mixedmodels():
         self.multicompare_correction = multicompare_correction
         self.verbose = verbose
 
-        self.dataframe['auc'] = self.dataframe['auc'].astype('float16')
+        self.dataframe['group'] = self.dataframe['group'].astype('category')
+        self.dataframe['trialtype'] = self.dataframe['trialtype'].astype('category')
+        self.dataframe['period'] = self.dataframe['period'].astype('category')
+        self.dataframe['day'] = self.dataframe['day'].astype('category') 
+        self.dataframe['suid'] = self.dataframe['suid'].astype('category')
+        self.dataframe['neuid'] = self.dataframe['neuid'].astype('category')
 
         assert self.model_type=='lmm'
 
