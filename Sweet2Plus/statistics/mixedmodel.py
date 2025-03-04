@@ -21,7 +21,6 @@ import argparse
 import ipdb
 import itertools
 
-
 class mixedmodels():
     """ General class for building, running and evaluating mixed models """
     def __init__(self, drop_directory, dataframe, model_type='lmm', fixed_effects_formula = "Activity ~ Group * Session * Trialtype", 
@@ -51,13 +50,13 @@ class mixedmodels():
         self.multicompare_correction = multicompare_correction
         self.verbose = verbose
 
-        self.dataframe['group'] = self.dataframe['group'].astype('category')
-        self.dataframe['trialtype'] = self.dataframe['trialtype'].astype('category')
-        self.dataframe['period'] = self.dataframe['period'].astype('category')
-        self.dataframe['day'] = self.dataframe['day'].astype('category') 
-        self.dataframe['suid'] = self.dataframe['suid'].astype('category')
-        self.dataframe['neuid'] = self.dataframe['neuid'].astype('category')
-        self.dataframe['trialid'] = self.dataframe['trialid'].astype('category')
+        self.dataframe['group'] = self.dataframe['group'].astype('category').cat.codes
+        self.dataframe['trialtype'] = self.dataframe['trialtype'].astype('category').cat.codes
+        self.dataframe['period'] = self.dataframe['period'].astype('category').cat.codes
+        self.dataframe['day'] = self.dataframe['day'].astype('category').cat.codes
+        self.dataframe['suid'] = self.dataframe['suid'].astype('category').cat.codes
+        self.dataframe['neuid'] = self.dataframe['neuid'].astype('category').cat.codes
+        self.dataframe['trialid'] = self.dataframe['trialid'].astype('category').cat.codes
         self.dataframe['auc'] = self.dataframe['auc'].astype('float')
         self.dataframe['auc_avg'] = self.dataframe.groupby(['suid','neuid','group', 'day', 'trialtype', 'period'])['auc'].transform('mean')
         self.columns_order = ['suid', 'neuid', 'group', 'day', 'trialtype', 'period', 'auc_avg']
@@ -67,7 +66,8 @@ class mixedmodels():
     def __call__(self):
         """ General statistical protocol """
         self.generate_model()
-        self.multiple_comparisons()
+        # self.EMM()
+        # self.multiple_comparisons()
         self.residual_evaluation()
 
     def generate_model(self):
@@ -95,10 +95,26 @@ class mixedmodels():
         p_value = stats.chi2.sf(lrt_stat_oh, df_diff_oh)
         print(f"LRT Statistic: {lrt_stat_oh}, p-value: {p_value}")
 
-        # Calculate emmeans
+        predictions = self.full_model.predict(self.dataframe)
+        self.predicted_auc = predictions[:, -1]
+        self.dataframe['predictions'] = self.predicted_auc
+
+    def EMM(self):
+        """ Python does not have a package that does this, so I needed to code it """
+        predictions = self.full_model.predict(self.dataframe)
+        predicted_auc = predictions[:, -1]
+        self.dataframe['predictions'] = predicted_auc
+
+        # Group by categorical variables and calculate the mean prediction for each group
+        emmeans = self.dataframe.groupby(['group', 'day', 'trialtype', 'period'])['predictions'].mean().reset_index()
+        std_devs = self.dataframe.groupby(['group', 'day', 'trialtype', 'period'])['predictions'].std().reset_index()
+        group_sizes = self.dataframe.groupby(['group', 'day', 'trialtype', 'period']).size().reset_index(name='n')
+        emmeans = emmeans.merge(std_devs, on=['group', 'day', 'trialtype', 'period'])
+        self.emmeans = emmeans.merge(group_sizes, on=['group', 'day', 'trialtype', 'period'])
         ipdb.set_trace()
-        emmeans_oh = self.full_model.predict( self.dataframe)
-        # self.dataframe['auc_emm'] = emmeans_oh
+
+    def EMM_multiple_comparisons(self):
+        ipdb.set_trace()
 
     def multiple_comparisons(self):
         """ Run multiple comparisons on significant interactions and/or main effects """
@@ -138,8 +154,8 @@ class mixedmodels():
     def residual_evaluation(self):
         """ Generate common plots and stats for residuals to manaully evaluate model fit """
         # Pull residuals and fitted values
-        residuals = self.full_model.resid_deviance
-        fit_vals = self.full_model.fittedvalues
+        residuals = self.dataframe['auc_avg'] - self.predicted_auc
+        fit_vals = self.predicted_auc
 
         # Plot of residuals and 
         plt.figure(figsize=(7,5))
@@ -163,7 +179,7 @@ class mixedmodels():
         plt.savefig(os.path.join(self.drop_directory,"ResidualQQplot_Check.jpg"))
 
         # Predictor vs residual plot
-        sns.scatterplot(x=X["some_predictor"], y=residuals, alpha=0.6)
+        sns.scatterplot(x=self.dataframe["group"], y=residuals, alpha=0.6)
         plt.axhline(0, color='red', linestyle='dashed')
         plt.xlabel("Predictor Variable")
         plt.ylabel("Deviance Residuals")
