@@ -65,59 +65,37 @@ class mixedmodels():
     def generate_model(self):
         """ Build and run LinearMixed model based on attributes """
         ipdb.set_trace()
-        self.model = smf.mixedlm(self.formula,
+        print(f'Fitting full model with formula:{self.formula}')
+        self.full_model = smf.mixedlm(self.formula,
                                  self.dataframe,
                                  groups=self.dataframe[self.random_effects], 
                                  re_formula="1",
                                  vc_formula={self.nested_effects: "1"})
-        ipdb.set_trace()
-        full_model = smf.mixedlm("auc ~ group * day * trialtype * period", self.dataframe, 
-                         groups=self.dataframe["suid"], re_formula="1+neuid")
-        full_result = full_model.fit()
-        ipdb.set_trace()
+        self.full_model_result = self.full_model.fit()
 
-        # Fit the reduced model (without the 4-way interaction)
-        # Here we remove the `group*day*trialtype*period` interaction term
-        reduced_model = smf.mixedlm("auc ~ group + day + trialtype + period", self.dataframe, 
-                                    groups=self.dataframe_sub["suid"], re_formula="1+neuid")
-        reduced_result = reduced_model.fit()
-        ipdb.set_trace()
-        # Compute the Likelihood Ratio Test statistic
-        lrt_stat = 2 * (full_result.llf - reduced_result.llf)  # LRT statistic
-
-        # Degrees of freedom = difference in number of parameters
-        df_diff = (len(full_result.params) - len(reduced_result.params))
-
-        # Compute p-value for the LRT statistic
-        p_value = stats.chisquare([lrt_stat], df_diff)[1]
-
-        print(f"LRT Statistic: {lrt_stat}, p-value: {p_value}")
-        ipdb.set_trace()
-
-        self.model = smf.mixedlm(self.formula,
+        self.formula_reduced = 'auc~group+day+trialtype+period'
+        print(f'Fitting reduced model with formula: {self.formula_reduced}')
+        self.reduced_model = smf.mixedlm(self.formula_reduced,
                                  self.dataframe,
                                  groups=self.dataframe[self.random_effects], 
                                  re_formula="1",
                                  vc_formula={self.nested_effects: "1"})
-        ipdb.set_trace()
-        self.model_results = self.model.fit()
-        anova_results = anova_lm(self.model_results, typ=3) 
+        self.full_reduced_result = self.full_model.fit()
 
-        model = smf.mixedlm("auc ~ group*day*trialtype*period", 
-                     data=self.dataframe, 
-                     groups=self.dataframe["suid"],  # Random intercept for subject
-                     re_formula="1")  # Random intercept for neuid (nested)
-        result = model.fit()
+        # Calculate LRT
+        lrt_stat_oh = 2 * (self.full_model_result.llf - self.full_reduced_result.llf) 
+        df_diff_oh = (len(self.full_model_result.params) - len(self.full_reduced_result.params))
+        p_value = stats.chisquare([lrt_stat_oh], df_diff_oh)[1]
+        print(f"LRT Statistic: {lrt_stat_oh}, p-value: {p_value}")
+        ipdb.set_trace()
 
         # Perform Type III ANOVA for F-values and p-values
-        anova_results = anova_lm(result, typ=3 )
-        self.effect_p_values = self.model_results.pvalues
-        ipdb.set_trace()
-        if self.verbose:
-            print(self.model_results)
-            print(self.effect_p_values)
-
-       
+        # anova_results = anova_lm(result, typ=3 )
+        # self.effect_p_values = self.model_results.pvalues
+        # ipdb.set_trace()
+        # if self.verbose:
+        #     print(self.model_results)
+        #     print(self.effect_p_values)
 
     def multiple_comparisons(self):
         """ Run multiple comparisons on significant interactions and/or main effects """
