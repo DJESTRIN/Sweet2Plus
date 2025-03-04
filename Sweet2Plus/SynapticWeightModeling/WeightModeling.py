@@ -565,8 +565,8 @@ if __name__=='__main__':
     zdataoh = zscore_data_from_obj(args.s2p_object_file)
 
     # make sure drop_dir has traces path
-    if not os.path.exists(os.path.join(args.drop_directory,r'/traces')):
-        os.mkdir(os.path.join(args.drop_directory,r'/traces'))
+    if not os.path.exists(os.path.join(args.drop_directory,r'traces')):
+        os.mkdir(os.path.join(args.drop_directory,r'traces'))
 
     # Build, train and test best model
     objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=args.hypertuning_study, drop_directory=args.drop_directory)
