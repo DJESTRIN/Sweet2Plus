@@ -20,6 +20,8 @@ import numpy as np
 import argparse 
 from itertools import chain, combinations, product
 import ipdb
+from statsmodels.stats.anova import anova_lm
+
 
 class mixedmodels():
     """ General class for building, running and evaluating mixed models """
@@ -50,6 +52,8 @@ class mixedmodels():
         self.multicompare_correction = multicompare_correction
         self.verbose = verbose
 
+        self.dataframe['auc'] = self.dataframe['auc'].astype('float16')
+
         assert self.model_type=='lmm'
 
     def __call__(self):
@@ -60,17 +64,54 @@ class mixedmodels():
 
     def generate_model(self):
         """ Build and run LinearMixed model based on attributes """
+        ipdb.set_trace()
+        self.dataframe = self.dataframe.sample(n=1000)
+        full_model = smf.mixedlm("auc ~ group * day * trialtype * period", self.dataframe, 
+                         groups=self.dataframe["suid"], re_formula="1+neuid")
+        full_result = full_model.fit()
+
+        # Fit the reduced model (without the 4-way interaction)
+        # Here we remove the `group*day*trialtype*period` interaction term
+        reduced_model = smf.mixedlm("auc ~ group + day + trialtype + period", self.dataframe, 
+                                    groups=self.dataframe_sub["suid"], re_formula="1+neuid")
+        reduced_result = reduced_model.fit()
+
+        # Compute the Likelihood Ratio Test statistic
+        lrt_stat = 2 * (full_result.llf - reduced_result.llf)  # LRT statistic
+
+        # Degrees of freedom = difference in number of parameters
+        df_diff = (len(full_result.params) - len(reduced_result.params))
+
+        # Compute p-value for the LRT statistic
+        p_value = stats.chisquare([lrt_stat], df_diff)[1]
+
+        print(f"LRT Statistic: {lrt_stat}, p-value: {p_value}")
+        ipdb.set_trace()
+
         self.model = smf.mixedlm(self.formula,
                                  self.dataframe,
-                                 groups=self.dataframe[self.Random_Effects], 
+                                 groups=self.dataframe[self.random_effects], 
                                  re_formula="1",
-                                 vc_formula={self.Nested_Effects: "1"})
-        
+                                 vc_formula={self.nested_effects: "1"})
+        ipdb.set_trace()
         self.model_results = self.model.fit()
+        anova_results = anova_lm(self.model_results, typ=3) 
+
+        model = smf.mixedlm("auc ~ group*day*trialtype*period", 
+                     data=self.dataframe, 
+                     groups=self.dataframe["suid"],  # Random intercept for subject
+                     re_formula="1")  # Random intercept for neuid (nested)
+        result = model.fit()
+
+        # Perform Type III ANOVA for F-values and p-values
+        anova_results = anova_lm(result, typ=3 )
         self.effect_p_values = self.model_results.pvalues
+        ipdb.set_trace()
         if self.verbose:
             print(self.model_results)
             print(self.effect_p_values)
+
+       
 
     def multiple_comparisons(self):
         """ Run multiple comparisons on significant interactions and/or main effects """
@@ -127,94 +168,93 @@ class mixedmodels():
         plt.title("Scale-Location Plot")
         plt.savefig(os.path.join(self.drop_directory,"Heterosckedacity_Check.jpg"))
 
-class compare_models():
-    def __init__(self, drop_directory, dataframe, dependent_variable, fixed_effects, random_effects, nested_effects,incorporate_random_slopes=False):
-        self.drop_directory = drop_directory
-        self.dataframe = dataframe
-        self.dependent_variable = dependent_variable
-        self.fixed_effects = fixed_effects
-        self.random_effects = random_effects
-        self.nested_effects = nested_effects
-        self.incorporate_random_slopes = incorporate_random_slopes
+# class compare_models():
+#     def __init__(self, drop_directory, dataframe, dependent_variable, fixed_effects, random_effects, nested_effects,incorporate_random_slopes=False):
+#         self.drop_directory = drop_directory
+#         self.dataframe = dataframe
+#         self.dependent_variable = dependent_variable
+#         self.fixed_effects = fixed_effects
+#         self.random_effects = random_effects
+#         self.nested_effects = nested_effects
+#         self.incorporate_random_slopes = incorporate_random_slopes
     
-    def __call__(self):
-        self.all_models = self.get_all_models()
+#     def __call__(self):
+#         self.all_models = self.get_all_models()
         
-        all_aic_data = []
-        for model_oh in self.all_models:
-            if model_oh['groups'] is  None or model_oh['vc_formula'] is None:
-                continue
-            else:
-                try:
-                    current_model_oh = smf.mixedlm(model_oh['formula'], self.dataframe, groups=model_oh['groups'], 
-                                            re_formula="1", vc_formula=model_oh['vc_formula'])
-                    result_oh = current_model_oh.fit()
-                    AIC_value = result_oh.aic
-                except:
-                    AIC_value = np.nan
+#         all_aic_data = []
+#         for model_oh in self.all_models:
+#             if model_oh['groups'] is  None or model_oh['vc_formula'] is None:
+#                 continue
+#             else:
+#                 try:
+#                     current_model_oh = smf.mixedlm(model_oh['formula'], self.dataframe, groups=model_oh['groups'], 
+#                                             re_formula="1", vc_formula=model_oh['vc_formula'])
+#                     result_oh = current_model_oh.fit()
+#                     AIC_value = result_oh.aic
+#                 except:
+#                     AIC_value = np.nan
 
-                all_aic_data.append([model_oh, AIC_value])
+#                 all_aic_data.append([model_oh, AIC_value])
         
-        ipdb.set_trace()
+#         ipdb.set_trace()
 
-    def get_all_models(self):
-        model_specifications = []
-        fixed_effect_combos = list(self.powerset(self.fixed_effects))[1:] 
-        random_effect_combos = list(self.powerset(self.random_effects))
+#     def get_all_models(self):
+#         model_specifications = []
+#         fixed_effect_combos = list(self.powerset(self.fixed_effects))[1:] 
+#         random_effect_combos = list(self.powerset(self.random_effects))
 
-        nested_combos = []
-        for re_combo in random_effect_combos:
-            nested_structure = {}
-            for re in re_combo:
-                if re in nested_effects:
-                    for nested in self.powerset(self.nested_effects[re]):
-                        if nested: 
-                            nested_structure[re] = "1"
-            nested_combos.append(nested_structure)
+#         nested_combos = []
+#         for re_combo in random_effect_combos:
+#             nested_structure = {}
+#             for re in re_combo:
+#                 if re in nested_effects:
+#                     for nested in self.powerset(self.nested_effects[re]):
+#                         if nested: 
+#                             nested_structure[re] = "1"
+#             nested_combos.append(nested_structure)
 
-        for fixed_combo, re_combo, nested_combo in product(fixed_effect_combos, random_effect_combos, nested_combos):
-            fixed_part = " + ".join(fixed_combo)
-            groups = re_combo[0] if re_combo else None
-            random_parts = [f"(1|{re})" for re in re_combo] 
-            random_part = " + ".join(random_parts) if random_parts else ""
+#         for fixed_combo, re_combo, nested_combo in product(fixed_effect_combos, random_effect_combos, nested_combos):
+#             fixed_part = " + ".join(fixed_combo)
+#             groups = re_combo[0] if re_combo else None
+#             random_parts = [f"(1|{re})" for re in re_combo] 
+#             random_part = " + ".join(random_parts) if random_parts else ""
 
-            if random_part:
-                formula = f"{self.dependent_variable} ~ {fixed_part} + {random_part}"
-            else:
-                formula = f"{self.dependent_variable} ~ {fixed_part}"
+#             if random_part:
+#                 formula = f"{self.dependent_variable} ~ {fixed_part} + {random_part}"
+#             else:
+#                 formula = f"{self.dependent_variable} ~ {fixed_part}"
 
-            model_specifications.append({
-                "formula": formula,
-                "groups": groups,
-                "vc_formula": nested_combo if nested_combo else None})
+#             model_specifications.append({
+#                 "formula": formula,
+#                 "groups": groups,
+#                 "vc_formula": nested_combo if nested_combo else None})
 
-        return model_specifications
+#         return model_specifications
 
-    def powerset(self, itoh):
-        s = list(itoh)
-        return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
+#     def powerset(self, itoh):
+#         s = list(itoh)
+#         return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
     
 def cli_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_file_path', type=str, required=True, help='A CSV file containing all stats data')
     parser.add_argument('--drop_directory', type=str, required=True, help='A directory where results will be saved')
-    parser.add_argument('--model_simulation', action='store_bool', required=False, help='Determine whether to run simulation to find best fit model from fixed effects')
+    #parser.add_argument('--model_simulation', action='store_bool', required=False, help='Determine whether to run simulation to find best fit model from fixed effects')
     args = parser.parse_args()
     return args
 
 def main(arguments):
-    ipdb.set_trace()
+    # Load in dataframe
+    df = pd.read_csv(arguments.data_file_path)
+
+    # Create mixed models
+    all_model_obj = mixedmodels(drop_directory=arguments.drop_directory, dataframe=df, model_type='lmm', 
+                                fixed_effects_formula = "auc ~ group*day*trialtype*period", 
+                                random_effects='suid',nested_effects='neuid', multicompare_correction = 'fdr_bh',
+                                verbose=True)
+    all_model_obj()
 
 if __name__=='__main__':
-    # args = cli_parser()
-    # main(arguments=args)
-    # Set seed for reproducibility
-
-    output_variables = 'Activity'
-    fixed_effects = ["Group", "Session", "Trialtype", "Period"]
-    random_effects = ["Subject"]
-    nested_effects = {"Subject": ["Neuron"]}
-    all_model_obj = compare_models(dataframe=df, drop_directory=None, dependent_variable=output_variables, 
-                            fixed_effects=fixed_effects,random_effects=random_effects,nested_effects=nested_effects)
-    all_model_obj()
+    args = cli_parser()
+    main(arguments=args)
     ipdb.set_trace()
