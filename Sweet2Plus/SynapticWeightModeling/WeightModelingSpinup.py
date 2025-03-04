@@ -62,7 +62,7 @@ class spinup:
                                 --error={self.slurm_output_directory}/error_%j.log \
                                 --gres=gpu:{self.gpus} \
                                 --mem={self.memory}GB \
-                                --wrap='sourece ~/.bashrc && \
+                                --wrap='source ~/.bashrc && \
                                     conda activate {self.conda_environment} && \
                                         {wrap_oh}'"
             full_commands.append(sbatch_command)
