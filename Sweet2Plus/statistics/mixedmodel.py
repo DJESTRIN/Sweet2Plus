@@ -65,6 +65,12 @@ class mixedmodels():
     def generate_model(self):
         """ Build and run LinearMixed model based on attributes """
         ipdb.set_trace()
+        self.model = smf.mixedlm(self.formula,
+                                 self.dataframe,
+                                 groups=self.dataframe[self.random_effects], 
+                                 re_formula="1",
+                                 vc_formula={self.nested_effects: "1"})
+        ipdb.set_trace()
         full_model = smf.mixedlm("auc ~ group * day * trialtype * period", self.dataframe, 
                          groups=self.dataframe["suid"], re_formula="1+neuid")
         full_result = full_model.fit()
