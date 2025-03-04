@@ -88,6 +88,7 @@ class mixedmodels():
 
 
         # Calculate emmeans
+        ipdb.set_trace()
         emmeans_oh = self.full_model.predict(self.dataframe)
         self.dataframe['auc_emm'] = emmeans_oh
 
