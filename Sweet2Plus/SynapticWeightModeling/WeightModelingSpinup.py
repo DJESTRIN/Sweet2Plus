@@ -145,7 +145,6 @@ class spinup:
         # Run all s2p through models and save weight dataframes
         output_wraps = self.build_wrap(basepath = os.path.abspath(__file__), filelist = objfiles, droplist = drop_directories)
         jobs_oh, full_commands = self.call_slurm(full_wrap_calls=output_wraps)
-        ipdb.set_trace()
 
         # Determine when jobs are finished
         self.wait_for_jobs_to_finish(job_ids=jobs_oh)
