@@ -86,6 +86,11 @@ class mixedmodels():
         p_value = stats.chi2.sf(lrt_stat_oh, df_diff_oh)
         print(f"LRT Statistic: {lrt_stat_oh}, p-value: {p_value}")
 
+
+        # Calculate emmeans
+        emmeans_oh = self.full_model(self.dataframe)
+        self.dataframe['auc_emm'] = emmeans_oh
+
     def multiple_comparisons(self):
         """ Run multiple comparisons on significant interactions and/or main effects """
         factor_levels = [self.dataframe[f].unique() for f in ["group", "day", "trialtype", "period"]]
@@ -94,6 +99,7 @@ class mixedmodels():
         # Store p-values
         p_values = []
         t_stats = []
+        df_stats = []
         comparisons = []
 
         for (a, b) in all_comparisons:
@@ -107,18 +113,18 @@ class mixedmodels():
             ]
             
             # Run t-test
-            ipdb.set_trace()
-            t_stat, p_val = sm.stats.ttest_ind(subset["auc"], subset_b["auc"])
+            t_stat, p_val, df_oh = sm.stats.ttest_ind(subset["auc_emm"], subset_b["auc_emm"])
             p_values.append(p_val)
             comparisons.append(f"{a} vs {b}")
             t_stats.append(t_stat)
+            df_stats.append(df_oh)
 
         # Apply FDR correction (Benjamini-Hochberg)
         _, p_corrected, _, _ = multipletests(p_values, method="fdr_bh")
 
         # Show results
-        for comp, t_val, p_val, p_corr in zip(comparisons, t_stats, p_values, p_corrected):
-            print(f"{comp}: t={t_val:.4f}, p={p_val:.4f}, FDR-corrected p={p_corr:.4f}")
+        for comp, t_val, df_oh, p_val, p_corr in zip(comparisons, t_stats, df_stats, p_values, p_corrected):
+            print(f"{comp}: t({df_oh})={t_val:.4f}, p={p_val:.4f} -->  FDR-corrected p={p_corr:.4f}")
 
     def residual_evaluation(self):
         """ Generate common plots and stats for residuals to manaully evaluate model fit """
