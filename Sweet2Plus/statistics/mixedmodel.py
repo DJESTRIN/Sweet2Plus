@@ -95,9 +95,9 @@ class mixedmodels():
 
 
         # Calculate emmeans
-        ipdb.set_trace()
-        emmeans_oh = self.full_model.predict(self.dataframe)
-        self.dataframe['auc_emm'] = emmeans_oh
+        # ipdb.set_trace()
+        # emmeans_oh = self.full_model.predict(self.dataframe)
+        # self.dataframe['auc_emm'] = emmeans_oh
 
     def multiple_comparisons(self):
         """ Run multiple comparisons on significant interactions and/or main effects """
@@ -121,7 +121,7 @@ class mixedmodels():
             ]
             
             # Run t-test
-            t_stat, p_val, df_oh = sm.stats.ttest_ind(subset["auc_emm"], subset_b["auc_emm"])
+            t_stat, p_val, df_oh = sm.stats.ttest_ind(subset["auc"], subset_b["auc"])
             p_values.append(p_val)
             comparisons.append(f"{a} vs {b}")
             t_stats.append(t_stat)
