@@ -57,6 +57,8 @@ class mixedmodels():
         self.dataframe['day'] = self.dataframe['day'].astype('category') 
         self.dataframe['suid'] = self.dataframe['suid'].astype('category')
         self.dataframe['neuid'] = self.dataframe['neuid'].astype('category')
+        self.dataframe['trialid'] = self.dataframe['trialid'].astype('category')
+        self.dataframe['auc'] = self.dataframe['auc'].astype('float')
 
         assert self.model_type=='lmm'
 
