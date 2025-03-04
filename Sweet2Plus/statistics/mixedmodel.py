@@ -59,7 +59,6 @@ class mixedmodels():
         """ General statistical protocol """
         self.generate_model()
         self.multiple_comparisons()
-        ipdb.set_trace()
         self.residual_evaluation()
 
     def generate_model(self):
@@ -108,6 +107,7 @@ class mixedmodels():
             ]
             
             # Run t-test
+            ipdb.set_trace()
             t_stat, p_val = sm.stats.ttest_ind(subset["auc"], subset_b["auc"])
             p_values.append(p_val)
             comparisons.append(f"{a} vs {b}")
@@ -123,8 +123,8 @@ class mixedmodels():
     def residual_evaluation(self):
         """ Generate common plots and stats for residuals to manaully evaluate model fit """
         # Pull residuals and fitted values
-        residuals = self.model.resid_deviance
-        fit_vals = self.model.fittedvalues
+        residuals = self.full_model.resid_deviance
+        fit_vals = self.full_model.fittedvalues
 
         # Plot of residuals and 
         plt.figure(figsize=(7,5))
