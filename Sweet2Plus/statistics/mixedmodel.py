@@ -59,7 +59,8 @@ class mixedmodels():
         self.dataframe['neuid'] = self.dataframe['neuid'].astype('category')
         self.dataframe['trialid'] = self.dataframe['trialid'].astype('category')
         self.dataframe['auc'] = self.dataframe['auc'].astype('float')
-        self.dataframe = self.dataframe.groupby(['group', 'day', 'trialtype', 'period', 'suid','neuid'])['auc'].transform('mean')
+        ipdb.set_trace()
+        self.dataframe = self.dataframe.groupby(['suid','neuid','group', 'day', 'trialtype', 'period'])['auc'].transform('mean')
 
         assert self.model_type=='lmm'
 
