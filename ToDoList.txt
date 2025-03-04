@@ -3,8 +3,9 @@ Running to do list:
 
 (2) Analysis of general neuronal activity across conditions
     (a) Need to generate regression statistics
-        (i) fdr post hoc corrections or remove nonsensical comparisons...
-        (ii) finding best model with AIC values
+        (i) fdr post hoc corrections or remove nonsensical comparisons... How to do this????
+        (ii) Use EMM not just observed averages of data 
+        (iii) finding best model with AIC values
     (b) Generate comprehensive graph containing heatmaps
 
 (3) Activity of cluster results 

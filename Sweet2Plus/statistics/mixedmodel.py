@@ -93,10 +93,9 @@ class mixedmodels():
         p_value = stats.chi2.sf(lrt_stat_oh, df_diff_oh)
         print(f"LRT Statistic: {lrt_stat_oh}, p-value: {p_value}")
 
-
         # Calculate emmeans
-        # ipdb.set_trace()
-        # emmeans_oh = self.full_model.predict(self.dataframe)
+        ipdb.set_trace()
+        emmeans_oh = self.full_model.predict(self.dataframe)
         # self.dataframe['auc_emm'] = emmeans_oh
 
     def multiple_comparisons(self):
