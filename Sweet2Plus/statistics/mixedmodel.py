@@ -60,7 +60,8 @@ class mixedmodels():
         self.dataframe['trialid'] = self.dataframe['trialid'].astype('category')
         self.dataframe['auc'] = self.dataframe['auc'].astype('float')
         self.dataframe['auc_avg'] = self.dataframe.groupby(['suid','neuid','group', 'day', 'trialtype', 'period'])['auc'].transform('mean')
-
+        self.columns_order = ['suid', 'neuid', 'group', 'day', 'trialtype', 'period', 'auc_avg']
+        self.dataframe = self.dataframe[self.columns_order]
         assert self.model_type=='lmm'
 
     def __call__(self):
