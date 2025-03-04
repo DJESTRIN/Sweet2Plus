@@ -68,13 +68,14 @@ class mixedmodels():
         full_model = smf.mixedlm("auc ~ group * day * trialtype * period", self.dataframe, 
                          groups=self.dataframe["suid"], re_formula="1+neuid")
         full_result = full_model.fit()
+        ipdb.set_trace()
 
         # Fit the reduced model (without the 4-way interaction)
         # Here we remove the `group*day*trialtype*period` interaction term
         reduced_model = smf.mixedlm("auc ~ group + day + trialtype + period", self.dataframe, 
                                     groups=self.dataframe_sub["suid"], re_formula="1+neuid")
         reduced_result = reduced_model.fit()
-
+        ipdb.set_trace()
         # Compute the Likelihood Ratio Test statistic
         lrt_stat = 2 * (full_result.llf - reduced_result.llf)  # LRT statistic
 
