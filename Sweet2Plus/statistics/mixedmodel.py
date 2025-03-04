@@ -88,7 +88,7 @@ class mixedmodels():
 
 
         # Calculate emmeans
-        emmeans_oh = self.full_model(self.dataframe)
+        emmeans_oh = self.full_model.predict(self.dataframe)
         self.dataframe['auc_emm'] = emmeans_oh
 
     def multiple_comparisons(self):
