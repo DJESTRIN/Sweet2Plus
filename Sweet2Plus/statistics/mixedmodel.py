@@ -65,7 +65,6 @@ class mixedmodels():
     def generate_model(self):
         """ Build and run LinearMixed model based on attributes """
         ipdb.set_trace()
-        self.dataframe = self.dataframe.sample(n=1000)
         full_model = smf.mixedlm("auc ~ group * day * trialtype * period", self.dataframe, 
                          groups=self.dataframe["suid"], re_formula="1+neuid")
         full_result = full_model.fit()
