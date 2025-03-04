@@ -80,7 +80,7 @@ class mixedmodels():
                                  groups=self.dataframe[self.random_effects], 
                                  re_formula="1",
                                  vc_formula={self.nested_effects: "1"})
-        self.full_reduced_result = self.full_model.fit()
+        self.full_reduced_result = self.reduced_model.fit()
 
         # Calculate LRT
         lrt_stat_oh = 2 * (self.full_model_result.llf - self.full_reduced_result.llf) 
