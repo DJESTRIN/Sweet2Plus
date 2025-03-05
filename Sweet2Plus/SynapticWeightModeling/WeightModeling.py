@@ -569,7 +569,7 @@ if __name__=='__main__':
         os.mkdir(os.path.join(args.drop_directory,r'traces'))
 
     # Build, train and test best model
-    objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=args.hypertuning_study, drop_directory=args.drop_directory)
+    objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=False, drop_directory=args.drop_directory)
     objoh()
 
     # Pull model weight data, generate basic graphs, save to dataframe

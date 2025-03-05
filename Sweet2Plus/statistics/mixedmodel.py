@@ -58,63 +58,99 @@ class mixedmodels():
         self.dataframe['neuid'] = self.dataframe['neuid'].astype('category').cat.codes
         self.dataframe['trialid'] = self.dataframe['trialid'].astype('category').cat.codes
         self.dataframe['auc'] = self.dataframe['auc'].astype('float')
-        self.dataframe['auc_avg'] = self.dataframe.groupby(['suid','neuid','group', 'day', 'trialtype', 'period'])['auc'].transform('mean')
-        self.columns_order = ['suid', 'neuid', 'group', 'day', 'trialtype', 'period', 'auc_avg']
+        # self.dataframe['auc_avg'] = self.dataframe.groupby(['suid','neuid','group', 'day', 'trialtype', 'period'])['auc'].transform('mean')
+        # self.dataframe = self.dataframe[self.dataframe['period'] != 0].drop(columns=['period'])
+        self.columns_order = ['auc', 'group', 'day', 'trialtype', 'period', 'trialid', 'suid', 'neuid']
         self.dataframe = self.dataframe[self.columns_order]
         assert self.model_type=='lmm'
 
     def __call__(self):
         """ General statistical protocol """
+        self.data_distributions()
         self.generate_model()
-        # self.EMM()
-        # self.multiple_comparisons()
+        self.EMM()
+        self.EMM_multiple_comparisons()
         self.residual_evaluation()
+        ipdb.set_trace()
+
+    def data_distributions(self):
+        plt.figure(figsize=(7,5))
+        sns.histplot(self.dataframe['auc'], bins=1000, kde=True)
+        plt.axvline(0, color='red', linestyle='dashed')
+        plt.xlabel("AUC")
+        plt.ylabel("Denisty")
+        plt.savefig(os.path.join(self.drop_directory,"KernelDensityAUC.jpg"))
 
     def generate_model(self):
         """ Build and run LinearMixed model based on attributes """
         print(f'Fitting full model with formula:{self.formula}')
-        self.full_model = smf.mixedlm(self.formula,
+        self.full_model = smf.mixedlm('auc ~ group * day * trialtype ',
                                  self.dataframe,
-                                 groups=self.dataframe[self.random_effects], 
+                                 groups=self.dataframe['suid'], 
                                  re_formula="1",
-                                 vc_formula={self.nested_effects: "1"})
+                                 vc_formula={'suid:neuid': '1'})
+        
         self.full_model_result = self.full_model.fit()
 
-        self.formula_reduced = "auc_avg ~ group * day * trialtype + group * day * period + group * trialtype * period + day * trialtype * period"
-        print(f'Fitting reduced model with formula: {self.formula_reduced}')
-        self.reduced_model = smf.mixedlm(self.formula_reduced,
-                                 self.dataframe,
-                                 groups=self.dataframe[self.random_effects], 
-                                 re_formula="1",
-                                 vc_formula={self.nested_effects: "1"})
-        self.full_reduced_result = self.reduced_model.fit()
-
-        # Calculate LRT
-        lrt_stat_oh = 2 * (self.full_model_result.llf - self.full_reduced_result.llf) 
-        df_diff_oh = (len(self.full_model_result.params) - len(self.full_reduced_result.params))
-        p_value = stats.chi2.sf(lrt_stat_oh, df_diff_oh)
-        print(f"LRT Statistic: {lrt_stat_oh}, p-value: {p_value}")
-
-        predictions = self.full_model.predict(self.dataframe)
-        self.predicted_auc = predictions[:, -1]
-        self.dataframe['predictions'] = self.predicted_auc
+        ipdb.set_trace()
+        self.predictions = self.full_model_result.predict(self.dataframe.drop(columns='auc'))
+        self.dataframe['predictions'] = self.predictions
 
     def EMM(self):
         """ Python does not have a package that does this, so I needed to code it """
-        predictions = self.full_model.predict(self.dataframe)
-        predicted_auc = predictions[:, -1]
-        self.dataframe['predictions'] = predicted_auc
-
         # Group by categorical variables and calculate the mean prediction for each group
         emmeans = self.dataframe.groupby(['group', 'day', 'trialtype', 'period'])['predictions'].mean().reset_index()
+        ipdb.set_trace()
         std_devs = self.dataframe.groupby(['group', 'day', 'trialtype', 'period'])['predictions'].std().reset_index()
         group_sizes = self.dataframe.groupby(['group', 'day', 'trialtype', 'period']).size().reset_index(name='n')
         emmeans = emmeans.merge(std_devs, on=['group', 'day', 'trialtype', 'period'])
         self.emmeans = emmeans.merge(group_sizes, on=['group', 'day', 'trialtype', 'period'])
-        ipdb.set_trace()
 
     def EMM_multiple_comparisons(self):
-        ipdb.set_trace()
+        # Generate all possible combinations
+        combinations = list(itertools.product(self.emmeans['group'].unique(), 
+                                            self.emmeans['day'].unique(), 
+                                            self.emmeans['trialtype'].unique(), 
+                                            self.emmeans['period'].unique()))
+
+        # Function to check if two tuples differ in exactly one element
+        def differs_by_one(a, b):
+            diff_count = sum(x != y for x, y in zip(a, b))
+            return diff_count == 1
+
+        # Compare every combination with every other combination
+        for combo1, combo2 in itertools.combinations(combinations, 2):
+            if differs_by_one(combo1, combo2):
+                mean1 = self.emmeans[(self.emmeans['group'] == combo1[0]) & 
+                  (self.emmeans['day'] == combo1[1]) & 
+                  (self.emmeans['trialtype'] == combo1[2]) & 
+                  (self.emmeans['period'] == combo1[3])]['predictions_x']
+                
+                std1 = self.emmeans[(self.emmeans['group'] == combo1[0]) & 
+                  (self.emmeans['day'] == combo1[1]) & 
+                  (self.emmeans['trialtype'] == combo1[2]) & 
+                  (self.emmeans['period'] == combo1[3])]['predictions_y']
+        
+                n1 = self.emmeans[(self.emmeans['group'] == combo1[0]) & 
+                  (self.emmeans['day'] == combo1[1]) & 
+                  (self.emmeans['trialtype'] == combo1[2]) & 
+                  (self.emmeans['period'] == combo1[3])]['n']
+                
+                mean2 = self.emmeans[(self.emmeans['group'] == combo2[0]) & 
+                  (self.emmeans['day'] == combo2[1]) & 
+                  (self.emmeans['trialtype'] == combo2[2]) & 
+                  (self.emmeans['period'] == combo2[3])]['predictions_x']
+                
+                std2 = self.emmeans[(self.emmeans['group'] == combo2[0]) & 
+                  (self.emmeans['day'] == combo2[1]) & 
+                  (self.emmeans['trialtype'] == combo2[2]) & 
+                  (self.emmeans['period'] == combo2[3])]['predictions_y']
+        
+                n2 = self.emmeans[(self.emmeans['group'] == combo2[0]) & 
+                  (self.emmeans['day'] == combo2[1]) & 
+                  (self.emmeans['trialtype'] == combo2[2]) & 
+                  (self.emmeans['period'] == combo2[3])]['n']
+                ipdb.set_trace()
 
     def multiple_comparisons(self):
         """ Run multiple comparisons on significant interactions and/or main effects """
@@ -130,12 +166,11 @@ class mixedmodels():
         for (a, b) in all_comparisons:
             subset = self.dataframe[
                 (self.dataframe["group"] == a[0]) & (self.dataframe["day"] == a[1]) &
-                (self.dataframe["trialtype"] == a[2]) & (self.dataframe["period"] == a[3])
-            ]
+                (self.dataframe["trialtype"] == a[2]) & (self.dataframe["period"] == a[3])]
+            
             subset_b = self.dataframe[
                 (self.dataframe["group"] == b[0]) & (self.dataframe["day"] == b[1]) &
-                (self.dataframe["trialtype"] == b[2]) & (self.dataframe["period"] == b[3])
-            ]
+                (self.dataframe["trialtype"] == b[2]) & (self.dataframe["period"] == b[3])]
             
             # Run t-test
             t_stat, p_val, df_oh = sm.stats.ttest_ind(subset["auc"], subset_b["auc"])
@@ -154,8 +189,8 @@ class mixedmodels():
     def residual_evaluation(self):
         """ Generate common plots and stats for residuals to manaully evaluate model fit """
         # Pull residuals and fitted values
-        residuals = self.dataframe['auc_avg'] - self.predicted_auc
-        fit_vals = self.predicted_auc
+        residuals = self.dataframe['auc_avg'] - self.predictions
+        fit_vals = self.predictions
 
         # Plot of residuals and 
         plt.figure(figsize=(7,5))
@@ -174,11 +209,13 @@ class mixedmodels():
         plt.savefig(os.path.join(self.drop_directory,"ResidualHistogram_Check.jpg"))
 
         # qqplot plot
+        plt.figure(figsize=(7,5))
         sm.qqplot(residuals, line='45', fit=True)
         plt.title("Q-Q Plot of Residuals")
         plt.savefig(os.path.join(self.drop_directory,"ResidualQQplot_Check.jpg"))
 
         # Predictor vs residual plot
+        plt.figure(figsize=(7,5))
         sns.scatterplot(x=self.dataframe["group"], y=residuals, alpha=0.6)
         plt.axhline(0, color='red', linestyle='dashed')
         plt.xlabel("Predictor Variable")
@@ -196,72 +233,72 @@ class mixedmodels():
         plt.title("Scale-Location Plot")
         plt.savefig(os.path.join(self.drop_directory,"Heterosckedacity_Check.jpg"))
 
-# class compare_models():
-#     def __init__(self, drop_directory, dataframe, dependent_variable, fixed_effects, random_effects, nested_effects,incorporate_random_slopes=False):
-#         self.drop_directory = drop_directory
-#         self.dataframe = dataframe
-#         self.dependent_variable = dependent_variable
-#         self.fixed_effects = fixed_effects
-#         self.random_effects = random_effects
-#         self.nested_effects = nested_effects
-#         self.incorporate_random_slopes = incorporate_random_slopes
+class compare_models():
+    def __init__(self, drop_directory, dataframe, dependent_variable, fixed_effects, random_effects, nested_effects,incorporate_random_slopes=False):
+        self.drop_directory = drop_directory
+        self.dataframe = dataframe
+        self.dependent_variable = dependent_variable
+        self.fixed_effects = fixed_effects
+        self.random_effects = random_effects
+        self.nested_effects = nested_effects
+        self.incorporate_random_slopes = incorporate_random_slopes
     
-#     def __call__(self):
-#         self.all_models = self.get_all_models()
+    def __call__(self):
+        self.all_models = self.get_all_models()
         
-#         all_aic_data = []
-#         for model_oh in self.all_models:
-#             if model_oh['groups'] is  None or model_oh['vc_formula'] is None:
-#                 continue
-#             else:
-#                 try:
-#                     current_model_oh = smf.mixedlm(model_oh['formula'], self.dataframe, groups=model_oh['groups'], 
-#                                             re_formula="1", vc_formula=model_oh['vc_formula'])
-#                     result_oh = current_model_oh.fit()
-#                     AIC_value = result_oh.aic
-#                 except:
-#                     AIC_value = np.nan
+        all_aic_data = []
+        for model_oh in self.all_models:
+            if model_oh['groups'] is  None or model_oh['vc_formula'] is None:
+                continue
+            else:
+                try:
+                    current_model_oh = smf.mixedlm(model_oh['formula'], self.dataframe, groups=model_oh['groups'], 
+                                            re_formula="1", vc_formula=model_oh['vc_formula'])
+                    result_oh = current_model_oh.fit()
+                    AIC_value = result_oh.aic
+                except:
+                    AIC_value = np.nan
 
-#                 all_aic_data.append([model_oh, AIC_value])
+                all_aic_data.append([model_oh, AIC_value])
         
-#         ipdb.set_trace()
+        ipdb.set_trace()
 
-#     def get_all_models(self):
-#         model_specifications = []
-#         fixed_effect_combos = list(self.powerset(self.fixed_effects))[1:] 
-#         random_effect_combos = list(self.powerset(self.random_effects))
+    def get_all_models(self):
+        model_specifications = []
+        fixed_effect_combos = list(self.powerset(self.fixed_effects))[1:] 
+        random_effect_combos = list(self.powerset(self.random_effects))
 
-#         nested_combos = []
-#         for re_combo in random_effect_combos:
-#             nested_structure = {}
-#             for re in re_combo:
-#                 if re in nested_effects:
-#                     for nested in self.powerset(self.nested_effects[re]):
-#                         if nested: 
-#                             nested_structure[re] = "1"
-#             nested_combos.append(nested_structure)
+        nested_combos = []
+        for re_combo in random_effect_combos:
+            nested_structure = {}
+            for re in re_combo:
+                if re in nested_effects:
+                    for nested in self.powerset(self.nested_effects[re]):
+                        if nested: 
+                            nested_structure[re] = "1"
+            nested_combos.append(nested_structure)
 
-#         for fixed_combo, re_combo, nested_combo in product(fixed_effect_combos, random_effect_combos, nested_combos):
-#             fixed_part = " + ".join(fixed_combo)
-#             groups = re_combo[0] if re_combo else None
-#             random_parts = [f"(1|{re})" for re in re_combo] 
-#             random_part = " + ".join(random_parts) if random_parts else ""
+        for fixed_combo, re_combo, nested_combo in product(fixed_effect_combos, random_effect_combos, nested_combos):
+            fixed_part = " + ".join(fixed_combo)
+            groups = re_combo[0] if re_combo else None
+            random_parts = [f"(1|{re})" for re in re_combo] 
+            random_part = " + ".join(random_parts) if random_parts else ""
 
-#             if random_part:
-#                 formula = f"{self.dependent_variable} ~ {fixed_part} + {random_part}"
-#             else:
-#                 formula = f"{self.dependent_variable} ~ {fixed_part}"
+            if random_part:
+                formula = f"{self.dependent_variable} ~ {fixed_part} + {random_part}"
+            else:
+                formula = f"{self.dependent_variable} ~ {fixed_part}"
 
-#             model_specifications.append({
-#                 "formula": formula,
-#                 "groups": groups,
-#                 "vc_formula": nested_combo if nested_combo else None})
+            model_specifications.append({
+                "formula": formula,
+                "groups": groups,
+                "vc_formula": nested_combo if nested_combo else None})
 
-#         return model_specifications
+        return model_specifications
 
-#     def powerset(self, itoh):
-#         s = list(itoh)
-#         return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
+    def powerset(self, itoh):
+        s = list(itoh)
+        return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
     
 def cli_parser():
     parser = argparse.ArgumentParser()

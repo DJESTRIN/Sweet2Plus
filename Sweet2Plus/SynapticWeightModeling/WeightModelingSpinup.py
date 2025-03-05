@@ -22,7 +22,7 @@ def parse_cli_inputs():
 
 class spinup:
     def __init__(self,parent_input_directory, slurm_output_directory, job_name='SynapticWeightModeling', 
-                 partition='scu-gpu', gpus=1, memory=64, conda_environment='sweet2p'):
+                 partition='scu-gpu, sackler-gpu', gpus=1, memory=64, conda_environment='sweet2p'):
         # Directory containing all s2p data objects
         self.parent_input_directory = parent_input_directory
 
@@ -43,7 +43,6 @@ class spinup:
         for file, drop in zip(filelist,droplist):
             wrap_call_oh = f'python {basepath}/WeightModeling.py \
                 --s2p_object_file {file} \
-                --hypertuning_study \
                 --drop_directory {drop}'
             # Append the current wrap string to list
             output_wrap_calls.append(wrap_call_oh)
