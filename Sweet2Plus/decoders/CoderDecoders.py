@@ -22,13 +22,12 @@ Can average neuronal activity for a trial predict the trial type? Is there a pre
 
 
 """
-from Sweet2Plus.statistics.heatmaps import heatmap
 from Sweet2Plus.statistics.coefficient_clustering import cli_parser, gather_data
+from Sweet2Plus.decoders.NetworkArchitectures import *
+from Sweet2Plus.decoders.DataLoader import *
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import StepLR
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.metrics import f1_score, confusion_matrix
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from sklearn.model_selection import train_test_split
@@ -36,33 +35,9 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
-import matplotlib
 import optuna
 import tqdm
-import random
 import ipdb
-
-def sampling(X,y):
-    """ Sampling -- 
-     Takes data, finds smallest class and makes sure the data is equally sampled across all classes """
-    unique_classes, class_counts = np.unique(y, return_counts=True)
-    max_count = np.max(class_counts)
-    minority_class_index = np.argmin(class_counts) 
-    minority_class = unique_classes[minority_class_index]
-    X_minority = X[y == minority_class]
-    y_minority = y[y == minority_class]
-    n_minority_samples = X_minority.shape[0]
-    n_upsampled = max_count - n_minority_samples 
-    indices = np.random.choice(n_minority_samples, n_upsampled, replace=True)
-    X_upsampled = np.vstack([X_minority, X_minority[indices]])
-    y_upsampled = np.hstack([y_minority, y_minority[indices]])
-    X_balanced = np.vstack([X[y != minority_class], X_upsampled])
-    y_balanced = np.hstack([y[y != minority_class], y_upsampled])
-    return X_balanced, y_balanced
-
-def zero_samples(X):
-    X_zeroed = X - np.tile(X[:,0],(X.shape[1],1)).T
-    return X_zeroed
 
 def quick_plot_df(X,y):
     average_traces = []
@@ -90,211 +65,6 @@ def track_gradients(model, epoch):
             if name not in gradient_history:
                 gradient_history[name] = []
             gradient_history[name].append((epoch, grad_norm))
-
-class format_data(heatmap):
-    def __init__(self, drop_directory, neuronal_activity, behavioral_timestamps, neuron_info, 
-                 trial_list=['Vanilla', 'PeanutButter', 'Water', 'FoxUrine'],
-                 normalize_neural_activity=False, regression_type='ridge', 
-                 hyp_batch_size=64, preprocessed = None, percentage_ds = 1 ):
-        super().__init__(drop_directory, neuronal_activity, behavioral_timestamps, neuron_info,
-                         trial_list, normalize_neural_activity, regression_type)
-        
-        self.batch_size = hyp_batch_size
-        self.preprocessed = preprocessed
-        self.percentage_ds = percentage_ds
-
-    def __call__(self):
-        if self.preprocessed:
-            # Load data from .npy files
-            X_path, y_path = self.preprocessed
-            self.X_original = np.load(X_path)
-            self.y_one_hot = np.load(y_path)
-            num_samples = int(len(self.X_original) * self.percentage_ds)
-            selected_indices = np.random.choice(len(self.X_original), size=num_samples, replace=False)
-            self.X_original = self.X_original[selected_indices]
-            self.y_one_hot  = self.y_one_hot[selected_indices]
-            self.normalize_for_neural_network()
-            self.quick_plot()
-        else:
-            super().__call__()
-
-        X_train, X_test, y_train, y_test = self.clean_and_split_data()
-        self.torch_loader(X_train, X_test, y_train, y_test)
-
-    def normalize_for_neural_network(self):
-        """
-        Normalize the data
-        """
-        for k,row in enumerate(self.X_original):
-            self.X_original[k] = (row-np.mean(row,axis=0))/(np.std(row,axis=0) + 1e-8) + 1e-8
-
-    def quick_plot(self):
-        plt.figure()
-        maxes = np.argmax(self.y_one_hot,axis=1)
-        for type,trial_name in zip(np.unique(maxes),self.trial_list):
-            current_data = self.X_original[np.where(maxes==type)]
-            average_current_data = np.nanmean(current_data,axis=0)
-            plt.plot(average_current_data,label=trial_name)
-        plt.savefig(os.path.join(self.drop_directory,"plotofavXdata.jpg"))
-
-    def clean_and_split_data(self):
-        # Shuffle the data
-        indices = np.arange(self.X_original.shape[0])
-        np.random.shuffle(indices)
-        self.X, y_one_hot = self.X_original[indices], self.y_one_hot[indices]
-
-        # Convert one hot to arg max
-        self.y = np.argmax(y_one_hot, axis=1)
-
-        # Oversample minority classes that are too small
-        self.X, self.y = sampling(X=self.X, y=self.y)
-        
-        # Zero the data by first point
-        self.X = zero_samples(self.X)
-
-        # Split the data into training and testing
-        X_train, X_test, y_train, y_test = train_test_split(self.X, self.y, test_size=0.2, random_state=42)
-
-        return X_train, X_test, y_train, y_test
-
-    def torch_loader(self, X_train, X_test, y_train, y_test):
-        """ Put numpy arrays into torch's data loader format """
-        X_train, X_test, y_train, y_test = map(torch.tensor, (X_train, X_test, y_train, y_test))
-
-        training_dataset = TensorDataset(X_train.float(), y_train.long())
-        testing_dataset = TensorDataset(X_test.float(), y_test.long())
-
-        self.train_loader = DataLoader(training_dataset, batch_size=self.batch_size, shuffle=True)
-        self.test_loader = DataLoader(testing_dataset, batch_size=self.batch_size)
-        
-class ResidualBlock(nn.Module):
-    def __init__(self, input_size, output_size, dropout_rate=0.3):
-        super(ResidualBlock, self).__init__()
-        
-        # Define the layers of the residual block
-        self.fc = nn.Sequential(
-            nn.Linear(input_size, output_size),
-            nn.BatchNorm1d(output_size),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(dropout_rate)
-        )
-
-        # Linear layer to match the input and output size for the residual connection
-        self.match_input = nn.Linear(input_size, output_size)
-
-        self.last_activation = nn.LeakyReLU(0.2)
-    def forward(self, x):
-        residual = self.match_input(x)
-        out = self.fc(x)
-        return self.last_activation(out + residual)
-        
-class NeuronalActivity_Encoder_Decoder(nn.Module):
-    def __init__(self, input_size, hyp_middle_dimension, output_size, dropout_rate=0.1):
-        super(NeuronalActivity_Encoder_Decoder, self).__init__()
-
-        # Encoder: Residual blocks with BatchNorm, LeakyReLU, and Dropout
-        self.encoder = nn.Sequential(
-            ResidualBlock(input_size, 512, dropout_rate),
-            ResidualBlock(512, 256, dropout_rate),
-            ResidualBlock(256, 128, dropout_rate),
-            ResidualBlock(128, hyp_middle_dimension, dropout_rate)
-        )
-
-        # Decoder: Residual blocks with BatchNorm, LeakyReLU, and Dropout
-        self.decoder = nn.Sequential(
-            ResidualBlock(hyp_middle_dimension, 128, dropout_rate),
-            ResidualBlock(128, 256, dropout_rate),
-            ResidualBlock(256, 512, dropout_rate),
-            nn.Linear(512, output_size)  # Final output layer without residual connection
-        )
-
-        # Initialize weights
-        self.initialize_weights()
-
-    def forward(self, x):
-        encoded = self.encoder(x)
-        if random.random() < 0.001:  
-            print("Encoder activations:", encoded.mean().item(), 
-                encoded.min().item(), encoded.max().item())
-        decoded = self.decoder(encoded)
-        return decoded
-
-    def initialize_weights(self):
-        for layer in self.modules():
-            if isinstance(layer, nn.Linear):
-                nn.init.xavier_normal_(layer.weight)
-                if layer.bias is not None:
-                    nn.init.constant_(layer.bias, 0)
-
-class LSTMResidualBlock(nn.Module):
-    def __init__(self, input_size, hidden_size, dropout=0.1):
-        super(LSTMResidualBlock, self).__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
-        self.dropout = nn.Dropout(dropout)
-        self.linear = nn.Linear(input_size, hidden_size)  # For matching input size to hidden size
-
-    def forward(self, x):
-        out, _ = self.lstm(x)  # LSTM output
-        out = self.dropout(out)  # Apply dropout
-        residual = self.linear(x)  # Residual connection
-        return out + residual  # Add residual connection
-
-class LSTMEncoder(nn.Module):
-    def __init__(self, input_size=46, hidden_size=256, num_layers=2, dropout=0.1):
-        super(LSTMEncoder, self).__init__()
-        self.residual_blocks = nn.ModuleList([
-            LSTMResidualBlock(input_size if i == 0 else hidden_size, hidden_size, dropout)
-            for i in range(num_layers)
-        ])
-
-    def forward(self, x):
-        for block in self.residual_blocks:
-            x = block(x)  # Pass through residual blocks
-        return x
-
-class LSTMDecoder(nn.Module):
-    def __init__(self, hidden_size=256, output_size=4, num_layers=2, dropout=0.1):
-        super(LSTMDecoder, self).__init__()
-        self.residual_blocks = nn.ModuleList([
-            LSTMResidualBlock(hidden_size, hidden_size, dropout)
-            for i in range(num_layers)
-        ])
-        self.fc = nn.Linear(hidden_size, output_size)
-
-    def forward(self, x):
-        # Ensure x is three-dimensional (batch_size, seq_length, hidden_size)
-        # Here, we assume you want the last hidden state of the last layer
-        for block in self.residual_blocks:
-            x = block(x)  # Pass through residual blocks
-
-        # If x is two-dimensional, you can expand it like this:
-        if x.dim() == 2:  # If it's (batch_size, hidden_size)
-            x = x.unsqueeze(1)  # Expand to (batch_size, 1, hidden_size)
-
-        # Use only the last time step for the output
-        return self.fc(x[:, -1, :])  # Output from the last time step
-
-
-class LSTMEncoderDecoder(nn.Module):
-    def __init__(self, input_size=46, hidden_size=256, output_size=4, num_layers=2, dropout=0.1):
-        super(LSTMEncoderDecoder, self).__init__()
-        self.encoder = LSTMEncoder(input_size, hidden_size, num_layers, dropout)
-        self.decoder = LSTMDecoder(hidden_size, output_size, num_layers, dropout)
-
-    def forward(self, x):
-        encoded = self.encoder(x)
-        decoded_output = self.decoder(encoded)  # Use the final encoded representation
-        return decoded_output
-
-class NeuralNetworkFigures():
-    def __init__(self,name):
-        self.name = name
-    
-    def plot_learning_curve(self,data,label,output_file):
-        plt.figure()
-        plt.plot(np.asarray(data),label=label)
-        plt.title(f"Current {label} results")
-        plt.savefig(output_file)
 
 class Education:
     def __init__(self, data_obj, neural_network_obj, figures_obj, hyp_total_epochs = 100, hyp_learning_rate = 0.0003906, hyp_gamma=0.9, show_results = 2):
@@ -473,8 +243,13 @@ if __name__=='__main__':
     
     else:
         # Preprocess and structure the data
-        #neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
-        preprossesed_oh = (os.path.join(drop_directory,"X_original.npy"),os.path.join(drop_directory,"y_one_hot.npy"))
+        neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
+        circuit_obj = circuit_format_data(drop_directory=drop_directory,neuronal_activity=neuronal_activity, 
+                            behavioral_timestamps=behavioral_timestamps, neuron_info=neuron_info)
+        circuit_obj()
+        
+        ipdb.set_trace()
+        #preprossesed_oh = (os.path.join(drop_directory,"X_original.npy"),os.path.join(drop_directory,"y_one_hot.npy"))
         data_obj_oh = format_data(drop_directory=drop_directory,
                             neuronal_activity=None,
                             behavioral_timestamps=None,
