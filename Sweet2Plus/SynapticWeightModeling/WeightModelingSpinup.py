@@ -67,6 +67,7 @@ class spinup:
             full_commands.append(sbatch_command)
 
             # Run command
+            ipdb.set_trace()
             result = subprocess.run(sbatch_command, capture_output=True, text=True, shell=True)
 
             # Print submission status
