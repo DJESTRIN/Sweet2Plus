@@ -61,11 +61,11 @@ def GeneratePlots(AUCs, Trace,  drop_directory):
     plt.figure(figsize=(6, 5))
     sns.set_theme(style="whitegrid")
     x_positions = np.arange(3)  
+    plt.errorbar(x_positions, means, yerr=sems, fmt='o', color="black", capsize=10, markersize=10, label="Mean ± SEM")
     for i in range(3):
-        sns.stripplot(x=np.full(len(AUCs), i), y=AUCs[:, i], jitter=True, color="gray", alpha=0.5)
+        sns.stripplot(x=np.full(len(AUCs), i), y=AUCs[:, i], jitter=True, color="gray", alpha=0.05)
 
-    colors=["black","blue","black"]
-    plt.errorbar(x_positions, means, yerr=sems, fmt='o', color=colors, capsize=5, markersize=8, label="Mean ± SEM")
+    plt.errorbar(x_positions, means, yerr=sems, fmt='o', color="black", capsize=10, markersize=10, label="Mean ± SEM")
     plt.xticks(x_positions, ["Pre-stimulation", "Stimulation", "Post-Stimulation"])  
     plt.ylabel("Values")
     plt.legend()
