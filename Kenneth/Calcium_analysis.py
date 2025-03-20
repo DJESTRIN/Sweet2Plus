@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import os 
 import ipdb
 import seaborn as sns
+from scipy.stats import sem
 
 def GetNumpyArray(parent_directory):
     Fnp = np.load(os.path.join(parent_directory, 'F.npy'))
@@ -52,6 +53,23 @@ def GeneratePlots(AUCs, Trace,  drop_directory):
     plt.xlabel("Time")
     plt.ylabel("DF")
     plt.savefig(os.path.join(drop_directory,'average_of_traces.jpg'))
+
+    # Generate mean +/- sem and jitter plot of AUC data
+    means = np.mean(AUCs, axis=0)
+    sems = sem(AUCs, axis=0)
+
+    plt.figure(figsize=(6, 5))
+    sns.set_theme(style="whitegrid")
+    x_positions = np.arange(3)  
+    for i in range(3):
+        sns.stripplot(x=np.full(len(AUCs), i), y=AUCs[:, i], jitter=True, color="gray", alpha=0.5)
+
+    colors=["black","blue","black"]
+    plt.errorbar(x_positions, means, yerr=sems, fmt='o', color=colors, capsize=5, markersize=8, label="Mean ± SEM")
+    plt.xticks(x_positions, ["Pre-stimulation", "Stimulation", "Post-Stimulation"])  
+    plt.ylabel("Values")
+    plt.legend()
+    plt.savefig(os.path.join(drop_directory,'AUC_mean_sem_jitter.jpg'))
 
     ipdb.set_trace()
 
