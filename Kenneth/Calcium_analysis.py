@@ -1,14 +1,18 @@
-import tqdm
-import pandas as pd
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Module name: Calcium_analysis.py
+Description:  
+Author: David Estrin & Kenneth Johnson
+Version: 1.0
+Date: 03-20-2025
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
-import cv2
-import glob as gb
 import os 
 import ipdb
-from multiprocessing import Pool
-from math import dist as dist
-import ipdb
+import seaborn as sns
 
 def GetNumpyArray(parent_directory):
     Fnp = np.load(os.path.join(parent_directory, 'F.npy'))
@@ -16,18 +20,32 @@ def GetNumpyArray(parent_directory):
     return Fnp, ICnp
 
 def FilterCells(Fnp, ICnp):
+    return Fnp[ICnp[:,0].astype(bool),:]
+
+def GetStats(Fnp, drop_directory, timepoints = [(0,738),(739,1439),(1440,-1)]):
+    # Parse timepoints
+    prestim_t = timepoints[0]
+    stim_t = timepoints[1]
+    poststim_t = timepoints[2]
+    
+    # Get all AUC data 
+    AUCs = []
+    for neuron in Fnp:
+        prestim = np.trapz(neuron[prestim_t[0]:prestim_t[1]])
+        stim = np.trapz(neuron[stim_t[0]:stim_t[1]])
+        poststim = np.trapz(neuron[poststim_t[0]:poststim_t[1]])
+        AUCs.append([prestim, stim, poststim])
+    
+    # Convert back to numpy array
+    AUCs = np.asarray(AUCs)
+    
+    # Get average trace
+    Trace = np.mean(Fnp, axis=1)
+    return AUCs, Trace
+
+def GeneratePlots(AUCs, Trace,  drop_directory):
+
     ipdb.set_trace()
-    return Fnp
-
-def GetStats(Fnp, timepoints = [(0,738),(739,1439),(1440,-1)]):
-    ipdb.set_trace()
-    area = np.trapz(y,x)
-
-    return AUCs, Traces
-
-def GeneratePlots(AUCs, Traces):
-    plt.plot(x, y, label="Y = 2X")
-    plt.show()
 
 if __name__=='__main__':
     # Get parent directory and create drop directory for dataframe and images 
