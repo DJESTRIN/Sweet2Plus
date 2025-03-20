@@ -57,18 +57,30 @@ def GeneratePlots(AUCs, Trace,  drop_directory):
     # Generate mean +/- sem and jitter plot of AUC data
     means = np.mean(AUCs, axis=0)
     sems = sem(AUCs, axis=0)
-
+    colors = ["black", "red", "black"]
     plt.figure(figsize=(6, 5))
     sns.set_theme(style="whitegrid")
     x_positions = np.arange(3)  
-    plt.errorbar(x_positions, means, yerr=sems, fmt='o', color="black", capsize=10, markersize=10, label="Mean ± SEM")
-    for i in range(3):
-        sns.stripplot(x=np.full(len(AUCs), i), y=AUCs[:, i], jitter=True, color="gray", alpha=0.05)
 
-    plt.errorbar(x_positions, means, yerr=sems, fmt='o', color="black", capsize=10, markersize=10, label="Mean ± SEM")
+    for i in range(3):
+        sns.stripplot(x=np.full(len(AUCs), i), y=AUCs[:, i], jitter=True, color=colors[i], alpha=0.5)
+
+    for i in range(3):
+        plt.errorbar(x_positions[i], means[i], yerr=sems[i], fmt='o', color=colors[i], capsize=5, markersize=8, label="Mean ± SEM" if i == 0 else "")
+
+    # Formatting
     plt.xticks(x_positions, ["Pre-stimulation", "Stimulation", "Post-Stimulation"])  
     plt.ylabel("Values")
     plt.legend()
+
+    ax_inset = plt.axes([0.55, 0.55, 0.35, 0.35])  # [left, bottom, width, height]
+    for i in range(3):
+        ax_inset.errorbar(x_positions[i], means[i], yerr=sems[i], fmt='o', color=colors[i], capsize=5, markersize=8)
+
+    # Inset formatting
+    ax_inset.set_xticks(x_positions)
+    ax_inset.set_xticklabels(["Pre", "Stim", "Post"], fontsize=8)
+    ax_inset.grid(True)
     plt.savefig(os.path.join(drop_directory,'AUC_mean_sem_jitter.jpg'))
 
     ipdb.set_trace()
