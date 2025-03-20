@@ -44,6 +44,27 @@ def sliding_zscore_2d(arr, window_size=50):
 
     return np.apply_along_axis(sliding_zscore_1d, axis=1, arr=arr)
 
+def plot_random_rows(data, num_rows=25, grid_size=(5, 5), seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+
+    M, N = data.shape
+    if M < num_rows:
+        raise ValueError("Not enough rows in the data to sample.")
+
+    selected_rows = np.random.choice(M, num_rows, replace=False)
+
+    fig, axes = plt.subplots(*grid_size, figsize=(12, 12))
+    fig.subplots_adjust(hspace=0.5, wspace=0.5)
+
+    for ax, row_idx in zip(axes.flat, selected_rows):
+        ax.plot(data[row_idx], color='black')
+        ax.set_title(f"Row {row_idx}")
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    plt.savefig(os.path.join(drop_directory,'randomly_pulled_neurons.jpg'))
+
 def GetStats(Fnp, drop_directory, timepoints = [(0,738),(739,1439),(1440,-1)]):
     # Parse timepoints
     prestim_t = timepoints[0]
@@ -104,8 +125,6 @@ def GeneratePlots(AUCs, Trace,  drop_directory):
     ax_inset.grid(True)
     plt.savefig(os.path.join(drop_directory,'AUC_mean_sem_jitter.jpg'))
 
-    ipdb.set_trace()
-
 if __name__=='__main__':
     # Get parent directory and create drop directory for dataframe and images 
     parent_directory = r"\\Kenneth-NAS\data\25-3-12\25-3-12\25-3-12_C4856077_M1_SERT_Flp_chrmine_drn_G6M-mpfc_15C_15stim_r1-042\suite2p\plane0" 
@@ -116,6 +135,7 @@ if __name__=='__main__':
     FnpOH, ICnpOH = GetNumpyArray(parent_directory=parent_directory)
     FnpOH = FilterCells(FnpOH, ICnpOH)
     FnpOH = sliding_zscore_2d(FnpOH)
+    plot_random_rows(data=FnpOH, num_rows=25, grid_size=(5, 5), seed=339)
     AUCsOH, TracesOH = GetStats(FnpOH, drop_directory)
     GeneratePlots(AUCsOH, TracesOH, drop_directory)
 
