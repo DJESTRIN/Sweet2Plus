@@ -1,19 +1,34 @@
 Running to do list:
-(1) How to determine neurons across recording sessions?
-(2) Analyze euclidian distance of state between trial types and sessions
-(3) How do manifold state differ within session ....
-    How do these state changes differ across sessions
-    NEED: Euclidian distance 
+(1) Analysis of manifolds via euclidean distances across trial types. 
+
+(2) Analysis of general neuronal activity across conditions
+    (a) Need to generate regression statistics
+        (i) fdr post hoc corrections or remove nonsensical comparisons... How to do this????
+        (ii) Use EMM not just observed averages of data 
+        (iii) finding best model with AIC values
+    (b) Generate comprehensive graph containing heatmaps
+
+(3) Activity of cluster results 
+    (a) Double check reliability of silhouette scores
+
+(4) Weight modeling analysis
+    (a) Finish code for collecting weights and saving to a csv dataframe
+        Need to save weight and bias dataframe, correlation of activity, pseudo_data?
+    (b) Finish code that runs hypertuning for all s2p obj files. 
+        Need to save json file containing best hyperparameters and the best correlation result
+        (i) calculates the best hyperparameters via median and graphs the hyperparameters wrt the best correlation
+            Saves median of best hyperparameters to json file in communal directory
+    (c) Run all s2p objects using best hyperparameters and saving weight dataframes
+        Need to add in hyperparameters as a cli setting
+    (d) Write code to analyze changes in weight distributions over conditions in dataframe 
+        (i) Graph kernel distributions of weights and biases wrt experimental conditions
+        (ii) Graph average +/- sem of weights and biases wrt experimental conditions
+        (iii) Possibly seperate neuron's influence on itself into two subsets because this data might bias the results. 
+        (iv) Cluster neuron's by weight distributions and then look at their activity? 
+    (e) Run all on cluster
+
+(5) Finding missing data
+    (a) 99 recording folders, yet only 88 obj*.json files
 
 
 
-Kenneth & David 02/20/2025
-
-Raster plots
-    Average all neurons:
-        - seperate data into cort and control
-
-    Average per cell type:
-        - Double check y axis compared to above plots
-        - Double check average compared to above plots
-        - Put heatmap above average +/- sem plots 

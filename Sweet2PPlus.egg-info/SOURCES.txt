@@ -1,0 +1,7 @@
+README.md
+setup.py
+Sweet2PPlus.egg-info/PKG-INFO
+Sweet2PPlus.egg-info/SOURCES.txt
+Sweet2PPlus.egg-info/dependency_links.txt
+Sweet2PPlus.egg-info/requires.txt
+Sweet2PPlus.egg-info/top_level.txt

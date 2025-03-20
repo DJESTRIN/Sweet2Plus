@@ -18,17 +18,23 @@ import numpy as np
 from Sweet2Plus.core.SaveLoadObjs import SaveObj, LoadObj, SaveList, OpenList
 from statsmodels.regression.linear_model import OLS
 from sklearn.cluster import KMeans as kmeans
+from sklearn.mixture import GaussianMixture
+from sklearn.manifold import TSNE
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from sklearn.linear_model import Ridge
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
+from sklearn.model_selection import cross_val_score
 import ipdb
 import tqdm
 import pandas as pd
 import seaborn as sns
-import json
+from itertools import combinations
+
 
 # Set up default matplotlib plot settings
 matplotlib.rc('font', family='sans-serif')
@@ -74,16 +80,41 @@ class regression_coeffecient_pca_clustering:
         #neural_activity = StandardScaler().fit_transform(neural_activity.T).T
 
     def timestamps_to_one_hot_array(self):
-        beh_timestamp_onehots=[]
-        for activity_oh,beh_oh in zip(self.neuronal_activity,self.behavioral_timestamps):
-            one_hot_oh = np.zeros((activity_oh.shape[1],len(beh_oh)))
+        beh_timestamp_onehots = []
 
-            for idx,beh in enumerate(beh_oh):
+        for activity_oh, beh_oh in zip(self.neuronal_activity, self.behavioral_timestamps):
+            num_timepoints = activity_oh.shape[1]
+            num_behaviors = len(beh_oh)
+
+            # Create the base one-hot encoding
+            one_hot_oh = np.zeros((num_timepoints, num_behaviors), dtype=int)
+
+            for idx, beh in enumerate(beh_oh):
                 for ts in beh:
-                    one_hot_oh[int(ts),idx]=1
+                    ts = int(ts)  # Ensure it's an integer
+                    if 0 <= ts < num_timepoints:  # Check to ensure ts is within bounds
+                        # Set a 1 for the range from ts to ts+10
+                        end_ts = min(ts + 20, num_timepoints)  # Ensure not to go beyond num_timepoints
+                        one_hot_oh[ts:end_ts, idx] = 1
 
-            beh_timestamp_onehots.append(one_hot_oh)
-        self.behavior_ts_onehot=beh_timestamp_onehots
+            # Generate combination columns
+            all_combinations = []
+            for r in range(2, num_behaviors + 1):  # 2-way to N-way combinations
+                all_combinations.extend(combinations(range(num_behaviors), r))
+
+            # Expand one-hot matrix to include combinations
+            extended_one_hot = np.zeros((num_timepoints, num_behaviors + len(all_combinations)), dtype=int)
+            extended_one_hot[:, :num_behaviors] = one_hot_oh  # Copy original one-hot
+
+            # Fill combination columns
+            for comb_idx, comb in enumerate(all_combinations):
+                new_col_idx = num_behaviors + comb_idx  # Column index in extended_one_hot
+                extended_one_hot[:, new_col_idx] = np.any(one_hot_oh[:, comb], axis=1)
+
+            beh_timestamp_onehots.append(extended_one_hot)
+
+        self.behavior_ts_onehot = beh_timestamp_onehots
+
 
     def normalize_activity(self):
         if self.normalize_neural_activity:
@@ -105,26 +136,156 @@ class regression_coeffecient_pca_clustering:
   
             self.all_coeffs.append(recording_coeffs)
 
+    def calculate_auc_and_behavior_comb(self, filtered_neuron_data, filtered_behavior_data):
+        def condense_array(arr):
+            condensed_rows = [row[np.insert(np.diff(row) != 0, 0, True)] for row in arr]
+            return np.vstack(condensed_rows)
+        
+        def binary_to_index(arr):
+            """Converts each row of a binary 4-column array to a unique index (1-15)."""
+            return np.dot(arr, [8, 4, 2, 1]) - 1  # Convert binary to decimal (1-15 index)
+
+        def convert_to_15_columns(arr):
+            """Converts Mx4 binary array to Mx15 one-hot encoded array."""
+            indices = binary_to_index(arr)  # Get indices (0-14)
+            result = np.zeros((arr.shape[0], 15), dtype=int)  # Initialize 15-column array
+            result[np.arange(arr.shape[0]), indices] = 1  # Set 1s at the right positions
+            return result
+
+        behshortened = filtered_behavior_data[:,0:4] 
+
+        trial_boolean = np.sum(filtered_behavior_data[:,0:4],axis=1)
+        trial_ones = np.where(trial_boolean == 1)[0] 
+
+        trial_starts = [trial_ones[0]]
+        trial_stops = []
+        for i in range(0, len(trial_ones)-1):
+            if (trial_ones[i+1] - trial_ones[i])>1:  # Gap between 1s indicates end of trial
+                trial_stops.append(trial_ones[i])
+                if i != (len(trial_ones)-1):
+                    trial_starts.append(trial_ones[i+1])
+
+            if i == len(trial_ones)-2:
+                trial_stops.append(trial_ones[-1])
+
+        AUCs=[]
+        for start,stop in zip(trial_starts,trial_stops):
+            AUCs.append(np.trapz(filtered_neuron_data[start:stop]))
+        AUC = np.asarray(AUCs)
+
+        trial_order = []
+        previous_trial = None
+
+        for row in behshortened:
+            if np.all(row == 0):  # Skip zero rows (invalid trials)
+                previous_trial = row 
+                continue
+            if previous_trial is None or not np.array_equal(row, previous_trial):
+                trial_order.append(np.argmax(row))  # Store index of active column
+                previous_trial = row  # Update previous trial
+            else:
+                previous_trial = row 
+
+        beh_condensed = np.eye(4)[trial_order]  # Reconstruct one-hot encoding
+        col_combinations = [list(combinations(range(beh_condensed.shape[1]), r)) for r in range(1, beh_condensed.shape[1] + 1)]
+        col_combinations = [combo for sublist in col_combinations for combo in sublist]  # Flatten list
+        beh_condensed = np.array([np.any(beh_condensed[:, list(combo)], axis=1) for combo in col_combinations]).T
+
+        return AUC, beh_condensed
+
     def ridge_regression(self):
         """ Individually run's ridge regression on each neuron in dataset """
         self.all_coeffs=[]
-        for recording_activity,recording_beh in zip(self.neuronal_activity,self.behavior_ts_onehot):
+        self.all_r2s = []
+        for recording_activity,recording_beh in tqdm.tqdm(zip(self.neuronal_activity,self.behavior_ts_onehot),total=len(self.behavior_ts_onehot)):
             # Create empty arrays to place coeffs
             recording_coeffs = np.zeros((recording_activity.shape[0], recording_beh.shape[1]))
 
             # Loop over neurons in dataset, fit neural activity to predictors, get tvalues, coeffs, and pvalues
             for neuron_idx, neuron in enumerate(recording_activity):
-                ridge_results = Ridge(alpha=1.0).fit(neuron.reshape(-1,1),recording_beh)
+                
+                auc_oh, behavior_oh = self.calculate_auc_and_behavior_comb(filtered_neuron_data=neuron,
+                                                                          filtered_behavior_data=recording_beh)
+                behavior_oh = behavior_oh.astype(int)
+                
+                # Standardize the predictor variable
+                scaler = StandardScaler()
+                auc_oh_scaled = scaler.fit_transform(auc_oh.reshape(-1, 1))
+
+                # Create polynomial features (up to 3rd order interactions)
+                poly = PolynomialFeatures(degree=3, interaction_only=True, include_bias=False)
+                auc_oh_poly = poly.fit_transform(auc_oh_scaled)  # Expands feature set
+
+                # Fit Ridge Regression with polynomial features
+                ridge_model = Ridge(alpha=1.0)
+                ridge_results = ridge_model.fit(auc_oh_poly, behavior_oh)
+
+                # Compute R^2 on training data
+                r2_score = ridge_model.score(auc_oh_poly, behavior_oh.astype(int))
+                print(f"Training R^2: {r2_score}")
+
+                # Cross-validation to check for overfitting
+                cv_scores = cross_val_score(ridge_model, auc_oh_poly, behavior_oh.astype(int), cv=5, scoring='r2')
+
+                # Print mean and standard deviation of cross-validated R^2
+                print(f"Cross-validated R^2: {np.mean(cv_scores):.4f} ± {np.std(cv_scores):.4f}")
+
+                self.all_r2s.append(r2_score)
                 recording_coeffs[neuron_idx] = ridge_results.coef_.squeeze(-1)
             
             self.all_coeffs.append(recording_coeffs)
+        ipdb.set_trace()
     
     def principal_component_analysis(self,values_to_be_clustered, max_clusters=20):
         # Convert list of lists to numpy array
         self.values_to_be_clustered=np.concatenate(values_to_be_clustered,axis=0)
 
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(self.values_to_be_clustered)
+
+        # Perform t-SNE
+        tsne = TSNE(n_components=3, random_state=42)  # You can also set n_components=3 for 3D
+        X_tsne = tsne.fit_transform(X_scaled)
+
+        # Plot the results (2D plot for now)
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(X_tsne[:, 0], X_tsne[:, 1], X_tsne[:, 2], c='blue', marker='o', alpha=0.7)
+        ax.set_xlabel('tsne 1')
+        ax.set_ylabel('tsne 2')
+        ax.set_zlabel('tsne 3')
+        ax.set_title('tsne - 3D Plot')
+        plt.savefig('tsne_results.jpg')
+        plt.close()
+
+
+        ipdb.set_trace()
+
+        # Generate pca plot 
+        pca = PCA()
+        X_pca = pca.fit_transform(self.values_to_be_clustered)
+
+        # Plot cumulative explained variance
+        plt.plot(np.cumsum(pca.explained_variance_ratio_), marker='o')
+        plt.xlabel('Number of Components')
+        plt.ylabel('Cumulative Explained Variance')
+        plt.title('PCA Explained Variance')
+        plt.grid()
+        plt.savefig('cumulativevariance.jpg')
+        plt.close()
+
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(X_pca[:, 0], X_pca[:, 1], X_pca[:, 2], c='blue', marker='o', alpha=0.7)
+        ax.set_xlabel('Principal Component 1')
+        ax.set_ylabel('Principal Component 2')
+        ax.set_zlabel('Principal Component 3')
+        ax.set_title('PCA - 3D Plot')
+        plt.savefig('pca_results.jpg')
+        plt.close()
+
         # Dimension reduction via PCA
-        pca_results = PCA(n_components=min(self.values_to_be_clustered.shape)).fit_transform(self.values_to_be_clustered)
+        pca_results = PCA(n_components=3).fit_transform(self.values_to_be_clustered)
         cluster_range = range(2,max_clusters)
 
         # Determine best number of clusters unbiased via silhouette scores
@@ -132,12 +293,15 @@ class regression_coeffecient_pca_clustering:
         for idx, number_clusters in enumerate(cluster_range):
             if number_clusters%5==0:
                 print(f'Calculating silhouette score for {number_clusters} clusters')
-            kmeans_results = kmeans(n_clusters=number_clusters, max_iter=1000).fit(pca_results)
-            labels = kmeans_results.labels_
-            silhouette_scores[idx] = silhouette_score(self.values_to_be_clustered,labels)
+            labels = GaussianMixture(n_components=number_clusters, random_state=42).fit_predict(pca_results)
+            #kmeans_results = kmeans(n_clusters=number_clusters, max_iter=1000).fit(pca_results)
+            #labels = kmeans_results.labels_
+            silhouette_scores[idx] = silhouette_score(pca_results,labels)
+            print(f'The sil score is {silhouette_scores[idx]}')
         lowest_sil = silhouette_scores.argmax()
         final_cluster_number = list(cluster_range)[lowest_sil]
-        print(f'The final cluster number is {final_cluster_number} clusters')
+        print(f'The final cluster number is {final_cluster_number} clusters with a silhouette score of {lowest_sil}.')
+        ipdb.set_trace()
 
         # Perform final kmeans clustering via correct number of clusters
         final_clusters = kmeans(n_clusters=final_cluster_number).fit(pca_results)
@@ -151,7 +315,6 @@ class regression_coeffecient_pca_clustering:
         self.sort_indices=sort_indices
 
     def plot_cluster_results(self,plot_label='Coeffecients'):
-
         # Create horizontal lines
         hlines = [x_idx-0.5 for x_idx, x in enumerate(self.sorted_final_labels[1:]) if x!=self.sorted_final_labels[x_idx]]
         hlines.append(len(self.sorted_final_labels)-0.5)
@@ -183,6 +346,8 @@ class regression_coeffecient_pca_clustering:
             self.ridge_regression()
         elif self.regression_type=='OLS':
             self.ols_regression()
+        
+        ipdb.set_trace()
 
         # Run PCA and clustering
         self.principal_component_analysis(values_to_be_clustered=self.all_coeffs)
@@ -428,23 +593,9 @@ class map_clusters_to_activity(regression_coeffecient_pca_clustering):
 
 def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
     """ Gather all data into lists from parent directory """
-    # Determine if files were previously created and load them in quicker
-    # if (os.path.isfile(os.path.join(drop_directory,"org_neuronal_activity.json")) and 
-    #     os.path.isfile(os.path.join(drop_directory,"org_behavioral_timestamps.json")) and 
-    #     os.path.isfile(os.path.join(drop_directory,"org_neuron_info.json"))): 
-        
-    #     with open(os.path.join(drop_directory,"org_neuronal_activity.json"), 'r') as file:
-    #         neuronal_activity = json.load(file)
-        
-    #     with open(os.path.join(drop_directory,"org_behavioral_timestamps.json"), 'r') as file:
-    #         behavioral_timestamps = json.load(file)
-        
-    #     neuron_info = pd.read_json(os.path.join(drop_directory,"org_neuron_info.json"), orient="records", lines=True)
-    
-    # else:
     # Get full path to object files
     objfiles=glob.glob(os.path.join(parent_data_directory,f'**/{file_indicator}*.json'),recursive=True)
-
+ 
     # Grab relevant data from files and create lists
     neuronal_activity=[]
     behavioral_timestamps=[]
@@ -457,15 +608,6 @@ def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
         repeated_info = repeated_info.reshape(objoh.ztraces.shape[0], 4)
         repeated_info_df = pd.DataFrame(repeated_info, columns=['day', 'cage', 'mouse', 'group'])
         neuron_info = pd.concat([neuron_info, repeated_info_df], ignore_index=True)
-    
-        # # Save data to files for easier loading in future
-        # with open(os.path.join(drop_directory,"org_neuronal_activity.json"), 'w') as file:
-        #     json.dump(neuronal_activity, file)
-        
-        # with open(os.path.join(drop_directory,"org_behavioral_timestamps.json"), 'w') as file:
-        #     json.dump(behavioral_timestamps, file)
-
-        # neuron_info.to_json(os.path.join(drop_directory,"org_neuron_info.json"), orient="records", lines=True) 
 
     return neuronal_activity, behavioral_timestamps, neuron_info
 

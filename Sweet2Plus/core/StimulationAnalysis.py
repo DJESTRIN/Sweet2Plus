@@ -179,8 +179,6 @@ class pipeline(pipeline):
                 cordf = pd.concat([prestim_av_cor,durring_av_cor,poststim_av_cor])
                 labels = pd.concat([pre,during,post])
 
-                #
-
                 # Re-index values
                 prestim_rec_aucs=prestim_rec_aucs.reindex(prestim_av_cor.index)
                 during_rec_aucs=during_rec_aucs.reindex(durring_av_cor.index)
@@ -216,11 +214,12 @@ class pipeline(pipeline):
         except:
             ipdb.set_trace()
 
-    
-    
 
 # Rewrite methods specific to dataset
 if __name__=='__main__':
     recordings=pipeline(r'D:\2p_drn_inhibition\serialoutput\*24*\*_*',r'D:\2p_drn_inhibition\twophotonrecordings\24-2-23_deepcad\*24*')
     recordings()
     recordings.build_dataframe(r'D:\2p_drn_inhibition\talldata.csv')
+
+
+    # python ./StimulationAnalysis.py
