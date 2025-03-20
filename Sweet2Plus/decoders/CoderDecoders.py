@@ -67,7 +67,7 @@ def track_gradients(model, epoch):
             gradient_history[name].append((epoch, grad_norm))
 
 class Education:
-    def __init__(self, data_obj, neural_network_obj, figures_obj, hyp_total_epochs = 100, hyp_learning_rate = 0.0003906, hyp_gamma=0.9, show_results = 2):
+    def __init__(self, data_obj, neural_network_obj, figures_obj, hyp_total_epochs = 1000, hyp_learning_rate = 0.0001, hyp_gamma=0.9, weight_decay=1e-2, show_results = 2):
         self.total_epochs = hyp_total_epochs
         self.learning_rate = hyp_learning_rate
         self.gamma = hyp_gamma
@@ -76,6 +76,7 @@ class Education:
         self.train_loader = data_obj.train_loader 
         self.test_loader = data_obj.test_loader  
         self.drop_directory = os.path.join(data_obj.drop_directory,"neural_network_encoder_results/")
+        self.weight_decay = weight_decay
 
         # Generate path if not real
         if not os.path.exists(self.drop_directory):
@@ -83,6 +84,7 @@ class Education:
 
         self.training_loss = []
         self.training_f1 = []
+        self.testing_f1_all = []
         self.testing_f1 = None
         self.figures = figures_obj
 
@@ -93,7 +95,7 @@ class Education:
 
     def training(self):
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.AdamW(self.model_oh.parameters(), lr=self.learning_rate)
+        optimizer = optim.AdamW(self.model_oh.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         # scheduler = StepLR(optimizer=optimizer, step_size=1, gamma=0.5)
         #scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True, min_lr=1e-9) 
         print(f'total epochs: {self.total_epochs}')
@@ -112,10 +114,8 @@ class Education:
                 optimizer.zero_grad()
                 res = self.model_oh(batch_X)  # Forward pass
                 loss = criterion(res, batch_y)  # Compute loss
-                if torch.isnan(loss):
-                    ipdb.set_trace()
                 loss.backward()  # Backward pass
-                track_gradients(self.model_oh, epoch)
+                # track_gradients(self.model_oh, epoch)
                 torch.nn.utils.clip_grad_norm_(self.model_oh.parameters(), max_norm=1.0) # Clip the gradients
 
                 optimizer.step()  # Update weights
@@ -134,8 +134,12 @@ class Education:
             self.training_loss.append(avg_loss)
             self.training_f1.append(avg_f1)
 
+            # Get testing results
+            average_test_f1 = self.testing()
+            self.testing_f1_all.append(average_test_f1)
+
             # Print stats every M epochs
-            print(f"Epoch {epoch + 1}/{self.total_epochs}, Loss: {avg_loss:.4f}, F1 Score: {avg_f1:.4f}")
+            print(f"Epoch {epoch + 1}/{self.total_epochs}, Loss: {avg_loss:.4f}, F1 Score: {avg_f1:.4f}, F1 TEST score: {average_test_f1:.4f}")
             if (epoch + 1) % self.show_results == 0:
                 self.figures.plot_learning_curve(data = self.training_loss, 
                                                  label = "training_loss", 
@@ -160,8 +164,8 @@ class Education:
 
         # Calculate final F1 score
         self.testing_f1 = f1_score(all_labels, all_preds, average='macro')
-        print(f"Final Testing F1 Score: {self.testing_f1:.4f}")
-
+        #print(f"Final Testing F1 Score: {self.testing_f1:.4f}")
+        self.model_oh.train()
         return self.testing_f1
     
     def confusion_matrix(self, labels, predictions, number_classes, trial):
@@ -242,37 +246,22 @@ if __name__=='__main__':
         hyperparameter_search_wrapper(data_directory=data_directory,drop_directory=drop_directory)
     
     else:
-        # Preprocess and structure the data
+        # Gather all 2p data to lists and arrays
         neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
+
+        # Convert data to torch dataset
         circuit_obj = circuit_format_data(drop_directory=drop_directory,neuronal_activity=neuronal_activity, 
                             behavioral_timestamps=behavioral_timestamps, neuron_info=neuron_info)
         circuit_obj()
         
-        ipdb.set_trace()
-        #preprossesed_oh = (os.path.join(drop_directory,"X_original.npy"),os.path.join(drop_directory,"y_one_hot.npy"))
-        data_obj_oh = format_data(drop_directory=drop_directory,
-                            neuronal_activity=None,
-                            behavioral_timestamps=None,
-                            neuron_info=None,
-                            preprocessed=preprossesed_oh,
-                            percentage_ds = 0.1)
-        data_obj_oh()
-
-        # Build neural network model
-        # current_model_oh = NeuronalActivity_Encoder_Decoder(input_size=data_obj_oh.X.shape[1], 
-        #                                                     hyp_middle_dimension = 16, 
-        #                                                     output_size=data_obj_oh.y_one_hot.shape[1])
-
-        # Example usage:
-        current_model_oh = LSTMEncoderDecoder(input_size=data_obj_oh.X.shape[1], 
-                                              hidden_size=256, 
-                                              output_size=data_obj_oh.y_one_hot.shape[1])
+        # Build LSTM residual encoder-decoder network
+        current_model_oh = LSTMDecoderSimple(input_size=circuit_obj.X_train[33].shape[0])
 
         # Build figures object
         figures_object_oh = NeuralNetworkFigures(name='learningcurvefigs')
 
         # Build education pipeline
-        education_obj = Education(data_obj = data_obj_oh,
+        education_obj = Education(data_obj = circuit_obj,
                 neural_network_obj = current_model_oh, 
                 figures_obj = figures_object_oh)
         education_obj()

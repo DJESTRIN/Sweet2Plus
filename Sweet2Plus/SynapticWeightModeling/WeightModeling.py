@@ -559,20 +559,25 @@ def cli_parser():
 
 if __name__=='__main__':
     # Parse cli inputs
-    args = cli_parser()
+    # args = cli_parser()
 
-    # Get neuronal data
-    zdataoh = zscore_data_from_obj(args.s2p_object_file)
+    # # Get neuronal data
+    # zdataoh = zscore_data_from_obj(args.s2p_object_file)
 
-    # make sure drop_dir has traces path
-    if not os.path.exists(os.path.join(args.drop_directory,r'traces')):
-        os.mkdir(os.path.join(args.drop_directory,r'traces'))
+    # # make sure drop_dir has traces path
+    # if not os.path.exists(os.path.join(args.drop_directory,r'traces')):
+    #     os.mkdir(os.path.join(args.drop_directory,r'traces'))
 
-    # Build, train and test best model
-    objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=False, drop_directory=args.drop_directory)
-    objoh()
+    # # Build, train and test best model
+    # objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=False, drop_directory=args.drop_directory)
+    # objoh()
 
-    # Pull model weight data, generate basic graphs, save to dataframe
-    capture_obj = capture_model_weights(torch_file = objoh.torch_file, drop_directory = objoh.drop_directory, 
-                                        activity_data = zdataoh, correlation_result = objoh.corroh)
-    capture_obj()
+    # # Pull model weight data, generate basic graphs, save to dataframe
+    # capture_obj = capture_model_weights(torch_file = objoh.torch_file, drop_directory = objoh.drop_directory, 
+    #                                     activity_data = zdataoh, correlation_result = objoh.corroh)
+    # capture_obj()
+
+    objoh = capture_model_weights(torch_file=r'C:\Users\listo\Sweet2Plus\my_figs\weight_modeling_test_output\solo_model.pth',
+                          drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs\weight_modeling_test_output', 
+                          activity_data=None, correlation_result=None)
+    objoh.generate_heatmap()
