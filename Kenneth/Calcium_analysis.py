@@ -45,6 +45,17 @@ def GetStats(Fnp, drop_directory, timepoints = [(0,738),(739,1439),(1440,-1)]):
 
 def GeneratePlots(AUCs, Trace,  drop_directory):
 
+    time = np.linspace(0, len(Trace))  
+    sns.set_theme(style="whitegrid")  # Set theme for better visualization
+    plt.figure(figsize=(8, 4))
+    sns.lineplot(x=time, y=Trace)
+
+    # Labels and title
+    plt.xlabel("Time")
+    plt.ylabel("DF")
+
+    # Show the plot
+    plt.savefig('examplt.jpg')
     ipdb.set_trace()
 
 if __name__=='__main__':
