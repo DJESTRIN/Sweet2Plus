@@ -45,17 +45,14 @@ def GetStats(Fnp, drop_directory, timepoints = [(0,738),(739,1439),(1440,-1)]):
 
 def GeneratePlots(AUCs, Trace,  drop_directory):
 
-    time = np.linspace(0, len(Trace))  
-    sns.set_theme(style="whitegrid")  # Set theme for better visualization
-    plt.figure(figsize=(8, 4))
-    sns.lineplot(x=time, y=Trace)
-
-    # Labels and title
+    # Generate average trace for all neurons. 
+    sns.set_theme(style="whitegrid")  
+    plt.figure(figsize=(10, 10))
+    sns.lineplot(x=range(len(Trace)), y=Trace)
     plt.xlabel("Time")
     plt.ylabel("DF")
+    plt.savefig(os.path.join(drop_directory,'average_of_traces.jpg'))
 
-    # Show the plot
-    plt.savefig('examplt.jpg')
     ipdb.set_trace()
 
 if __name__=='__main__':
