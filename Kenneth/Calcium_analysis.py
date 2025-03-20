@@ -23,6 +23,27 @@ def GetNumpyArray(parent_directory):
 def FilterCells(Fnp, ICnp):
     return Fnp[ICnp[:,0].astype(bool),:]
 
+def sliding_zscore_2d(arr, window_size=50):
+    def sliding_zscore_1d(row):
+        if len(row) < window_size:
+            raise ValueError("Window size must be smaller than or equal to the row length.")
+
+        mean_values = np.convolve(row, np.ones(window_size)/window_size, mode='valid')
+        squared_row = row**2
+        mean_squared = np.convolve(squared_row, np.ones(window_size)/window_size, mode='valid')
+        std_values = np.sqrt(mean_squared - mean_values**2)  # std = sqrt(E[X^2] - E[X]^2)
+
+        # Normalize each valid window
+        normalized = (row[window_size//2: -(window_size//2)] - mean_values) / std_values
+
+        # Handle edges by padding with NaN
+        padded_result = np.full_like(row, np.nan, dtype=np.float64)
+        padded_result[window_size//2: -(window_size//2)] = normalized
+
+        return padded_result
+
+    return np.apply_along_axis(sliding_zscore_1d, axis=1, arr=arr)
+
 def GetStats(Fnp, drop_directory, timepoints = [(0,738),(739,1439),(1440,-1)]):
     # Parse timepoints
     prestim_t = timepoints[0]
@@ -94,6 +115,7 @@ if __name__=='__main__':
     # Run current file through analysis. 
     FnpOH, ICnpOH = GetNumpyArray(parent_directory=parent_directory)
     FnpOH = FilterCells(FnpOH, ICnpOH)
+    FnpOH = sliding_zscore_2d(FnpOH)
     AUCsOH, TracesOH = GetStats(FnpOH, drop_directory)
     GeneratePlots(AUCsOH, TracesOH, drop_directory)
 
