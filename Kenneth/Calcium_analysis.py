@@ -74,9 +74,9 @@ def GetStats(Fnp, drop_directory, timepoints = [(0,738),(739,1439),(1440,-1)]):
     # Get all AUC data 
     AUCs = []
     for neuron in Fnp:
-        prestim = np.trapz(neuron[prestim_t[0]:prestim_t[1]])
-        stim = np.trapz(neuron[stim_t[0]:stim_t[1]])
-        poststim = np.trapz(neuron[poststim_t[0]:poststim_t[1]])
+        prestim = np.trapz(neuron[prestim_t[0]:prestim_t[1]])/(prestim_t[1] - prestim_t[0])
+        stim = np.trapz(neuron[stim_t[0]:stim_t[1]])/(stim_t[1] - stim_t[0])
+        poststim = np.trapz(neuron[poststim_t[0]:poststim_t[1]])/(poststim_t[1] - poststim_t[0])
         AUCs.append([prestim, stim, poststim])
     
     # Convert back to numpy array
