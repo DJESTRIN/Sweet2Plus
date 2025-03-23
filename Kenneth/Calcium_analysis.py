@@ -34,7 +34,7 @@ def sliding_zscore_2d(arr, window_size=50):
         std_values = np.sqrt(mean_squared - mean_values**2)  # std = sqrt(E[X^2] - E[X]^2)
 
         # Normalize each valid window
-        normalized = (row[window_size//2: -(window_size//2)] - mean_values) / std_values
+        normalized = (row[window_size//2: -(window_size//2)] - mean_values[:-1]) / std_values[:-1]
 
         # Handle edges by padding with NaN
         padded_result = np.full_like(row, np.nan, dtype=np.float64)
