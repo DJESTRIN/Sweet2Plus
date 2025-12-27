@@ -11,7 +11,6 @@ import argparse
 import subprocess
 import os, glob
 import time
-import ipdb
 
 def parse_cli_inputs():
     """ Get parent directory containing all s2p objs """
@@ -43,7 +42,8 @@ class spinup:
         for file, drop in zip(filelist,droplist):
             wrap_call_oh = f'python {basepath}/WeightModeling.py \
                 --s2p_object_file {file} \
-                --drop_directory {drop}'
+                --drop_directory {drop} \
+                --hypertuning_study'
             # Append the current wrap string to list
             output_wrap_calls.append(wrap_call_oh)
         return output_wrap_calls

@@ -150,12 +150,13 @@ class heatmap(regression_coeffecient_pca_clustering):
 
         # Define columns
         columns = ['suid', 'neuid', 'group', 'day', 'trialtype', 'trialid', 'period', 'auc']
+        columns_activity = ['suid', 'neuid', 'group', 'day', 'trialtype', 'trialid', 'activity']
         
         # Use a list to collect data (much faster than repeated DataFrame concatenation)
         data_list = []
+        data_activity = []
 
         for subject_peth_data_oh, info_oh in tqdm.tqdm(zip(self.all_neural_peth_data, subject_sessions.itertuples()), total=len(self.all_neural_peth_data)):
-            
             # Precompute reusable info
             suid = f"{info_oh.cage}{info_oh.mouse}"
             group = info_oh.group
@@ -163,21 +164,33 @@ class heatmap(regression_coeffecient_pca_clustering):
 
             for trial_type, trial_name in zip(subject_peth_data_oh, self.trial_list):
                 for trial_id, trial_number in enumerate(trial_type):
-                    auc_values = np.trapz(trial_number[:, 10:20], axis=1), np.trapz(trial_number[:, 20:30], axis=1)
+                    auc_values = np.trapz(trial_number[10:20,:], axis=0), np.trapz(trial_number[20:30,:], axis=0)
 
                     for id_oh, (baseline_auc, event_auc) in enumerate(zip(*auc_values)):
                         neuid = f"{suid}_day{day}_neu{id_oh}"
                         trial_id_str = str(trial_id)
+                        neuron_activity_rn = trial_number[:,id_oh]
                         
                         # Append baseline and event data to the list
                         data_list.append([suid, neuid, group, day, trial_name, trial_id_str, 'baseline', baseline_auc])
                         data_list.append([suid, neuid, group, day, trial_name, trial_id_str, 'event', event_auc])
+                        data_activity.append([suid, neuid, group, day, trial_name, trial_id_str, neuron_activity_rn])
         
         # Convert list to DataFrame in one go (much faster than appending)
         self.final_dataframe = pd.DataFrame(data_list, columns=columns)
-
-        # Save data to a CSV file
         self.final_dataframe.to_csv(os.path.join(self.drop_directory, "auc_dataset.csv"), index=False)
+
+        ipdb.set_trace()
+
+        self.final_activity_dataframe = pd.DataFrame(data_activity, columns=columns_activity)
+        df_long = self.final_activity_dataframe.copy()
+        df_long = df_long.reset_index(drop=True)
+        df_long['row_id'] = df_long.index
+        df_long = df_long.explode('activity').reset_index(drop=True)
+        df_long['t'] = df_long.groupby('row_id').cumcount()
+        df_long = df_long.rename(columns={'activity': 'activity_value'})
+        df_long = df_long.drop(columns='row_id')
+        df_long.to_csv(os.path.join(self.drop_directory, "activity_dataset.csv"), index=False)
 
     def plot_data_by_trial(self):
         # Set up x axis

@@ -34,7 +34,11 @@ import tqdm
 import pandas as pd
 import seaborn as sns
 from itertools import combinations
-
+from sklearn.model_selection import train_test_split
+import statsmodels.api as sm
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, f1_score
+from scipy import stats
 
 # Set up default matplotlib plot settings
 matplotlib.rc('font', family='sans-serif')
@@ -136,6 +140,118 @@ class regression_coeffecient_pca_clustering:
   
             self.all_coeffs.append(recording_coeffs)
 
+    def keep_balanced_zeros_before_ones(self, X, y):
+        keep_indices = set()
+        n_rows, n_cols = y.shape
+
+        for col in range(n_cols):
+            y_col = y[:, col]
+            i = 0
+            while i < n_rows:
+                if y_col[i] == 1:
+                    # Start of a 1s series
+                    start = i
+                    while i < n_rows and y_col[i] == 1:
+                        i += 1
+                    end = i  # exclusive
+                    length = end - start
+
+                    # Keep 1s
+                    keep_indices.update(range(start, end))
+
+                    # Keep same number of zeros before the series
+                    pre_start = max(start - length, 0)
+                    keep_indices.update(range(pre_start, start))
+                else:
+                    i += 1
+
+        keep_indices = np.array(sorted(keep_indices))
+        return X[keep_indices], y[keep_indices]
+
+    def run_glm(self):
+        """ Individually run's glm regression on each neuron in dataset """
+        for recording_activity,recording_beh in zip(self.neuronal_activity,self.behavior_ts_onehot):
+            accuracies = []
+            f1_scores = []
+            coefficients_list = []
+            standard_errors_list = []
+            t_values_list = []
+            p_values_list = []
+            r_s = []
+            trialnum=[]
+
+            # Loop over neurons in dataset, fit neural activity to predictors, get tvalues, coeffs, and pvalues
+            for neuron_idx, neuron in enumerate(recording_activity):
+                X = neuron.reshape(-1, 1)
+                y = recording_beh[:,:4]
+                X, y = self.keep_balanced_zeros_before_ones(X,y)
+                X = sm.add_constant(X)
+                scaler = StandardScaler()
+                X = scaler.fit_transform(X)
+                
+                neurondf = pd.DataFrame(np.hstack((X,y)))
+                if not os.path.exists(os.path.join(self.drop_directory,r'individual_neuron_data')):
+                    os.makedirs(os.path.join(self.drop_directory,r'individual_neuron_data'))
+                filename=os.path.join(os.path.join(self.drop_directory,r'individual_neuron_data'),f'neuron_{neuron_idx}.csv')
+                neurondf.to_csv(filename,index=False)
+
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+                for i in range(y_train.shape[1]):
+                    model = LogisticRegression(class_weight='balanced', solver='saga', max_iter=10000)
+                    model.fit(X_train, y_train[:, i])
+                    coefficients = model.coef_[0]
+                    intercept = model.intercept_
+                    probabilities_train = model.predict_proba(X_train)[:, 1] # train predictions
+                    probabilities_test = model.predict_proba(X_test)[:, 1] # test predictions
+
+                    # Get r squared
+                    r2_tjur = probabilities_train[y_train[:,i] == 1].mean() - probabilities_train[y_train[:,i] == 0].mean()
+
+                    # Get classifications
+                    threshold = 0.5
+                    predictions_train = (probabilities_train >= threshold).astype(int)
+                    predicted_test = (probabilities_test >= threshold).astype(int)
+
+                    # Get T and p values for coeffecient
+                    X_design = np.hstack([np.ones((X_train.shape[0], 1)), X_train])
+                    cov_matrix = np.linalg.inv(X_design.T @ np.diag(predictions_train * (1 - predictions_train)) @ X_design + 1e-5 * np.eye(X_design.shape[1]))
+                    standard_errors = np.sqrt(np.diag(cov_matrix))
+                    t_values = coefficients / standard_errors[1:]
+                    p_values = 2 * (1 - stats.t.cdf(np.abs(t_values), df=X_train.shape[0] - X_train.shape[1]))
+                    t_values = t_values[1]
+                    p_values = p_values[1]
+
+                    # Get model accuracy and F1
+                    accuracy = accuracy_score(y_test[:, i], predicted_test)
+                    f1 = f1_score(y_test[:, i], predicted_test)
+
+                    # Append data to lists
+                    accuracies.append(accuracy)
+                    f1_scores.append(f1)
+                    coefficients_list.append(coefficients)
+                    standard_errors_list.append(standard_errors[1:])  
+                    t_values_list.append(t_values)
+                    p_values_list.append(p_values)
+                    r_s.append(r2_tjur)
+                    trialnum.append(i)
+
+
+            # Create a DataFrame with results for each column
+            ipdb.set_trace()
+            results_df = pd.DataFrame({
+                'Beh':trialnum,
+                'Accuracy': accuracies,
+                'F1 Score': f1_scores,
+                'Rs':r_s,
+                'Coefficient': coefficients_list,
+                'Standard Error': standard_errors_list,
+                't-value': t_values_list,
+                'p-value': p_values_list
+            })
+            ipdb.set_trace()
+ 
+
     def calculate_auc_and_behavior_comb(self, filtered_neuron_data, filtered_behavior_data):
         def condense_array(arr):
             condensed_rows = [row[np.insert(np.diff(row) != 0, 0, True)] for row in arr]
@@ -234,8 +350,228 @@ class regression_coeffecient_pca_clustering:
                 recording_coeffs[neuron_idx] = ridge_results.coef_.squeeze(-1)
             
             self.all_coeffs.append(recording_coeffs)
-        ipdb.set_trace()
     
+    def operational_cluster(self):
+        # Get auc for all tmt trials for all neurons
+        all_tmt_auc = []
+        for recording_activity,recording_beh in tqdm.tqdm(zip(self.neuronal_activity,self.behavior_ts_onehot),total=len(self.behavior_ts_onehot)):
+            tmt_stim = recording_beh[:,3]
+            for neuron_idx, neuron in enumerate(recording_activity):
+                neuron_tmt_activity = neuron[tmt_stim==1]
+                neuron_total_auc = np.trapz(neuron_tmt_activity)
+                all_tmt_auc.append(neuron_total_auc)
+        all_tmt_auc = np.asarray(all_tmt_auc)
+
+        # Filter neurons based on percentile into 3 groups. 
+        low_pass_filter = np.percentile(all_tmt_auc,33)
+        high_pass_filter = np.percentile(all_tmt_auc,66)
+
+        # Create a nicer plot using Seaborn
+        plt.figure(figsize=(10, 8))
+        sns.histplot(all_tmt_auc, bins=500, kde=True, color='grey', edgecolor='grey')
+        plt.axvline(low_pass_filter, color='red', linestyle='--', label=f'Low Threshold: {low_pass_filter:.4f}')
+        plt.axvline(high_pass_filter, color='red', linestyle='--', label=f'High Threshold: {high_pass_filter:.4f}')
+        plt.axvspan(all_tmt_auc.min(), low_pass_filter, color='red', alpha=0.2)
+        plt.axvspan(high_pass_filter, all_tmt_auc.max(), color='red', alpha=0.2)
+        plt.axvspan(low_pass_filter, high_pass_filter, color='skyblue', alpha=0.6)
+        plt.text(low_pass_filter-60, plt.ylim()[1] * 0.5, 'TMT-Responsive', color='red', ha='center', va='center', fontsize=16)
+        plt.text(high_pass_filter+60, plt.ylim()[1] * 0.5, 'TMT-Responsive', color='red', ha='center', va='center', fontsize=16)
+        plt.text(7, plt.ylim()[1] * 0.5, 'Non\nResponsive', color='black', ha='center', va='center', fontsize=16)
+        plt.xlabel('AUC During TMT Trials', fontsize=14)
+        plt.ylabel('Number of Neurons', fontsize=14)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig('tmt_auc_hist.jpg')
+
+        clusters = []
+        counter = 0
+        for recording_activity,recording_beh in tqdm.tqdm(zip(self.neuronal_activity,self.behavior_ts_onehot),total=len(self.behavior_ts_onehot)):
+            for neuron_idx, neuron in enumerate(recording_activity):
+                tmt_ac_oh = all_tmt_auc[counter]
+                if tmt_ac_oh <= low_pass_filter:
+                    clusters.append('TMT-Responsive-deactive')
+                elif tmt_ac_oh >= high_pass_filter:
+                    clusters.append('TMT-Responsive-active')
+                elif tmt_ac_oh > low_pass_filter and tmt_ac_oh < high_pass_filter:
+                    clusters.append('Non-Responsive')
+                else:
+                    raise TypeError('this is not an option')
+                counter += 1
+
+        # Calculate Pearson Correlation wrt cluster and group
+        rows = []
+        counter = 0
+        for recording_activity, recording_beh in tqdm.tqdm(zip(self.neuronal_activity, self.behavioral_timestamps), total=len(self.behavioral_timestamps)):
+            correlation_matrix = np.corrcoef(recording_activity)
+            for neuron_idx in range(len(recording_activity)):  
+                row = self.neuron_info.iloc[counter].copy() 
+                for i in range(correlation_matrix.shape[1]):  
+                    new_row = row.to_dict()  
+                    new_row.update({  
+                        "cluster": clusters[counter],
+                        "nuid" : row['cage']+row['mouse']+row['day']+f'_neu{neuron_idx}',
+                        "nuid_nuid_pair": f"{row['cage']+row['mouse']+row['day']+f'_neu{neuron_idx}'}-{row['cage']+row['mouse']+row['day']+f'_neu{i}'}",  
+                        "pearson_correlation": correlation_matrix[neuron_idx, i] })
+                    rows.append(new_row)  
+                counter += 1 
+
+        self.PC_dataframe = pd.DataFrame(rows)
+        self.PC_dataframe['suid'] =  self.PC_dataframe['cage'] + self.PC_dataframe['mouse'] 
+        self.PC_dataframe.to_csv(os.path.join(self.drop_directory,'pc_df.csv'))
+
+        # Get TMT PETH by cluster data
+        counter = 0
+        tmt_based_activity=[]
+        for recording_activity, recording_beh in tqdm.tqdm(zip(self.neuronal_activity, self.behavioral_timestamps), total=len(self.behavioral_timestamps)):
+            tmt_ts = recording_beh[3]
+            for neuron_activity in recording_activity:
+                tmt_oh = []
+                for ts in tmt_ts:
+                    tmt_oh.append(neuron_activity[int(ts-5):int(ts+15)])
+                tmt_based_activity.append(np.array(tmt_oh).mean(axis=0))
+        tmt_based_activity = np.array(tmt_based_activity)
+
+        # Zero cluster data by baseline
+        deactivated = tmt_based_activity[np.where(np.array(clusters)=='TMT-Responsive-deactive')]
+        activated = tmt_based_activity[np.where(np.array(clusters)=='TMT-Responsive-active')]
+        not_activated = tmt_based_activity[np.where(np.array(clusters)=='Non-Responsive')]
+
+        deactivated_zero=[]
+        for act_oh in deactivated:
+            deactivated_zero.append(act_oh-np.mean(act_oh[:5]))
+        deactivated_zero = np.array(deactivated_zero)
+        trapz_values = np.array([np.trapz(row[5:]) for row in deactivated_zero])
+        deactivated_zero = deactivated_zero[np.argsort(trapz_values)]
+        deact_mean = np.mean(deactivated_zero,axis=0)
+        deact_se = np.std(deactivated_zero, axis=0) / np.sqrt(deactivated_zero.shape[0])
+
+        activated_zero=[]
+        for act_oh in activated:
+            activated_zero.append(act_oh-np.mean(act_oh[:5]))
+        activated_zero = np.array(activated_zero)
+        trapz_values = np.array([np.trapz(row[5:]) for row in activated_zero])
+        activated_zero = activated_zero[np.argsort(trapz_values)]
+        act_mean = np.mean(activated_zero,axis=0)
+        act_se = np.std(activated_zero, axis=0) / np.sqrt(activated_zero.shape[0])
+
+        nonactivated_zero=[]
+        for act_oh in not_activated:
+            nonactivated_zero.append(act_oh-np.mean(act_oh[:5]))
+        nonactivated_zero = np.array(nonactivated_zero)
+        trapz_values = np.array([np.trapz(row[5:]) for row in nonactivated_zero])
+        nonactivated_zero = nonactivated_zero[np.argsort(trapz_values)]
+        nonact_mean = np.mean(nonactivated_zero,axis=0)
+        nonact_se = np.std(nonactivated_zero, axis=0) / np.sqrt(nonactivated_zero.shape[0])
+
+        # Generate HEATMAPS by cluster
+        time = np.arange(-5, 15, 1)
+
+        vmin_value = np.percentile(np.vstack((deactivated_zero, activated_zero, nonactivated_zero)), 10)
+        vmax_value = np.percentile(np.vstack((deactivated_zero, activated_zero, nonactivated_zero)), 90)
+        fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(14, 21)) 
+
+        im1 = axes[0].imshow(activated_zero, aspect='auto', cmap='coolwarm', origin='lower', interpolation='none', vmin=vmin_value, vmax=vmax_value)
+        axes[0].set_title('Activated')
+        axes[0].set_ylabel('Rows (14,000)')
+        axes[0].set_xticks(np.arange(0, len(time)))  # Set x-ticks to match the time vector length
+        axes[0].set_xticklabels(time)  # Label x-ticks with the time vector
+        axes[0].axvline(x=5, color='black', linestyle='--', linewidth=1)  # Vertical dashed line at x=0
+        sns.despine(ax=axes[0], left=True, bottom=True)  # Remove the spines
+
+        im2 = axes[1].imshow(nonactivated_zero, aspect='auto', cmap='coolwarm', origin='lower', interpolation='none', vmin=vmin_value, vmax=vmax_value)
+        axes[1].set_title('Non-Activated')
+        axes[1].set_ylabel('Rows (14,000)')
+        axes[1].set_xticks(np.arange(0, len(time)))  # Set x-ticks to match the time vector length
+        axes[1].set_xticklabels(time)  # Label x-ticks with the time vector
+        axes[1].axvline(x=5, color='black', linestyle='--', linewidth=1)  # Vertical dashed line at x=0
+        sns.despine(ax=axes[1], left=True, bottom=True)  # Remove the spines
+
+        im3 = axes[2].imshow(deactivated_zero, aspect='auto', cmap='coolwarm', origin='lower', interpolation='none', vmin=vmin_value, vmax=vmax_value)
+        axes[2].set_title('Deactivated')
+        axes[2].set_ylabel('Rows (14,000)')
+        axes[2].set_xticks(np.arange(0, len(time)))  # Set x-ticks to match the time vector length
+        axes[2].set_xticklabels(time)  # Label x-ticks with the time vector
+        axes[2].axvline(x=5, color='black', linestyle='--', linewidth=1)  # Vertical dashed line at x=0
+        sns.despine(ax=axes[2], left=True, bottom=True)  # Remove the spines
+
+        plt.tight_layout()
+        fig.colorbar(im3, ax=axes, orientation='vertical', fraction=0.02, pad=0.04)
+        plt.savefig('HeatMapClusters.jpg')
+
+
+        # Graph DF curve by cluster
+        time = np.arange(-5, 15, 1)
+        means = [act_mean, nonact_mean, deact_mean] 
+        ses = [act_se, nonact_se, deact_se]  
+        palette = sns.color_palette("Set1", n_colors=3)
+        legend_names = [
+             "Top 33% TMT AUC: TMT Responsive",
+             "Middle 33% TMT AUC: TMT Non-Responsive",
+             "Bottom 33% TMT AUC: TMT Responsive"]
+
+        fig = plt.figure(figsize=(8, 8))
+        sns.set_theme(style="white", font_scale=1.2)
+        for i, (mean, sem) in enumerate(zip(means, ses)):
+            plt.plot(time, mean, label=legend_names[i], color=palette[i])
+            plt.fill_between(time, mean - sem, mean + sem, color=palette[i], alpha=0.3)
+        plt.set_xlabel("Time")
+        plt.set_ylabel("Normalized DF")
+        plt.axhline(0, color='black', linestyle='--', linewidth=1.5)
+        plt.axvline(0, color='black', linestyle='--', linewidth=1.5)
+        plt.legend(loc='upper left', bbox_to_anchor=(1.05, 1), fontsize=10, frameon=False)
+        plt.tight_layout()
+        plt.savefig("ClusterAverages_with_Heatmaps.jpg")
+        ipdb.set_trace()
+       
+
+        time = np.arange(0, 20, 1)  # Time range
+        fig, axes = plt.subplots(nrows=4, ncols=1, figsize=(14, 28), sharex=True)  # 4 rows, 1 column, shared x-axis
+        vmin_value = np.percentile(np.vstack((deactivated_zero, activated_zero, nonactivated_zero)), 10)
+        vmax_value = np.percentile(np.vstack((deactivated_zero, activated_zero, nonactivated_zero)), 90)
+
+        sns.heatmap(activated_zero, ax=axes[0], cmap="coolwarm", vmin=vmin_value, vmax=vmax_value, cbar=False)
+        axes[0].set_ylabel('Neurons')
+        axes[0].axvline(x=5, color='black', linestyle='--', linewidth=2)
+        sns.despine(ax=axes[0], left=True, bottom=True)
+
+        sns.heatmap(nonactivated_zero, ax=axes[1], cmap="coolwarm", vmin=vmin_value, vmax=vmax_value, cbar=False)
+        axes[1].set_ylabel('Neurons')
+        axes[1].axvline(x=5, color='black', linestyle='--', linewidth=2)
+        sns.despine(ax=axes[1], left=True, bottom=True)
+
+        sns.heatmap(deactivated_zero, ax=axes[2], cmap="coolwarm", vmin=vmin_value, vmax=vmax_value, cbar=False)
+        axes[2].set_ylabel('Neurons')
+        axes[2].axvline(x=5, color='black', linestyle='--', linewidth=2)
+        sns.despine(ax=axes[2], left=True, bottom=True)
+
+        means = [act_mean, nonact_mean, deact_mean]
+        ses = [act_se, nonact_se, deact_se]
+        palette = sns.color_palette("Set1", n_colors=3)
+        legend_names = [
+            "Top 33% TMT AUC: TMT Responsive",
+            "Middle 33% TMT AUC: TMT Non-Responsive",
+            "Bottom 33% TMT AUC: TMT Responsive"
+        ]
+
+        for i, (mean, sem) in enumerate(zip(means, ses)):
+            axes[3].plot(time, mean, label=legend_names[i], color=palette[i])
+            axes[3].fill_between(time, mean - sem, mean + sem, color=palette[i], alpha=0.3)
+
+        axes[3].set_xlabel("Time")
+        axes[3].set_ylabel("Normalized DF")
+        axes[3].axhline(0, color='black', linestyle='--', linewidth=2)
+        axes[3].axvline(5, color='black', linestyle='--', linewidth=2)
+        sns.despine(ax=axes[3], left=True, bottom=True)
+        axes[3].set_xlim(time[0], time[-1])
+        custom_ticks = [0, 5, 10, 15, 20]  # Positions in the original time array
+        custom_labels = [-5, 0, 5, 10, 15]  # Custom labels you want
+        axes[3].set_xticks(custom_ticks)
+        axes[3].set_xticklabels(custom_labels)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.drop_directory,'MergedHeatmapAndDF.jpg'))
+
+
     def principal_component_analysis(self,values_to_be_clustered, max_clusters=20):
         # Convert list of lists to numpy array
         self.values_to_be_clustered=np.concatenate(values_to_be_clustered,axis=0)
@@ -257,9 +593,6 @@ class regression_coeffecient_pca_clustering:
         ax.set_title('tsne - 3D Plot')
         plt.savefig('tsne_results.jpg')
         plt.close()
-
-
-        ipdb.set_trace()
 
         # Generate pca plot 
         pca = PCA()
@@ -341,19 +674,22 @@ class regression_coeffecient_pca_clustering:
         self.normalize_activity()
         self.timestamps_to_one_hot_array()
 
+        self.run_glm()
+
         # Run regression
-        if self.regression_type=='ridge':
-            self.ridge_regression()
-        elif self.regression_type=='OLS':
-            self.ols_regression()
+        # if self.regression_type=='ridge':
+        #     self.ridge_regression()
+        # elif self.regression_type=='OLS':
+        #     self.ols_regression()
         
-        ipdb.set_trace()
+        # TMT operationally defined clustering
+        #self.operational_cluster()
 
         # Run PCA and clustering
-        self.principal_component_analysis(values_to_be_clustered=self.all_coeffs)
+        #self.principal_component_analysis(values_to_be_clustered=self.all_coeffs)
 
         # Plot clustering results
-        self.plot_cluster_results(plot_label=f'{self.regression_type} regression coeffecients')
+        #self.plot_cluster_results(plot_label=f'{self.regression_type} regression coeffecients')
 
 class map_clusters_to_activity(regression_coeffecient_pca_clustering):
     def __call__(self):

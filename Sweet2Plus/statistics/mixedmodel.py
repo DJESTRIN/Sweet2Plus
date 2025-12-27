@@ -23,9 +23,10 @@ import itertools
 
 class mixedmodels():
     """ General class for building, running and evaluating mixed models """
-    def __init__(self, drop_directory, dataframe, model_type='lmm', fixed_effects_formula = "Activity ~ Group * Session * Trialtype", 
+    def __init__(self, drop_directory, dataframe, model_type='lmm', dependent_var_name='AUC',
+                 fixed_effects_formula = "Activity ~ Group * Session * Trialtype", 
                  random_effects='Subject',nested_effects='Neuron', multicompare_correction = 'fdr_bh',
-                 verbose=True):
+                 force_categorical_cols=None, verbose=True):
         """  For running mixed model statistics on neuronal data
         Inputs 
         drop_directory -- Where results will be saved. 
@@ -44,57 +45,151 @@ class mixedmodels():
         self.drop_directory = drop_directory
         self.dataframe = dataframe
         self.model_type = model_type
+        self.dependent_var_name = dependent_var_name
         self.formula = fixed_effects_formula
         self.random_effects = random_effects
         self.nested_effects = nested_effects
         self.multicompare_correction = multicompare_correction
         self.verbose = verbose
-
-        self.dataframe['group'] = self.dataframe['group'].astype('category').cat.codes
-        self.dataframe['trialtype'] = self.dataframe['trialtype'].astype('category').cat.codes
-        self.dataframe['period'] = self.dataframe['period'].astype('category').cat.codes
-        self.dataframe['day'] = self.dataframe['day'].astype('category').cat.codes
-        self.dataframe['suid'] = self.dataframe['suid'].astype('category').cat.codes
-        self.dataframe['neuid'] = self.dataframe['neuid'].astype('category').cat.codes
-        self.dataframe['trialid'] = self.dataframe['trialid'].astype('category').cat.codes
-        self.dataframe['auc'] = self.dataframe['auc'].astype('float')
-        # self.dataframe['auc_avg'] = self.dataframe.groupby(['suid','neuid','group', 'day', 'trialtype', 'period'])['auc'].transform('mean')
-        # self.dataframe = self.dataframe[self.dataframe['period'] != 0].drop(columns=['period'])
-        self.columns_order = ['auc', 'group', 'day', 'trialtype', 'period', 'trialid', 'suid', 'neuid']
-        self.dataframe = self.dataframe[self.columns_order]
+        self.force_categorical_cols = force_categorical_cols
         assert self.model_type=='lmm'
+
+    def set_types(self):
+        """ Set each column as cateogorical or numeric """
+        if self.force_categorical_cols is None:
+            self.force_categorical_cols = []
+
+        for col in self.dataframe.columns:
+            if col in self.force_categorical_cols:
+                self.dataframe[col] = self.dataframe[col].astype('category')
+
+            elif pd.api.types.is_numeric_dtype(self.dataframe[col]):
+                self.dataframe[col] = pd.to_numeric(self.dataframe[col], errors='coerce')
+            else:
+                self.dataframe[col] = self.dataframe[col].astype('category')
 
     def __call__(self):
         """ General statistical protocol """
+        # Force dataframe columns to categorical or numeric
+        self.set_types()
+        self.remove_outliers_iqr()
+
+        # Plot data distribution
         self.data_distributions()
+        ipdb.set_trace()
+
+        # Run model and get emms
         self.generate_model()
-        self.EMM()
-        self.EMM_multiple_comparisons()
         self.residual_evaluation()
         ipdb.set_trace()
 
+        self.model_predictions()
+        self.EMM()
+        self.EMM_multiple_comparisons()
+
     def data_distributions(self):
         plt.figure(figsize=(7,5))
-        sns.histplot(self.dataframe['auc'], bins=1000, kde=True)
+        sns.histplot(self.dataframe[self.dependent_var_name], bins=100, kde=True)
         plt.axvline(0, color='red', linestyle='dashed')
-        plt.xlabel("AUC")
+        plt.xlabel(self.dependent_var_name)
         plt.ylabel("Denisty")
-        plt.savefig(os.path.join(self.drop_directory,"KernelDensityAUC.jpg"))
+        plt.savefig(os.path.join(self.drop_directory,f"KernelDensity{self.dependent_var_name}.jpg"))
+
+    def remove_outliers_iqr(self):
+        """Remove outliers from a DataFrame using the IQR method."""
+        Q1 = self.dataframe[self.dependent_var_name].quantile(0.25)
+        Q3 = self.dataframe[self.dependent_var_name].quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        self.dataframe = self.dataframe[~((self.dataframe[self.dependent_var_name] < lower_bound) | (self.dataframe[self.dependent_var_name] > upper_bound)).any(axis=1)]
 
     def generate_model(self):
         """ Build and run LinearMixed model based on attributes """
         print(f'Fitting full model with formula:{self.formula}')
-        self.full_model = smf.mixedlm('auc ~ group * day * trialtype ',
+        self.full_model = smf.mixedlm(self.formula,
                                  self.dataframe,
-                                 groups=self.dataframe['suid'], 
+                                 groups=self.dataframe[self.random_effects], 
                                  re_formula="1",
-                                 vc_formula={'suid:neuid': '1'})
+                                 vc_formula={f'{self.random_effects}:{self.nested_effects}': '1'})
         
         self.full_model_result = self.full_model.fit()
+        self.params = self.full_model_result.params
 
+    def model_predictions(self):
+
+        # Extract model coefficients
+        intercept = self.full_model_result.params["Intercept"]
+        group_effect = self.full_model_result.params.get("group[T.cort]", 0)
+        cluster_effect = self.full_model_result.params.get("cluster[T.TMT-Responsive]", 0)
+        interaction_effect = self.full_model_result.params.get("group[T.cort]:cluster[T.TMT-Responsive]", 0)
+        cov_matrix = self.full_model_result.cov_params()
+
+        conditions = [
+            {"group": "control", "cluster": "Non-TMT", "Intercept": 1, "group_effect": 0, "cluster_effect": 0, "interaction": 0},
+            {"group": "control", "cluster": "TMT-Responsive", "Intercept": 1, "group_effect": 0, "cluster_effect": 1, "interaction": 0},
+            {"group": "cort", "cluster": "Non-TMT", "Intercept": 1, "group_effect": 1, "cluster_effect": 0, "interaction": 0},
+            {"group": "cort", "cluster": "TMT-Responsive", "Intercept": 1, "group_effect": 1, "cluster_effect": 1, "interaction": 1},
+        ]
+        # Convert to DataFrame
+        conditions_df = pd.DataFrame(conditions)
+
+        # Compute Predicted Values
+        conditions_df["predicted"] = (
+            intercept +
+            conditions_df["group_effect"] * group_effect +
+            conditions_df["cluster_effect"] * cluster_effect +
+            conditions_df["interaction"] * interaction_effect
+        )
+
+        # Compute standard error for each condition
+        design_matrix = conditions_df[["Intercept", "group_effect", "cluster_effect", "interaction"]].values
+        variance_estimates = np.diag(design_matrix @ cov_matrix.loc[["Intercept", "group[T.cort]", "cluster[T.TMT-Responsive]", "group[T.cort]:cluster[T.TMT-Responsive]"]] @ design_matrix.T)
+        conditions_df["SE"] = np.sqrt(variance_estimates)
+
+        # Compute confidence intervals (95% CI)
+        df_resid = self.full_model_result.df_resid  # Residual degrees of freedom
+        t_value = t.ppf(0.975, df_resid)  # Two-tailed critical t-value
+
+        conditions_df["CI_lower"] = conditions_df["predicted"] - t_value * conditions_df["SE"]
+        conditions_df["CI_upper"] = conditions_df["predicted"] + t_value * conditions_df["SE"]
+
+        # Print results
+        print(conditions_df[["group", "cluster", "predicted", "SE", "CI_lower", "CI_upper"]])
+
+        # Get unique levels
+        group_levels = self.dataframe['group'].unique()
+        cluster_levels = self.dataframe['cluster'].unique()
+
+        # Create all possible group-cluster combinations
+        combinations = pd.DataFrame([(g, c) for g in group_levels for c in cluster_levels], columns=['group', 'cluster'])
+
+        # Add an intercept column (needed for prediction)
+        combinations['Intercept'] = 1
+
+        # Create dummy variables but keep control over naming
+        group_dummies = pd.get_dummies(combinations['group'], prefix='group', drop_first=True)
+        cluster_dummies = pd.get_dummies(combinations['cluster'], prefix='cluster', drop_first=True)
+
+        # Manually rename dummy variables to match statsmodels format
+        group_dummies.columns = [f'group[T.{col}]' for col in group_dummies.columns]
+        cluster_dummies.columns = [f'cluster[T.{col}]' for col in cluster_dummies.columns]
+
+        # Merge everything
+        combinations = pd.concat([combinations, group_dummies, cluster_dummies], axis=1)
+
+        # Ensure all parameter names from model are in the dataframe
+        for param in self.full_model_result.params.index:
+            if param not in combinations.columns:
+                combinations[param] = 0  # Set to 0 for missing terms (now it should work correctly!)
+
+        # Compute EMMs using the fixed effects
+        combinations['predicted'] = np.dot(combinations[self.full_model_result.params.index], self.full_model_result.params)
+
+        # Debugging: Print to check if values change across conditions
+        print(combinations[['group', 'cluster', 'predicted']])
         ipdb.set_trace()
-        self.predictions = self.full_model_result.predict(self.dataframe.drop(columns='auc'))
-        self.dataframe['predictions'] = self.predictions
+
 
     def EMM(self):
         """ Python does not have a package that does this, so I needed to code it """
@@ -189,8 +284,8 @@ class mixedmodels():
     def residual_evaluation(self):
         """ Generate common plots and stats for residuals to manaully evaluate model fit """
         # Pull residuals and fitted values
-        residuals = self.dataframe['auc_avg'] - self.predictions
-        fit_vals = self.predictions
+        fit_vals = self.full_model_result.fittedvalues  
+        residuals = self.full_model_result.resid  
 
         # Plot of residuals and 
         plt.figure(figsize=(7,5))

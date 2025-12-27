@@ -13,6 +13,9 @@ import numpy as np
 from Sweet2Plus.core.core import corralative_activity 
 import pickle
 import numpy as np
+import os, glob
+import pandas as pd
+from tqdm import tqdm
 
 def SaveObj(FullPath: str, s2p_obj_input):
     """ Saves custom objects to json file
@@ -109,6 +112,27 @@ def OpenList(FullPath: str):
     with open(FullPath, "rb") as file:
         complicated_list = pickle.load(file)
     return complicated_list
+
+def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
+    """ Gather all data into lists from parent directory """
+    # Get full path to object files
+    objfiles=glob.glob(os.path.join(parent_data_directory,f'**/{file_indicator}*.json'),recursive=True)
+ 
+    # Grab relevant data from files and create lists
+    neuronal_activity=[]
+    behavioral_timestamps=[]
+    neuron_info = pd.DataFrame(columns=['day', 'cage', 'mouse', 'group'])
+    for file in tqdm(objfiles):
+        objoh=LoadObj(FullPath=file)
+        neuronal_activity.append(objoh.ztraces)
+        behavioral_timestamps.append(objoh.all_evts_imagetime)
+        repeated_info = np.tile([objoh.day, objoh.cage, objoh.mouse, objoh.group], objoh.ztraces.shape[0]) 
+        repeated_info = repeated_info.reshape(objoh.ztraces.shape[0], 4)
+        repeated_info_df = pd.DataFrame(repeated_info, columns=['day', 'cage', 'mouse', 'group'])
+        neuron_info = pd.concat([neuron_info, repeated_info_df], ignore_index=True)
+
+    return neuronal_activity, behavioral_timestamps, neuron_info
+
 
 if __name__=='__main__':
     ooh = LoadObj(r'C:\Users\listo\twophoton\summary_data\example_obj.json')

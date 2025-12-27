@@ -1,4 +1,17 @@
-my_figs/**/*/
-figures/**/*/
+# Git Ignore File
+my_figs/**/*
+figures/**/*
 Sweet2PPlus.egg-info/
-
+my_data/**/*
+Sweet2PPlus/statistics/Stats.pdf
+**/*.tif
+**/*.tiff
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.pdf
+**/*.R
+**/*.Rmd
+**/*.xls
+**/*.xlsx
+**/*.csv

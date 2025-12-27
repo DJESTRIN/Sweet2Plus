@@ -8,14 +8,12 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix
 from torch import nn
 from torch.utils.data import DataLoader
-import ipdb
 import optuna
-import tqdm
-import matplotlib.pyplot as plt
-import argparse
+import pandas as pd
+from datetime import datetime
+import re
 
 def downsample_array(array,new_length=1000):
     array_new=np.zeros((array.shape[0],new_length))
@@ -69,13 +67,6 @@ def expand_training_dataset(X,Y):
             if toh in random_trace_for_plot:
                 plot_data.append(new_trace)
 
-        # if toh in random_trace_for_plot:
-        #    plt.figure()
-        #    for r,plottrace in enumerate(plot_data):
-        #        plt.subplot(3, 1, r+1)
-        #        plt.plot(plottrace)
-        #    plt.savefig(f'Noisytraces{toh}.jpg')
-        #    plt.close()
     expanded_trainingdata=np.asarray(expanded_trainingdata)
     expanded_labels=np.asarray(expanded_labels)
     return expanded_trainingdata,expanded_labels
@@ -126,79 +117,125 @@ class NeuralNetwork(nn.Module):
         res = self.linear_relu_stack(x)
         return res
 
-def Diagnostics(epoch, loss, outputs, labels, learningrate, batch_size, data_set_name):
-    predictions = outputs
-    accuracy = accuracy_score(predictions, labels)
-    f1 = f1_score(predictions,labels)
-    tn, fp, fn, tp = confusion_matrix(labels, predictions).ravel()
-    Diagnostics_list = [epoch, data_set_name, loss, learningrate, batch_size, accuracy, f1, tn, fp, fn, tp]
-    return Diagnostics_list, f1
-
 def Average(lst):
     return sum(lst) / len(lst)
 
-def TrainTestNetwork(Network, train_loader, test_loader, learningrate, batch_size, epochs):
-    # Set up optimizers
-    best_f1=0
+def TrainTestNetwork(Network, train_loader, test_loader, learningrate, batchsize, epochs, 
+                     xls_drop_directory=r'C:\tmt_assay\tmt_experiment_2024_clean\mlp_roi_classifier_results'):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(Network.parameters(), lr = learningrate)
+    
+    best_f1 = 0
+    training_results = []
+    testing_results = []
+    all_epoch_metrics = []  # store metrics per epoch for Excel
 
-    # Run training and testing
-    training_results,testing_results=[],[]
     for epoch in range(epochs):
-        optimizer = torch.optim.SGD(Network.parameters(), lr = learningrate)
-        # Train Neural Network 
+        # Reset optimizer per epoch (like original code)
+        optimizer = torch.optim.SGD(Network.parameters(), lr=learningrate)
+        
+        # --- Training ---
+        Network.train()
         f1_train_av = []
-        ac_train_av =[]
-        losses=[]
-        for i, data in enumerate(train_loader, 0):
-            inputs, labels = data
+        ac_train_av = []
+        losses = []
+        
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = Network(inputs.float())
-            loss = criterion(outputs, labels) #Not great but prob works
+            loss = criterion(outputs, labels)
             loss.backward()
-            #torch.nn.utils.clip_grad_norm_(Network.parameters(), 5)
             optimizer.step()
+
             train_loss = loss.item()
             losses.append(train_loss)
-            outputs = torch.argmax(outputs,dim=1)
-            f1_train_av.append(f1_score(labels.cpu().detach().numpy(),outputs.cpu().detach().numpy())) 
-            ac_train_av.append(accuracy_score(labels.cpu().detach().numpy(),outputs.cpu().detach().numpy())) 
-
-        # Test Neural Network
+            outputs_argmax = torch.argmax(outputs, dim=1)
+            f1_train_av.append(f1_score(labels.cpu().detach().numpy(), outputs_argmax.cpu().detach().numpy()))
+            ac_train_av.append(accuracy_score(labels.cpu().detach().numpy(), outputs_argmax.cpu().detach().numpy()))
+        
+        # --- Testing ---
+        Network.eval()
         f1_test_av = []
         ac_test_av = []
-        for i, data in enumerate(test_loader, 0):
-            inputs, labels = data
+        test_cm_list = []
+
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
             outputs = Network(inputs.float())
-            outputs = torch.argmax(outputs, dim = 1)
-            f1_test_av.append(f1_score(labels.cpu().detach().numpy(),outputs.cpu().detach().numpy())) 
-            ac_test_av.append(accuracy_score(labels.cpu().detach().numpy(),outputs.cpu().detach().numpy())) 
+            outputs_argmax = torch.argmax(outputs, dim=1)
+            f1_test_av.append(f1_score(labels.cpu().detach().numpy(), outputs_argmax.cpu().detach().numpy()))
+            ac_test_av.append(accuracy_score(labels.cpu().detach().numpy(), outputs_argmax.cpu().detach().numpy()))
+            cm = confusion_matrix(labels.cpu().detach().numpy(), outputs_argmax.cpu().detach().numpy())
+            test_cm_list.append(cm.flatten())
         
-        #Save and Print Results
-        if epoch%10==0:
-            print('Epoch [%d] Training loss: %.8f Training F1 Score: %.8f Training Accuracy: %.8f Testing F1 Score: %.8f Testing Accuracy: %.8f Learning Rate: %.8f' % (epoch, Average(losses), Average(f1_train_av), Average(ac_train_av), Average(f1_test_av), Average(ac_test_av),learningrate))
+        # Average metrics per epoch
+        train_f1_avg = np.mean(f1_train_av)
+        train_acc_avg = np.mean(ac_train_av)
+        train_loss_avg = np.mean(losses)
+        test_f1_avg = np.mean(f1_test_av)
+        test_acc_avg = np.mean(ac_test_av)
+        test_cm_avg = np.mean(test_cm_list, axis=0) if len(test_cm_list) > 0 else np.array([np.nan]*4)
+        
+        # Save best model
+        if test_f1_avg > best_f1:
+            best_f1_on_disk = -1.0
+            if os.path.exists(xls_drop_directory):
+                for fname in os.listdir(xls_drop_directory):
+                    match = re.match(r"best_model_f1_([0-9.]+)\.pth", fname)
+                    if match:
+                        best_f1_on_disk = float(match.group(1))
+                        break
 
-        if epoch%100==0:
-            learningrate*=0.1
+            if test_f1_avg > best_f1_on_disk:
+                best_f1 = test_f1_avg
+                best_model_weights = os.path.join(xls_drop_directory,f"best_model_f1_{best_f1:.4f}.pth")
+                torch.save(Network.state_dict(), best_model_weights)
+                print(f"Epoch {epoch}: Saved best model "
+                      f"(Test F1 = {best_f1:.4f}, Test Accuracy = {test_acc_avg:.4f})")
+        
+        # Decay learning rate every 100 epochs (like original)
+        if epoch % 100 == 0 and epoch != 0:
+            learningrate *= 0.1
 
-        training_results.append(Average(f1_train_av))
-        testing_results.append(Average(f1_test_av))
+        # Store results for plotting
+        training_results.append(train_f1_avg)
+        testing_results.append(test_f1_avg)
+        
+        # Save metrics for Excel
+        all_epoch_metrics.append({
+            'epoch': epoch,
+            'train_f1': train_f1_avg,
+            'train_accuracy': train_acc_avg,
+            'train_loss': train_loss_avg,
+            'test_f1': test_f1_avg,
+            'test_accuracy': test_acc_avg,
+            'test_cm_00': test_cm_avg[0],
+            'test_cm_01': test_cm_avg[1],
+            'test_cm_10': test_cm_avg[2],
+            'test_cm_11': test_cm_avg[3],
+            'learning_rate': learningrate,
+            'batch_size': batchsize
+        })
+        
+        if epoch % 100 == 0:
+            print(f'Epoch {epoch}: Train F1={train_f1_avg:.4f}, Test F1={test_f1_avg:.4f}, Train Loss={train_loss_avg:.6f}, LR={learningrate:.6f}')
 
-        current_f1=Average(f1_test_av)
-        if current_f1>best_f1:
-            best_f1=current_f1
-            torch.save(Network.state_dict(), 'best_model_weights.pth')
-            print(f'Saved best model with Test F1 score of {best_f1} and test accuracy of {Average(ac_test_av)}')
-
-    testing_results_np=np.asarray(testing_results)
-    f1_test_average=testing_results_np.max()
+    # Save Data to Excel
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_excel = os.path.join(xls_drop_directory, f"training_metrics_{timestamp}.xlsx")
+    df_results = pd.DataFrame(all_epoch_metrics)
+    df_results.to_excel(output_excel, index=False)
+    
+    # Return results like original function
+    testing_results_np = np.asarray(testing_results)
+    f1_test_average = testing_results_np.max()
     print(f'Max Testing F1: {f1_test_average}')
-    return training_results, testing_results,f1_test_average
+
+    return df_results
 
 
-def main(search_string,lr,mom,wd,bs):
+def main(search_string,lr,bs):
     # Gather Data and Normalize it
     X,Y=generate_data(search_sting=search_string)
     X,Y=normalize_trace(X,Y)
@@ -216,8 +253,8 @@ def main(search_string,lr,mom,wd,bs):
     net=NeuralNetwork().to(device=device)
 
     # Run training regimine
-    training_results,testing_results,f1_test_average = TrainTestNetwork(net, train_dataloader, test_dataloader, lr, bs,1000)
-    return training_results,testing_results,f1_test_average, net
+    results_oh = TrainTestNetwork(net, train_dataloader, test_dataloader, lr, bs, 1000)
+    return results_oh, net
 
 def objective(trial):
     """ Generate Hyperparmeters """
@@ -225,19 +262,18 @@ def objective(trial):
     Learing_Rate = trial.suggest_float('Learing_Rate', 0.45, 0.47, log=True) #Initial learning rate
     Batch_Size = trial.suggest_int('Batch_Size', 160, 170) #Batch Size
 
-    training_results,testing_results,f1_test_average,model=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*',Learing_Rate,1,1,Batch_Size)
+    results_oh,model=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*',Learing_Rate,Batch_Size)
+    f1_test_average = results_oh['test_f1'].mean()
     return f1_test_average
 
 if __name__=='__main__':
-    training_results,testing_results,f1_test_average,model=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*', 0.46859501736598963,1,1,170)
-    plt.figure(figsize=(10,10))
-    plt.plot(np.asarray(training_results),color='green')
-    plt.plot(np.asarray(testing_results),color='red')
-    plt.savefig('MLP_results.jpg')
-
-    ipdb.set_trace()
-   
-    # study = optuna.create_study(study_name='SignalMLP_e1', direction='maximize')
-    # study.optimize(objective, n_trials=50)
-    # optuna.visualization.plot_optimization_history(study)
-    # ipdb.set_trace()
+    choice = input("Do you want to run an Optuna study or use manual hyperparameters? (optuna/manual): ").strip().lower()
+    if choice == "optuna":
+        study = optuna.create_study(study_name='SignalMLP_e1', direction='maximize')
+        study.optimize(objective, n_trials=100)
+        optuna.visualization.plot_optimization_history(study)
+        
+    elif choice == "manual":
+        results_oh, model=main(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\Day1\*24*\*24*\suite2p\*lane*', 0.46859501736598963,170)
+    else:
+        print("Invalid choice. Please enter 'optuna' or 'manual'.")

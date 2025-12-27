@@ -82,6 +82,7 @@ class graphics(weightdata):
         self.average_sem()
 
     def average_sem(self):
+        ipdb.set_trace()
         running_average = self.weights.groupby(['day', 'suid', 'group','neuron_id_2'])['abs_synaptic_weight'].mean().reset_index()
         running_average = running_average.groupby(['suid','group','day'])['abs_synaptic_weight'].mean().reset_index()
         running_average2 = running_average

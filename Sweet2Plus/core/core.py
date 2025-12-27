@@ -327,56 +327,98 @@ class funcational_classification(parse_s2p):
         
         return ImageNumberTS
 
-    def PETH(self,data,timestamps,window,baseline_period,event_period,event_name):
+    def PETH(self, data, timestamps, window, baseline_period, event_period, event_name):
         """ PETH method will align neuronal trace data to each event of interest. 
-        Inputs:
-        data: float -- This is a matrix of data where each row contains dF trace data for a single neuron. Each column is a frame/time point
-        timestamps: float -- This is the timestamps (taken from load_serial_output class) for trial of interest. 
-        window: float default=10 -- The time (seconds) before and after each event that you would like to plot.
-        baseline_period: list of two floats default=[-10,-5] -- 
-        event_period: list of two floats default=[-10,-5]
-        event_name: str -- This string will be used to create a subfolder in figures path. Suggest using the name of the trial type. Example: 'shocktrials'.
-
-        Outputs:
-        self.peth_stats -- Class attribute containg a list of important Area Under the Curve statistics for baseline and event. Each element corresponds to stats for a single neuron. 
-        PETH graphs -> saved to the provided datapath /figures/neuronal/peths/eventname/peth_neuron{X}.jpg. If given N traces, there will be N peth graphs saved.
+        Inputs remain unchanged.
         """
-        sampling_frequency=self.ops['fs'] # Number of Images taken per second
-        window = round(window*sampling_frequency) # Convert the window (s) * the sampling frequency (Frames/s) to get number of frames in window. 
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import os
 
-        for i,neuron_trace in enumerate(data):
-            heatmap_data=[]
-            BL_AUC=[] # Save the baseline AUC stats
-            EV_AUC=[] # Save the Event AUC stats
+        sampling_frequency = self.ops['fs']  # Number of Images taken per second
+        window = round(window * sampling_frequency)  # Convert window (s) to frames
+
+        for i, neuron_trace in enumerate(data):
+            heatmap_data = []
+            BL_AUC = []  # Baseline AUC stats
+            EV_AUC = []  # Event AUC stats
+
             for time in timestamps:
-                trace_event = neuron_trace[int(time-window):int(time+window)]
+                start_idx = int(time - window)
+                end_idx = int(time + window)
+                if start_idx < 0 or end_idx > len(neuron_trace):
+                    continue
+                trace_event = neuron_trace[start_idx:end_idx]
                 heatmap_data.append(trace_event)
 
-                #Calculate AUC for Baseline
-                bl_trace=neuron_trace[int(time+round(baseline_period[0]*sampling_frequency)):int(time+round(baseline_period[1]*sampling_frequency))]
-                BL_AUC.append(np.trapz(bl_trace))
+                # Baseline AUC
+                bl_start = int(time + round(baseline_period[0] * sampling_frequency))
+                bl_end   = int(time + round(baseline_period[1] * sampling_frequency))
+                BL_AUC.append(np.trapz(neuron_trace[bl_start:bl_end]))
 
-                #Calculate AUC for Event
-                ev_trace=neuron_trace[int(time+round(event_period[0]*sampling_frequency)):int(time+round(event_period[1]*sampling_frequency))]
-                EV_AUC.append(np.trapz(ev_trace))
+                # Event AUC
+                ev_start = int(time + round(event_period[0] * sampling_frequency))
+                ev_end   = int(time + round(event_period[1] * sampling_frequency))
+                EV_AUC.append(np.trapz(neuron_trace[ev_start:ev_end]))
+
+            if not heatmap_data:
+                continue
 
             try:
-                mean_trace=np.asarray(heatmap_data).mean(axis=0) # Get Average trace across events for Neuron
+                mean_trace = np.asarray(heatmap_data).mean(axis=0)
             except:
-                heatmap_data=heatmap_data[:-1] #The last element is too close to end of session. Best to delete data.
-                mean_trace=np.asarray(heatmap_data).mean(axis=0) 
-           
-            # Plot PETH
-            plt.figure(figsize=(15,15),dpi=1200)
-            f, axes = plt.subplots(2, 1, sharex='col')
-            plt.subplot(2, 1, 1)
-            axes[0] = plt.plot(mean_trace)
-            ax = plt.subplot(2, 1, 2)
-            axes[1].pcolor(heatmap_data)
-            #ax.colarbar()
-            plt.title(event_name)
-            plt.savefig(os.path.join(self.resultpath_neur,f'{event_name}PETH_Neuron{i}.pdf'))
-            plt.close()
+                heatmap_data = heatmap_data[:-1]
+                mean_trace = np.asarray(heatmap_data).mean(axis=0)
+
+            heatmap_array = np.asarray(heatmap_data)
+
+            # ---------- Publication-ready plotting ----------
+            fig, axes = plt.subplots(2, 1, figsize=(6, 10), dpi=300, gridspec_kw={'height_ratios': [1, 2]}, constrained_layout=True)
+
+            # Top: mean trace
+            ax1 = axes[0]
+            time_axis = np.arange(-window, window) / sampling_frequency  # convert frames to seconds
+            ax1.plot(time_axis, mean_trace, color='#1f77b4', linewidth=2.5)  # blue line
+            ax1.fill_between(time_axis,
+                            mean_trace - heatmap_array.std(axis=0) / np.sqrt(heatmap_array.shape[0]),
+                            mean_trace + heatmap_array.std(axis=0) / np.sqrt(heatmap_array.shape[0]),
+                            color='#1f77b4', alpha=0.25)
+            ax1.axvline(0, color='black', linestyle='--', linewidth=2)
+            ax1.set_ylabel('ΔF/F', fontsize=14, fontweight='bold')
+            ax1.tick_params(axis='both', labelsize=12)
+            ax1.spines['top'].set_visible(False)
+            ax1.spines['right'].set_visible(False)
+            ax1.spines['left'].set_linewidth(1.5)
+            ax1.spines['bottom'].set_linewidth(1.5)
+
+            # Bottom: heatmap
+            ax2 = axes[1]
+            im = ax2.imshow(heatmap_array, aspect='auto', cmap='viridis', extent=[-window/sampling_frequency, window/sampling_frequency, 0, heatmap_array.shape[0]], origin='lower')
+            ax2.axvline(0, color='black', linestyle='--', linewidth=2)
+            ax2.set_xlabel('Time (s)', fontsize=14, fontweight='bold')
+            ax2.set_ylabel('Trial #', fontsize=14, fontweight='bold')
+            ax2.tick_params(axis='both', labelsize=12)
+            ax2.spines['top'].set_visible(False)
+            ax2.spines['right'].set_visible(False)
+            ax2.spines['left'].set_linewidth(1.5)
+            ax2.spines['bottom'].set_linewidth(1.5)
+
+            cbar = fig.colorbar(im, ax=ax2, fraction=0.046, pad=0.04)
+            cbar.ax.tick_params(labelsize=12)
+            cbar.set_label('ΔF/F', fontsize=12, fontweight='bold')
+
+            plt.suptitle(f'{event_name} - Neuron {i}', fontsize=16, fontweight='bold')
+
+            # Save figure
+            outpath = os.path.join(self.resultpath_neur, f'{event_name}PETH_Neuron{i}.pdf')
+            plt.savefig(outpath, dpi=300)
+            plt.close(fig)
+
+            # Store stats in class attribute if desired
+            if not hasattr(self, 'peth_stats'):
+                self.peth_stats = []
+            self.peth_stats.append({'neuron': i, 'BL_AUC': BL_AUC, 'EV_AUC': EV_AUC})
+
 
 class corralative_activity(funcational_classification):
     def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):

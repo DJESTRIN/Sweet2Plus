@@ -29,7 +29,8 @@ import os
 import scipy
 import random
 import json 
-import ipdb
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+
 
 # Custom functions and classes 
 def zscore_data_from_obj(obj_file_oh):
@@ -84,7 +85,7 @@ class Education():
     def __init__(self, data, model=[], num_data_points=300, epochs=100, print_training=True,
                  print_training_epoch=1, plot_neurons=False, run_study=False, device='cuda', 
                  study_trials = 50, learning_rate=0.001, weight_decay = 0, default_hidden = 64, 
-                 default_layers = 3, drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs'):
+                 default_layers = 3, drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs',drop_filename='filename'):
         # Set initial attributes
         self.data = data
         self.model = model
@@ -102,6 +103,7 @@ class Education():
         self.weight_decay = weight_decay
         self.hidden_suggested = default_hidden 
         self.layers_suggested = default_layers
+        self.drop_filename = drop_filename
 
     def __call__(self):
 
@@ -136,8 +138,8 @@ class Education():
                 
                 # run training
                 print("Converting wrangled data into torch format ... ")
-                X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(self.num_data_points)
-                train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
+                X_train, y_train, X_val, y_val, X_test, y_test = self.get_data(num_data_points=self.num_data_points)
+                train_loader, val_loader, test_loader = self.convert_to_torch_loader(X_train, y_train, X_val, y_val, X_test, y_test)
 
                 # Build model           
                 model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
@@ -159,8 +161,13 @@ class Education():
                 
                 # Run testing and get correlation between signals
                 print('Testing model ....')
-                self.corroh = self.test(model_oh, original_loader)
-                print(f'The average correlation of prediction to real data for all neurons is {self.corroh}')
+                self.metric_results = self.test(model_oh, test_loader)
+                csv_path = os.path.join(self.drop_directory, f"{self.drop_filename}_metrics.csv")
+                metrics_df = pd.DataFrame.from_dict(
+                {k: [v] if not isinstance(v, (list, tuple, np.ndarray)) else v
+                for k, v in self.metric_results.items()},
+                orient="columns")
+                metrics_df.to_csv(csv_path, index=False)
 
                 # Save model for later use
                 print('Saving model to file ...')
@@ -172,8 +179,9 @@ class Education():
                 print('Setting up data structure into torch dataset and model parameters')
     
                 # Set up datasets
-                X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=self.num_data_points)
-                train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
+                X_train, y_train, X_val, y_val, X_test, y_test = self.get_data(num_data_points=self.num_data_points)
+                train_loader, val_loader, test_loader = self.convert_to_torch_loader(X_train, y_train, X_val, y_val, X_test, y_test)
+
 
                 # Build model            
                 model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
@@ -196,8 +204,13 @@ class Education():
                 
                 # Run testing and get correlation between signals
                 print('Testing model ....')
-                self.corroh = self.test(model_oh, original_loader)
-                print(f'The average correlation of prediction to real data for all neurons is {self.corroh}')
+                self.metric_results = self.test(model_oh, test_loader)
+                csv_path = os.path.join(self.drop_directory, f"{self.drop_filename}_metrics.csv")
+                metrics_df = pd.DataFrame.from_dict(
+                {k: [v] if not isinstance(v, (list, tuple, np.ndarray)) else v
+                for k, v in self.metric_results.items()},
+                orient="columns")
+                metrics_df.to_csv(csv_path, index=False)
 
                 # Save model for later use
                 print('Saving model to file ...')
@@ -221,8 +234,8 @@ class Education():
                     self.run_study = False
 
             # Get data
-            X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=self.num_data_points)
-            train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
+            X_train, y_train, X_val, y_val, X_test, y_test = self.get_data(num_data_points=self.num_data_points)
+            train_loader, val_loader, test_loader = self.convert_to_torch_loader(X_train, y_train, X_val, y_val, X_test, y_test)
 
             # Load in the trained model        
             model_oh = torch.load(self.torch_file, map_location=torch.device(self.device))
@@ -230,33 +243,59 @@ class Education():
                 
             # Run testing and get correlation between signals
             print('Testing model ....')
-            self.corroh = self.test(model_oh, original_loader)
-            print(f'The average correlation of prediction to real data for all neurons is {self.corroh}')
+            self.metric_results = self.test(model_oh, test_loader)
+            csv_path = os.path.join(self.drop_directory, f"{self.drop_filename}_metrics.csv")
+            metrics_df = pd.DataFrame.from_dict(
+                {k: [v] if not isinstance(v, (list, tuple, np.ndarray)) else v
+                for k, v in self.metric_results.items()},
+                orient="columns")
+            metrics_df.to_csv(csv_path, index=False)
             return 
 
-    def get_data(self,num_data_points):
-        arranged_data = datawrangler(z_scored_neural_data=self.data,X_points=num_data_points)
-        X_train, y_train, X_test, y_test = arranged_data()
-        X_original, y_original=arranged_data.get_original_data()
-        return X_train, y_train, X_test, y_test, X_original, y_original
-    
-    def convert_to_torch_loader(self,X_train, y_train, X_test, y_test, X_original, y_original):
-        # Put data into torch formatting
-        X_train = torch.tensor(np.asarray(X_train), dtype=torch.float32)
-        y_train = torch.tensor(np.asarray(y_train), dtype=torch.float32)
-        X_test = torch.tensor(np.asarray(X_test), dtype=torch.float32)
-        y_test = torch.tensor(np.asarray(y_test), dtype=torch.float32)
-        xo = torch.tensor(np.asarray(X_original), dtype=torch.float32)
-        yo = torch.tensor(np.asarray(y_original), dtype=torch.float32)
+    def get_data(self, num_data_points, train_frac=0.7, val_frac=0.15):
+        arranged_data = datawrangler(z_scored_neural_data=self.data, X_points=num_data_points)
 
-        train_dataset = TensorDataset(X_train, y_train)
-        test_dataset = TensorDataset(X_test, y_test)
-        od = TensorDataset(xo, yo)
+        X, y = arranged_data()  # full dataset
+        N = len(X)
+
+        # --- Create splits ---
+        idx = np.random.permutation(N)
+        n_train = int(train_frac * N)
+        n_val = int(val_frac * N)
+
+        train_idx = idx[:n_train]
+        val_idx = idx[n_train:n_train + n_val]
+        test_idx = idx[n_train + n_val:]
+
+        X_train, y_train = X[train_idx], y[train_idx]
+        X_val, y_val     = X[val_idx], y[val_idx]
+        X_test, y_test   = X[test_idx], y[test_idx]
+
+        return X_train, y_train, X_val, y_val, X_test, y_test
+
+    
+    def convert_to_torch_loader(self, X_train, y_train, X_val, y_val, X_test, y_test):
+        train_dataset = TensorDataset(
+            torch.tensor(X_train, dtype=torch.float32),
+            torch.tensor(y_train, dtype=torch.float32)
+        )
+
+        val_dataset = TensorDataset(
+            torch.tensor(X_val, dtype=torch.float32),
+            torch.tensor(y_val, dtype=torch.float32)
+        )
+
+        test_dataset = TensorDataset(
+            torch.tensor(X_test, dtype=torch.float32),
+            torch.tensor(y_test, dtype=torch.float32)
+        )
 
         train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-        val_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
-        original_loader = DataLoader(od, batch_size=1, shuffle=False)
-        return train_loader, val_loader, original_loader
+        val_loader   = DataLoader(val_dataset, batch_size=16, shuffle=False)
+        test_loader  = DataLoader(test_dataset, batch_size=1, shuffle=False)
+
+        return train_loader, val_loader, test_loader
+
     
     def train(self, model, train_loader, val_loader, criterion, optimizer, scheduler,plot_mode=True):
         """ Run training on given model """
@@ -324,41 +363,73 @@ class Education():
         return model, loss_history
 
     def test(self, modeloh, test_loader):
-        real_data=[]
-        predict_data=[]
-        for inputs, targets in test_loader:
-            inputs = inputs.transpose(1, 2).contiguous() # Reconfigure input shape
-            inputs = inputs.to(self.device)
-            outputs = modeloh(inputs)
-            outputs_numpy = outputs.cpu().detach().numpy()
-            targets=targets.detach().numpy()
-            real_data.append(targets)
-            predict_data.append(outputs_numpy)
+        modeloh.eval()
 
-        real_data=np.squeeze(np.asarray(real_data)).T
-        predict_data=np.squeeze(np.asarray(predict_data)).T
-        
-        all_correlations=[]
-        for real,predict in zip(real_data,predict_data):
-            all_correlations.append(np.corrcoef(real, predict)[0, 1])
-        correlation = np.nanmean(np.asarray(all_correlations))
+        real_data = []
+        predict_data = []
+
+        with torch.no_grad():
+            for inputs, targets in test_loader:
+                inputs = inputs.transpose(1, 2).contiguous().to(self.device)
+                outputs = modeloh(inputs)
+
+                real_data.append(targets.cpu().numpy())
+                predict_data.append(outputs.cpu().numpy())
+
+        # Convert to arrays
+        real_data = np.squeeze(np.asarray(real_data))
+        predict_data = np.squeeze(np.asarray(predict_data))
+
+        n_neurons = real_data.shape[1]
+
+        corrs, r2s, rmses, maes = [], [], [], []
+
+        for n in range(n_neurons):
+            real = real_data[:, n, :].reshape(-1)
+            pred = predict_data[:, n, :].reshape(-1)
+
+            if np.std(real) == 0:
+                continue
+
+            corrs.append(np.corrcoef(real, pred)[0, 1])
+            r2s.append(r2_score(real, pred))
+            rmses.append(np.sqrt(mean_squared_error(real, pred)))
+            maes.append(mean_absolute_error(real, pred))
+
+        # Aggregate results
+        metrics = {
+            "corr_mean": np.nanmean(corrs),
+            "corr_std": np.nanstd(corrs),
+            "r2_mean": np.nanmean(r2s),
+            "rmse_mean": np.nanmean(rmses),
+            "mae_mean": np.nanmean(maes),
+            "per_neuron": {
+                "corr": corrs,
+                "r2": r2s,
+                "rmse": rmses,
+                "mae": maes
+            }
+        }
 
         if self.plot_neurons:
-            for neuron_id in range(len(real_data)):
-                # Generate output file path
-                filepath = os.path.join(self.neuron_drop_directory,f"neuron{neuron_id}.jpg")
+            for neuron_id in range(n_neurons):
+                filepath = os.path.join(
+                    self.neuron_drop_directory,
+                    f"neuron{neuron_id}.jpg"
+                )
 
-                # Create figure and save
-                plt.figure(figsize=(10,10))
-                plt.plot(real_data[neuron_id,:], linewidth=3, alpha=0.5, label='Real Output')
-                plt.plot(predict_data[neuron_id,:], linewidth=3, alpha=0.5, label='Model Output')
+                plt.figure(figsize=(10, 6))
+                plt.plot(real_data[neuron_id, :], label="Real", alpha=0.7)
+                plt.plot(predict_data[neuron_id, :], label="Predicted", alpha=0.7)
+                plt.xlabel("Time")
+                plt.ylabel("Normalized dF")
                 plt.legend()
-                plt.xlabel('Time')
-                plt.ylabel('Normalized dF')
+                plt.tight_layout()
                 plt.savefig(filepath)
                 plt.close()
-        
-        return correlation
+
+        return metrics
+
     
     def plot_learning_curve(self,data,filename):
         plt.figure()
@@ -381,8 +452,8 @@ class Education():
             self.plot_neurons = False
 
             # Get neural data from file and seperate into X_train, y_train, etc
-            X_train, y_train, X_test, y_test, X_original, y_original = self.get_data(num_data_points=num_data_points)
-            train_loader, val_loader, original_loader = self.convert_to_torch_loader(X_train, y_train, X_test, y_test, X_original, y_original)
+            X_train, y_train, X_val, y_val, X_test, y_test = self.get_data(num_data_points=self.num_data_points)
+            train_loader, val_loader, test_loader = self.convert_to_torch_loader(X_train, y_train, X_val, y_val, X_test, y_test)
             
             # Build model
             model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
@@ -559,25 +630,29 @@ def cli_parser():
 
 if __name__=='__main__':
     # Parse cli inputs
-    # args = cli_parser()
+    args = cli_parser()
 
-    # # Get neuronal data
-    # zdataoh = zscore_data_from_obj(args.s2p_object_file)
+    # Get neuronal data
+    zdataoh = zscore_data_from_obj(args.s2p_object_file)
+    s2pobject_filename = os.path.splitext(os.path.basename(args.s2p_object_file))[0]
 
-    # # make sure drop_dir has traces path
-    # if not os.path.exists(os.path.join(args.drop_directory,r'traces')):
-    #     os.mkdir(os.path.join(args.drop_directory,r'traces'))
+    # make sure drop_dir has traces path
+    if not os.path.exists(os.path.join(args.drop_directory,r'traces')):
+        os.mkdir(os.path.join(args.drop_directory,r'traces'))
 
-    # # Build, train and test best model
-    # objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=False, drop_directory=args.drop_directory)
-    # objoh()
+    # Build, train and test best model
+    objoh = Education(zdataoh, model=None, plot_neurons=True, run_study=args.hypertuning_study, drop_directory=args.drop_directory,drop_filename=s2pobject_filename)
+    objoh()
 
-    # # Pull model weight data, generate basic graphs, save to dataframe
-    # capture_obj = capture_model_weights(torch_file = objoh.torch_file, drop_directory = objoh.drop_directory, 
-    #                                     activity_data = zdataoh, correlation_result = objoh.corroh)
-    # capture_obj()
+    # Pull model weight data, generate basic graphs, save to dataframe
+    capture_obj = capture_model_weights(torch_file = objoh.torch_file, drop_directory = objoh.drop_directory, 
+                                        activity_data = zdataoh, correlation_result = objoh.corroh)
+    capture_obj()
 
-    objoh = capture_model_weights(torch_file=r'C:\Users\listo\Sweet2Plus\my_figs\weight_modeling_test_output\solo_model.pth',
-                          drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs\weight_modeling_test_output', 
-                          activity_data=None, correlation_result=None)
+    # objoh = capture_model_weights(torch_file=r'C:\Users\listo\Sweet2Plus\my_figs\weight_modeling_test_output\solo_model.pth',
+    #                       drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs\weight_modeling_test_output', 
+    #                       activity_data=None, correlation_result=None)
     objoh.generate_heatmap()
+
+    # C:\Users\listo\tmt_experiment_2024_working_file\C4620083_cohort-1_M1_cort\day_7\24-3-25_day-7_C4620083_M1_R1\objfile.json
+    # C:\Users\listo\weightmodelingtest
