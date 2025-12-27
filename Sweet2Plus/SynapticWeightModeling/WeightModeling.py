@@ -369,16 +369,30 @@ class Education():
                 predict_data.append(outputs.cpu().numpy())
 
         # Convert to arrays
-        real_data = np.squeeze(np.asarray(real_data))
-        predict_data = np.squeeze(np.asarray(predict_data))
+        real_data = np.asarray(real_data)
+        predict_data = np.asarray(predict_data)
 
-        n_neurons = real_data.shape[1]
+        # Handle shape safely
+        # Possible shapes:
+        # (batches, time, neurons) OR (batches, neurons)
+        if real_data.ndim == 3:
+            # (batch, time, neuron)
+            n_neurons = real_data.shape[2]
+        elif real_data.ndim == 2:
+            # (time, neuron)
+            n_neurons = real_data.shape[1]
+        else:
+            raise ValueError(f"Unexpected real_data shape: {real_data.shape}")
 
         corrs, r2s, rmses, maes = [], [], [], []
 
         for n in range(n_neurons):
-            real = real_data[:, n, :].reshape(-1)
-            pred = predict_data[:, n, :].reshape(-1)
+            if real_data.ndim == 3:
+                real = real_data[:, :, n].reshape(-1)
+                pred = predict_data[:, :, n].reshape(-1)
+            else:
+                real = real_data[:, n]
+                pred = predict_data[:, n]
 
             if np.std(real) == 0:
                 continue
@@ -388,7 +402,6 @@ class Education():
             rmses.append(np.sqrt(mean_squared_error(real, pred)))
             maes.append(mean_absolute_error(real, pred))
 
-        # Aggregate results
         metrics = {
             "corr_mean": np.nanmean(corrs),
             "corr_std": np.nanstd(corrs),
@@ -411,8 +424,13 @@ class Education():
                 )
 
                 plt.figure(figsize=(10, 6))
-                plt.plot(real_data[neuron_id, :], label="Real", alpha=0.7)
-                plt.plot(predict_data[neuron_id, :], label="Predicted", alpha=0.7)
+                if real_data.ndim == 3:
+                    plt.plot(real_data[:, :, neuron_id].reshape(-1), label="Real", alpha=0.7)
+                    plt.plot(predict_data[:, :, neuron_id].reshape(-1), label="Predicted", alpha=0.7)
+                else:
+                    plt.plot(real_data[:, neuron_id], label="Real", alpha=0.7)
+                    plt.plot(predict_data[:, neuron_id], label="Predicted", alpha=0.7)
+
                 plt.xlabel("Time")
                 plt.ylabel("Normalized dF")
                 plt.legend()
@@ -421,6 +439,7 @@ class Education():
                 plt.close()
 
         return metrics
+
 
     
     def plot_learning_curve(self,data,filename):
