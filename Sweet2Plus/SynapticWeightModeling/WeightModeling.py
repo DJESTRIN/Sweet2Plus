@@ -40,45 +40,33 @@ def zscore_data_from_obj(obj_file_oh):
     return np.asarray(objoh.ztraces).T
 
 class datawrangler(torch.utils.data.Dataset):
-    """ datawrangler 
-    Puts neuronal activity data into a torch dataset format    
     """
-    def __init__(self,z_scored_neural_data,test_size=0.2,random_state=43,X_points=100):
-        self.zdata=z_scored_neural_data
-        self.test_size=test_size
-        self.random_state=random_state
-        self.X_points=X_points
-        self.normalize_data()
-        self.X,self.y=self.rearrange_data()
+    Prepares neural time-series data into (X, y) pairs.
+    """
 
-    def __call__(self):
-        X_train, y_train, X_test, y_test = self.split()
-        return X_train, y_train, X_test, y_test
-    
+    def __init__(self, z_scored_neural_data, X_points=100):
+        self.zdata = z_scored_neural_data
+        self.X_points = X_points
+        self.normalize_data()
+        self.X, self.y = self.rearrange_data()
+
     def normalize_data(self):
-        zdatanorm=[]
+        zdatanorm = []
         for trace in self.zdata.T:
-            neuron_data = (trace-trace.min())/(trace.max()-trace.min())
+            neuron_data = (trace - trace.min()) / (trace.max() - trace.min())
             zdatanorm.append(neuron_data)
-        self.zdata=np.array(zdatanorm).T
+        self.zdata = np.array(zdatanorm).T
 
     def rearrange_data(self):
         X, y = [], []
-        # Iterate over the data with a sliding window
         for i in range(len(self.zdata) - (self.X_points + 1)):
-            # Select X_points for input and the subsequent value for output
-            stackoh = np.vstack(self.zdata[i:(i + self.X_points)])
-            target = self.zdata[i + self.X_points + 1]
-            X.append(stackoh)
-            y.append(target)
-        return X, y
-        
-    def get_original_data(self):
+            X.append(self.zdata[i:i + self.X_points])
+            y.append(self.zdata[i + self.X_points + 1])
+        return np.array(X), np.array(y)
+
+    def __call__(self):
         return self.X, self.y
-    
-    def split(self):
-        X_train,X_test,y_train,y_test = train_test_split(self.X,self.y,test_size=self.test_size,random_state=self.random_state)
-        return X_train, y_train, X_test, y_test
+
 
 class Education():
     """ Builds pipeline needed to train network """
@@ -253,13 +241,16 @@ class Education():
             return 
 
     def get_data(self, num_data_points, train_frac=0.7, val_frac=0.15):
-        arranged_data = datawrangler(z_scored_neural_data=self.data, X_points=num_data_points)
+        data = datawrangler(
+            z_scored_neural_data=self.data,
+            X_points=num_data_points
+        )
 
-        X, y = arranged_data()  # full dataset
+        X, y = data()  # clean and unambiguous
+
         N = len(X)
-
-        # --- Create splits ---
         idx = np.random.permutation(N)
+
         n_train = int(train_frac * N)
         n_val = int(val_frac * N)
 
@@ -268,10 +259,11 @@ class Education():
         test_idx = idx[n_train + n_val:]
 
         X_train, y_train = X[train_idx], y[train_idx]
-        X_val, y_val     = X[val_idx], y[val_idx]
-        X_test, y_test   = X[test_idx], y[test_idx]
+        X_val, y_val = X[val_idx], y[val_idx]
+        X_test, y_test = X[test_idx], y[test_idx]
 
         return X_train, y_train, X_val, y_val, X_test, y_test
+
 
     
     def convert_to_torch_loader(self, X_train, y_train, X_val, y_val, X_test, y_test):
