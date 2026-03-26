@@ -3,9 +3,6 @@ A python API for analysis of suite2P outputs. In addition to parsing suite2P out
 We include scripts allowing for easy plug in of DeepLabCut based pose-estimation results. This repository contains C++ code for running behavioral experiments in the wet lab, as well as a guided user interface for managing multiple ports
 from various behavioral computers simultaneously.
 
-<h2> <b> ⚠️ Warning: This code is still under development. ⚠️ </b> </h2>
-Please kindly ignore any issues with code as well as any missing citations to others code. 
-
 <h2> <b> Sweet2Plus's API </b></h2>
 Sweet2Plus allows for the analysis of two-photon calcium imaging data. Here are a few example images from our dataset:
 <p float="left">

@@ -361,6 +361,7 @@ def cli_parser():
 if __name__=='__main__':
     data_directory, drop_directory = cli_parser()
     neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
+    ipdb.set_trace()
     States_oh = StateDynamics(neuronal_activity, behavioral_timestamps, neuron_info)
     States_oh()
     summary_stats = StateStatistics(dataframe=States_oh.result_dataframe)
