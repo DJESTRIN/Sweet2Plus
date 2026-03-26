@@ -230,74 +230,73 @@ class engelhardglm(object):
 
         results=[]
 
-        match self.model_type:
-            case "lm":
-                model = sm.OLS(Y, X).fit()
-                predicted = model.predict(X)
+        if self.model_type=="lm":
+            model = sm.OLS(Y, X).fit()
+            predicted = model.predict(X)
 
-                # Save relevant data to list
-                results.append({
-                    "info": info_oh,
-                    "betas": result.params,
-                    "pvalues": result.pvalues,})
+            # Save relevant data to list
+            results.append({
+                "info": info_oh,
+                "betas": result.params,
+                "pvalues": result.pvalues,})
 
-            case "lmm":
-                df_oh = pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
-                df_oh['activity'] = Y
-                df_oh['trial'] = random_intercept
-                model = MixedLM(
-                    endog=df_oh['activity'],
-                    exog=df_oh.drop(columns=['activity','trial']),
-                    groups=df_oh['trial'],
-                    exog_re=np.ones((len(df_oh), 1)))
+        if self.model_type=="lmm":
+            df_oh = pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
+            df_oh['activity'] = Y
+            df_oh['trial'] = random_intercept
+            model = MixedLM(
+                endog=df_oh['activity'],
+                exog=df_oh.drop(columns=['activity','trial']),
+                groups=df_oh['trial'],
+                exog_re=np.ones((len(df_oh), 1)))
+            
+            # Attempt to use REML first
+            try:
+                result = model.fit(reml=True)
+            except:
+                result = model.fit(reml=False) 
+            predicted = result.predict(df_oh.drop(columns=['activity','trial']))
+
+            # Save relevant data to list
+            results.append({
+                "info": info_oh,
+                "betas": result.params,
+                "pvalues": result.pvalues,})
+
+        if self.model_type=="glm":
+            df_glm = pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
+
+            # GLM on Circular Lag Permutation testing first
+            for i in range(permutations):
+                X_perm, lag = circular_time_lag(df_glm)
                 
-                # Attempt to use REML first
-                try:
-                    result = model.fit(reml=True)
-                except:
-                    result = model.fit(reml=False) 
-                predicted = result.predict(df_oh.drop(columns=['activity','trial']))
+                # Using formula interface for GLM
+                X_perm['Y'] = Y
+                model = smf.glm("Y ~ " + " + ".join(X_perm.columns[:-1]), data=X_perm, family=self.selected_family_glm)
+                result = model.fit()
+                predicted = result.predict(X_perm)
 
                 # Save relevant data to list
-                results.append({
-                    "info": info_oh,
-                    "betas": result.params,
-                    "pvalues": result.pvalues,})
-
-            case "glm":
-                df_glm = pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
-
-                # GLM on Circular Lag Permutation testing first
-                for i in range(permutations):
-                    X_perm, lag = circular_time_lag(df_glm)
-                    
-                    # Using formula interface for GLM
-                    X_perm['Y'] = Y
-                    model = smf.glm("Y ~ " + " + ".join(X_perm.columns[:-1]), data=X_perm, family=self.selected_family_glm)
-                    result = model.fit()
-                    predicted = result.predict(X_perm)
-
-                    # Save relevant data to list
-                    results.append({
-                        "info": info_oh,
-                        "betas": result.params,
-                        "pvalues": result.pvalues,
-                        'type':f'permutation_{str(i)}',
-                        'r2':(np.corrcoef(Y, predicted)[0, 1])**2,})
-
-                # GLM on Real Data 
-                df_glm = pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
-                df_glm['Y'] = Y
-                model = smf.glm("Y ~ " + " + ".join(df_glm.columns[:-1]), data=df_glm, family=self.selected_family_glm)
-                result = model.fit()
-                predicted = result.predict(df_glm)
-
                 results.append({
                     "info": info_oh,
                     "betas": result.params,
                     "pvalues": result.pvalues,
-                    'type':f'real',
+                    'type':f'permutation_{str(i)}',
                     'r2':(np.corrcoef(Y, predicted)[0, 1])**2,})
+
+            # GLM on Real Data 
+            df_glm = pd.DataFrame(X, columns=[f"X{i}" for i in range(X.shape[1])])
+            df_glm['Y'] = Y
+            model = smf.glm("Y ~ " + " + ".join(df_glm.columns[:-1]), data=df_glm, family=self.selected_family_glm)
+            result = model.fit()
+            predicted = result.predict(df_glm)
+
+            results.append({
+                "info": info_oh,
+                "betas": result.params,
+                "pvalues": result.pvalues,
+                'type':f'real',
+                'r2':(np.corrcoef(Y, predicted)[0, 1])**2,})
 
         # Save graphics of predicted and obsorved data
         if self.graphics:
