@@ -151,7 +151,7 @@ def cli_parser():
     parser.add_argument('--input_path', type=str, required=True, help='Input path containing processed two-photon data')
 
     # Options for run
-    parser.add_argument('--conda_environment_name', type=str, required=True, help='Conda environment needed for registration')
+    parser.add_argument('--conda_environment_name', type=str, required=True, help='Conda environment needed')
     parser.add_argument('--partition', type=str, default='scu-cpu', help='slurm partition to use')
     parser.add_argument('--user_email', type=str, default='dje4001@med.cornell.edu', help='Email to use for slurm' )
     parser.add_argument('--memory', type=str, default='128', help='Memory in Gb to be used for each node')
@@ -171,6 +171,9 @@ def cli_parser():
 if __name__=='__main__':
     # Parse command line inputs
     args = cli_parser()
-    current_glm_job_object = multinodeglm()
+    current_glm_job_object = multinodeglm(input_path = args.input_path, conda_environment_name = args.conda_environment_name, 
+                                          partition_oh = 'scu-cpu', email = 'dje4001@med.cornell.edu',  username='dje4001', memory_per_job = 256, 
+                                          tasks_per_job = 3, cpus_per_task = 8, delete_contents_of_output_folders = False, delete_pkls=False, 
+                                          number_of_jobs=500, slurm_sleep=60 )
     current_glm_job_object()
     
