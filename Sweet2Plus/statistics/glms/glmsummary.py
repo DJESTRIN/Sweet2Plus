@@ -1,17 +1,104 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Module name: engelhardglm.py
-Description: Here we attempt to use a nearly identical glm as Engelhard et al., 2019 for neuronal encoding. We also run validation analyses. 
+Module name: glmsummary.py
+Description: Analysis of beta weights from Engelhard et al., 2019 based glm. 
 Author: David James Estrin
 Version: 1.1
-Date: 03-05-2026
+Date: 03-27-2026
 
 Current to do list:
  - write and read results to temp files. 
  - Write code for seperation of neurons by beta weight classifications
  - Analysis of functional connectivity and neuronal activity wrt to beta_weight classification, stress group, and day
 """
+
+# Set up CLI for input directory
+# Read in gz files into a dataframe
+# Generate figures
+# Generate summary statistics
+# Run analyses? 
+import argparse
+import glob, os
+import gzip
+import pickle
+import ipdb
+import pandas as pd
+import numpy as np
+
+def cli_parser():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--input_directory',type=str,help='Parent directory where g zipped data is located')
+    args=parser.parse_args()
+    return args.input_directory
+
+class collect():
+    def __init__(self,input_path):
+        self.input_path = input_path
+
+    def load_results(self, search_string = None):
+        """ Results are save to temp pickle files to lower use of RAM during fit. 
+        Here we load results from pickled files after fit for analyses."""
+
+        # Default search string when not provided
+        if search_string is None:
+            search_string = self.input_path + r'/*.pkl.gz'
+
+        # Find model output files and load them in to common list attribute
+        model_files = glob.glob(search_string)
+        self.model_results = []
+        for filename in model_files:
+            with gzip.open(filename, "rb") as f:
+                information,_ = (os.path.basename(filename)).split('.pk')
+                day,cage,mouse,group,neuronid = information.split('_')
+                self.model_results.append([pickle.load(f),day,cage,mouse,group,neuronid])
+    
+    def generate_dataframe(self):
+        rows = []
+
+        for neuron_data in self.model_results:
+            data, day, cage, mouse, group, neuronid = neuron_data
+
+            for perm_idx, j in enumerate(data):
+                betas = np.array(j['betas'])      # (200,)
+                pvals = np.array(j['pvalues'])    # (200,)
+                r2 = float(np.array(j['r2']).flatten()[0])  # scalar
+                perm_type = j['type']             # scalar or label
+
+                # sanity check
+                if betas.ndim != 1:
+                    print("Unexpected shape:", betas.shape)
+                    continue
+
+                n_betas = betas.shape[0]
+
+                rows.append(pd.DataFrame({
+                    'day': day,
+                    'cage': cage,
+                    'mouse': mouse,
+                    'group': group,
+                    'neuronid': neuronid,
+                    'permutation': perm_type,
+                    'perm_idx': perm_idx,
+                    'beta_idx': np.arange(n_betas),
+                    'beta': betas,
+                    'pval': pvals,
+                    'r2': r2   # repeated automatically
+                }))
+
+        return pd.concat(rows, ignore_index=True)
+
+def proc():
+    input_directory = cli_parser()
+    collection_obj = collect(input_path=input_directory)
+    collection_obj.load_results()
+    dataframe = collection_obj.generate_dataframe()
+    ipdb.set_trace()
+
+if __name__=='__main__':
+    proc()
+
+
 
 # def betaweight_collection(self):
     #     # generate a final long dataframe
@@ -62,21 +149,3 @@ Current to do list:
     #         save_path = os.path.join(self.dropdir, f'event{event_idx+1}_max_abs_beta.png')
     #         plt.savefig(save_path)
     #         plt.close()
-
-
-    
-    # def load_results(self, search_string = None):
-    #     """ Results are save to temp pickle files to lower use of RAM during fit. 
-    #     Here we load results from pickled files after fit for analyses."""
-    #     # Default search string when not provided
-    #     if search_string is None:
-    #         search_string = self.dropdir + r'/temp/*.pkl.gz'
-        
-    #     # Find model output files and load them in to common list attribute
-    #     model_files = glob.glob(search_string)
-    #     self.model_results = []
-    #     for filename in model_files:
-    #         with gzip.open(filename, "rb") as f:
-    #             information,_ = (os.path.basename(filename)).split('.pk')
-    #             day,cage,mouse,group,neuronid = information.split('_')
-    #             self.model_results.append([pickle.load(f),day,cage,mouse,group,neuronid])

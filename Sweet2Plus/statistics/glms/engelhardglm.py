@@ -12,15 +12,13 @@ from Sweet2Plus.core.SaveLoadObjs import gather_data  # Custom function which ba
 
 # import libraries
 import argparse
-import os, glob
+import os
 import shutil
 import pickle
 import tqdm
-import time
 import gzip
 import numpy as np
 import pandas as pd
-from collections import defaultdict
 from scipy.interpolate import BSpline
 from itertools import combinations
 import matplotlib.pyplot as plt
@@ -28,10 +26,7 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from statsmodels.regression.mixed_linear_model import MixedLM
 from sklearn.model_selection import GridSearchCV
-
-# Misc. libraries
 from joblib import Parallel, delayed
-import ipdb
 
 # Custom classes and functions
 class currate_data(object):
@@ -110,6 +105,8 @@ class engelhardglm(object):
         # Data parameters
         self.post_event_frames = post_event_frames # The number of frames to be included after an event onset for fitting.
         self.scaling_parameter = scaling_parameter # Maybe delete? Scales the predictors by some factor to attempt to match activity range
+        self.start_neuron = start_neuron
+        self.stop_neuron = stop_neuron
 
         # Hyper parameters
         self.spline_duration = spline_duration
