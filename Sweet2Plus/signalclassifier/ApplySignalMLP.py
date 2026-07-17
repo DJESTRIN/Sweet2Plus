@@ -308,7 +308,7 @@ class RunMLPFull():
                 if counter%100==0:
                     try:
                         traceoh=((trace-np.min(trace))/(np.max(trace)-np.min(trace)))+spacer
-                    except:
+                    except Exception:
                         traceoh=trace+spacer
                     plt.plot(traceoh,color='black')
                     spacer+=1

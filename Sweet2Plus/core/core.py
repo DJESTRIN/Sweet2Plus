@@ -194,7 +194,7 @@ class funcational_classification(parse_s2p):
                 file_string=os.path.join(self.resultpath_neur,f'all_neurons_with_{trial_name}trials.pdf')
                 plt.savefig(file_string)
                 plt.close()
-            except:
+            except Exception:
                 continue
                 #print('skipped')
         
@@ -364,7 +364,7 @@ class funcational_classification(parse_s2p):
 
             try:
                 mean_trace = np.asarray(heatmap_data).mean(axis=0)
-            except:
+            except Exception:
                 heatmap_data = heatmap_data[:-1]
                 mean_trace = np.asarray(heatmap_data).mean(axis=0)
 

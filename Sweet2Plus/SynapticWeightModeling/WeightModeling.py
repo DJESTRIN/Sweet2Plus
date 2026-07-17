@@ -20,7 +20,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from sklearn.model_selection import train_test_split
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -42,34 +41,98 @@ def zscore_data_from_obj(obj_file_oh):
 class datawrangler(torch.utils.data.Dataset):
     """
     Prepares neural time-series data into (X, y) pairs.
+
+    IMPORTANT (data leakage prevention):
+    The raw time series is first split *chronologically* into train/val/test
+    segments (with a buffer/gap of X_points between segments) BEFORE any
+    sliding windows are built and BEFORE normalization statistics are
+    computed. This guarantees that:
+      (1) No sliding window used for validation/testing shares any raw
+          timepoints with a window used for training (windows built with a
+          stride of 1 overlap heavily, so a naive random shuffle-then-split
+          of windows would leak almost all of the test signal into training).
+      (2) Normalization (min/max per neuron) is fit ONLY on the training
+          segment and then applied to validation/test, so the model is never
+          implicitly informed about the scale/range of future/held-out data.
     """
 
-    def __init__(self, z_scored_neural_data, X_points=100):
-        self.zdata = z_scored_neural_data
+    def __init__(self, z_scored_neural_data, X_points=100, train_frac=0.7, val_frac=0.15):
+        self.zdata = np.asarray(z_scored_neural_data)
         self.X_points = X_points
+        self.train_frac = train_frac
+        self.val_frac = val_frac
+
+        self.split_raw_data()
         self.normalize_data()
-        self.X, self.y = self.rearrange_data()
+
+        self.X_train, self.y_train = self.rearrange_data(self.train_raw)
+        self.X_val, self.y_val = self.rearrange_data(self.val_raw)
+        self.X_test, self.y_test = self.rearrange_data(self.test_raw)
+
+    def split_raw_data(self):
+        """ Chronologically split the raw (unnormalized) time series into
+        train/val/test blocks, leaving a gap of X_points timepoints between
+        blocks so that no sliding window can straddle a split boundary. """
+        n_total = len(self.zdata)
+        gap = self.X_points
+
+        n_train = int(self.train_frac * n_total)
+        n_val = int(self.val_frac * n_total)
+
+        train_end = n_train
+        val_start = train_end + gap
+        val_end = val_start + n_val
+        test_start = val_end + gap
+
+        if test_start >= n_total:
+            raise ValueError(
+                f"Not enough timepoints ({n_total}) to create train/val/test "
+                f"splits with X_points={self.X_points}. Reduce X_points or "
+                f"provide more data."
+            )
+
+        self.train_raw = self.zdata[:train_end]
+        self.val_raw = self.zdata[val_start:val_end]
+        self.test_raw = self.zdata[test_start:]
+
+        # Each segment must be long enough to yield at least one (X, y) window.
+        for name, segment in (("train", self.train_raw), ("val", self.val_raw), ("test", self.test_raw)):
+            if len(segment) <= self.X_points:
+                raise ValueError(
+                    f"The '{name}' segment only has {len(segment)} timepoints, which is not "
+                    f"enough to build a single window with X_points={self.X_points}. Reduce "
+                    f"X_points, adjust train_frac/val_frac, or provide more data."
+                )
 
     def normalize_data(self):
-        zdatanorm = []
-        for trace in self.zdata.T:
-            denom = trace.max() - trace.min()
-            if denom == 0:
-                neuron_data = np.zeros_like(trace)
-            else:
-                neuron_data = (trace - trace.min()) / denom
-            zdatanorm.append(neuron_data)
-        self.zdata = np.array(zdatanorm).T
+        """ Fit per-neuron min/max normalization on the TRAINING segment only,
+        then apply the same transform to train/val/test. This avoids leaking
+        information about the scale/range of held-out data into training. """
+        train_min = self.train_raw.min(axis=0)
+        train_max = self.train_raw.max(axis=0)
+        denom = train_max - train_min
+        denom_safe = np.where(denom == 0, 1.0, denom)
 
-    def rearrange_data(self):
+        self.train_raw = (self.train_raw - train_min) / denom_safe
+        self.val_raw = (self.val_raw - train_min) / denom_safe
+        self.test_raw = (self.test_raw - train_min) / denom_safe
+
+        # Neurons with zero variance in training data carry no signal; force to 0.
+        zero_var_mask = denom == 0
+        if np.any(zero_var_mask):
+            self.train_raw[:, zero_var_mask] = 0.0
+            self.val_raw[:, zero_var_mask] = 0.0
+            self.test_raw[:, zero_var_mask] = 0.0
+
+    def rearrange_data(self, segment):
         X, y = [], []
-        for i in range(len(self.zdata) - self.X_points):
-            X.append(self.zdata[i:i + self.X_points])
-            y.append(self.zdata[i + self.X_points])
+        for i in range(len(segment) - self.X_points):
+            X.append(segment[i:i + self.X_points])
+            y.append(segment[i + self.X_points])
         return np.array(X), np.array(y)
 
     def __call__(self):
-        return self.X, self.y
+        return (self.X_train, self.y_train), (self.X_val, self.y_val), (self.X_test, self.y_test)
 
 
 class Education():
@@ -245,29 +308,28 @@ class Education():
             return 
 
     def get_data(self, num_data_points, train_frac=0.7, val_frac=0.15):
+        """ Build train/val/test splits.
+
+        NOTE: The split is performed CHRONOLOGICALLY on the raw time series
+        (with a buffer gap of `num_data_points` between segments) inside
+        `datawrangler`, not by randomly shuffling sliding-window samples.
+        Sliding windows are built with a stride of 1, so consecutive windows
+        overlap almost entirely; randomly shuffling them before splitting
+        (the old behavior) would put near-duplicate windows in both the
+        train and test sets, leaking test information into training and
+        producing artificially inflated performance metrics. Normalization
+        statistics are likewise fit only on the training segment (see
+        `datawrangler.normalize_data`) to avoid leaking held-out data scale
+        into the model.
+        """
         data = datawrangler(
             z_scored_neural_data=self.data,
-            X_points=num_data_points
+            X_points=num_data_points,
+            train_frac=train_frac,
+            val_frac=val_frac,
         )
 
-        X, y = data()  # clean and unambiguous
-
-        N = len(X)
-        np.random.seed(2256)
-        idx = np.random.permutation(N)
-
-        n_train = int(train_frac * N)
-        n_val = int(val_frac * N)
-
-        train_idx = idx[:n_train]
-        val_idx = idx[n_train:n_train + n_val]
-        test_idx = idx[n_train + n_val:]
-
-        X_train, y_train = X[train_idx], y[train_idx]
-        X_val, y_val = X[val_idx], y[val_idx]
-        X_test, y_test = X[test_idx], y[test_idx]
-
-        return X_train, y_train, X_val, y_val, X_test, y_test
+        return data.X_train, data.y_train, data.X_val, data.y_val, data.X_test, data.y_test
 
 
     

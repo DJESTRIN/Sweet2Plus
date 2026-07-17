@@ -181,5 +181,5 @@ class NeuralNetworkFigures():
 
             # Save the figure
             plt.savefig(output_file)
-        except:
+        except Exception:
             print('Error with plotting results.... ')

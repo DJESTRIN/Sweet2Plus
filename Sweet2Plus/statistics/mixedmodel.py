@@ -348,7 +348,7 @@ class compare_models():
                                             re_formula="1", vc_formula=model_oh['vc_formula'])
                     result_oh = current_model_oh.fit()
                     AIC_value = result_oh.aic
-                except:
+                except Exception:
                     AIC_value = np.nan
 
                 all_aic_data.append([model_oh, AIC_value])

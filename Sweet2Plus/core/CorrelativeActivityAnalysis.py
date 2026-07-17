@@ -99,7 +99,7 @@ def parallel_correlations(subject_obj_oh):
                 else:
                     neuron_labels.append(zerolabels)
 
-        except:
+        except Exception:
             # Parse traces
             ztracesoh=np.copy(subject_obj_oh.ztraces) #Make a copy of the trace data
             baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time
@@ -137,7 +137,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
                 av_corrs_data.append([[np.nan],[np.nan],[np.nan],[np.nan],np.nan])
             else:
                 av_corrs_data.append([[np.nanmean(uid[0][0],axis=0)],[np.nanmean(uid[0][1],axis=0)],[np.nanmean(uid[0][2],axis=0)],[np.nanmean(uid[0][3],axis=0)],uid[0][4]])
-        except:
+        except Exception:
             av_corrs_data.append([[np.nan],[np.nan],[np.nan],[np.nan],np.nan])
 
     #Build tall dataset
@@ -156,7 +156,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
                     else:
                         DF=pd.concat([DF,dfoh])
                     counter+=1
-            except:
+            except Exception:
                 for neuron_id,(blv,labelsoh) in enumerate(zip(bl[0],neuron_labels)):
                     # list of name, degree, score
                     try:
@@ -234,7 +234,7 @@ class pipeline(pipeline):
 
                 #Append object as attribute to list
                 self.recordings.append(self.s2p_obj)
-            except:
+            except Exception:
                 string = f'Error with loop {i}, see {imagepath} or {behpath}'
                 print(string)
                 

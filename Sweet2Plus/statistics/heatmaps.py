@@ -123,7 +123,7 @@ class heatmap(regression_coeffecient_pca_clustering):
                         neuron_aucs = [np.trapz(row_oh) for row_oh in cropped_data.T]
                         trial_mean_auc = np.array(neuron_aucs).mean()
                     
-                    except:
+                    except Exception:
                         trial_mean_auc = np.nan
 
                     auc_by_trial.append(trial_mean_auc) # Collects each trial auc

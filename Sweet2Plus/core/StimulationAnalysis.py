@@ -33,7 +33,7 @@ class load_serial_output(load_serial_output):
                 if line.shape[0]!=3: #Hard coded shape in, remove later
                     continue
                 alldata.append(line) #Append to empty list
-            except:
+            except Exception:
                 continue
             
         alldata=np.asarray(alldata) #Reshape list into numpy array

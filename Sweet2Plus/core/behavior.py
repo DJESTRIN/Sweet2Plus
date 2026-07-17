@@ -54,7 +54,7 @@ class load_serial_output():
                         if line.shape[0]!=9: #Hard coded shape in, remove later
                             continue
                         alldata.append(line) #Append to empty list
-                    except:
+                    except Exception:
                         continue
             
                 alldata=np.asarray(alldata) #Reshape list into numpy array
@@ -70,7 +70,7 @@ class load_serial_output():
                         if line.shape[0]!=3: #Hard coded shape in, remove later
                             continue
                         alldata.append(line) #Append to empty list
-                    except:
+                    except Exception:
                         continue
             
                 alldata=np.asarray(alldata) #Reshape list into numpy array
@@ -97,7 +97,7 @@ class load_serial_output():
             stops=np.where(imagecount==stops)
             try:
                 stops=[int(stops[0][-1])]
-            except:
+            except Exception:
                 raise Exception("Sync File has no stops, suggesting recording error")
     
         if len(stops)>1:
@@ -147,7 +147,7 @@ class load_serial_output():
                     row_number=np.where(self.sync[:,1]==start_time)[0][0]
                     image_time=self.sync[row_number,0]
                     all_ts.append(image_time)
-                except:
+                except Exception:
                     continue
             self.all_evts_imagetime.append(all_ts)
 

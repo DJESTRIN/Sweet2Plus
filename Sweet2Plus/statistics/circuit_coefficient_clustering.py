@@ -276,7 +276,7 @@ class circuit_regression:
         self.beta_results_filtered = df_final
         self.beta_results_filtered.to_csv(os.path.join(self.drop_directory,'beta_filtered.csv'))
 
-        for (name,i) in zip(['water','peanut','vanilla','TMT'],range(4)):
+        for (name,i) in zip(['vanilla','peanut','water','TMT'],range(4)):
             df = self.beta_results_filtered
             neurons_behavior0 = df[df['Behavior_num'] == i]
             total_neurons = neurons_behavior0['nuid'].nunique()
@@ -344,7 +344,7 @@ class circuit_regression:
         n_timepoints = all_times_mean.shape[1]
         x = np.arange(n_timepoints) - 10  
         colors = ['blue', 'green', 'red', 'purple']
-        labels = ['Water', 'Peanut', 'Vanilla', 'TMT']
+        labels = ['Vanilla', 'Peanut', 'Water', 'TMT']
 
         plt.figure(figsize=(10, 5))
 
@@ -369,9 +369,9 @@ class circuit_regression:
         df = self.beta_results_filtered
         sig_neuron_sets = {}
         behavior_map = {
-            0: 'water',
+            0: 'vanilla',
             1: 'peanut',
-            2: 'vanilla',
+            2: 'water',
             3: 'TMT'
         }
         for behavior_num, name in behavior_map.items():
@@ -387,9 +387,9 @@ class circuit_regression:
 
         # Set up behavior labels
         behavior_map = {
-            0: 'water',
+            0: 'vanilla',
             1: 'peanut',
-            2: 'vanilla',
+            2: 'water',
             3: 'TMT'
         }
 
@@ -433,7 +433,7 @@ class circuit_regression:
 
         df = self.beta_results_filtered.copy()
         # Behavior mapping
-        behavior_map = {0: 'water', 1: 'peanut', 2: 'vanilla', 3: 'TMT'}
+        behavior_map = {0: 'vanilla', 1: 'peanut', 2: 'water', 3: 'TMT'}
 
         groups = df['group'].unique()
         days = sorted(df['day'].unique())
@@ -627,7 +627,7 @@ class circuit_regression:
                 try:
                     stacked = np.stack(curvesoh, axis=0)
                     average_trace_per_neuron = np.mean(stacked, axis=0)
-                except:
+                except Exception:
                     stacked = np.stack(curvesoh[:-1], axis=0)
                     average_trace_per_neuron = np.mean(stacked, axis=0)
                 all_curves.append(average_trace_per_neuron)

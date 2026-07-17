@@ -194,7 +194,7 @@ class GUI(recordport):
                     soh.port=portname
                     soh.open()
                     self.sSeriallist.append(soh)
-                except:
+                except Exception:
                     continue
 
             #set up label
@@ -291,7 +291,9 @@ if __name__=='__main__':
         parser.add_argument("--working_dir",required=True,type=str)
         args = parser.parse_args()
         workingd=args.working_dir
-    except:
+    except SystemExit:
+        # argparse raises SystemExit (not a plain Exception) when a
+        # required argument is missing; fall back to a default directory.
         workingd=os.path.join(os.getcwd(),'run_behavior')
 
     goh=GUI(workingd,True)

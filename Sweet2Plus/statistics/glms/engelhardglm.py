@@ -250,7 +250,7 @@ class engelhardglm(object):
             # Attempt to use REML first
             try:
                 result = model.fit(reml=True)
-            except:
+            except Exception:
                 result = model.fit(reml=False) 
             predicted = result.predict(df_oh.drop(columns=['activity','trial']))
 

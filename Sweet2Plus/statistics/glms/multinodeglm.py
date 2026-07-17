@@ -75,7 +75,7 @@ class multinodeglm():
                             try:
                                 print(f'File being deleted {item_path}')
                                 os.remove(item_path) 
-                            except:
+                            except Exception:
                                 print(f'Not found {item_path}')
 
         else:

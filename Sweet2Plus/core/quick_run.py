@@ -59,7 +59,7 @@ def correlations(objoh):
             else:
                 neuron_labels.append('NotTMT_activated')
 
-    except:
+    except Exception:
         # Parse traces
         ztracesoh=np.copy(objoh.ztraces) #Make a copy of the trace data
         baselineztracesoh=ztracesoh[:,:int(start_time)] #Crop trace data 0 --> start time

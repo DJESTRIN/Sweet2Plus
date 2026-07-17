@@ -28,12 +28,24 @@ import numpy as np
 def cli_parser():
     parser=argparse.ArgumentParser()
     parser.add_argument('--input_directory',type=str,help='Parent directory where g zipped data is located')
+    parser.add_argument('--output_file',type=str,default='engelhard_stimulus_summary.csv',
+                         help='Where the per-neuron per-stimulus summary CSV is saved')
+    parser.add_argument('--number_events',type=int,default=4,help='Number of distinct stimulus/odor events fit by the GLM')
+    parser.add_argument('--number_bases_spline',type=int,default=50,help='Number of B-spline basis functions per event used by engelhardglm')
     args=parser.parse_args()
-    return args.input_directory
+    return args.input_directory, args.output_file, args.number_events, args.number_bases_spline
+
+# Canonical odor order established in Sweet2Plus/core/behavior.py (quick_timestamps' `trials` list):
+# index 0=Vanilla, 1=PeanutButter, 2=Water, 3=FoxUrine(TMT). This must match circuit_coefficient_clustering.py's
+# behavior_map so that engelhardglm's per-stimulus summary can be joined against circuit_regression's beta_filtered.csv.
+DEFAULT_STIMULUS_NAMES = ['vanilla', 'peanut', 'water', 'TMT']
 
 class collect():
-    def __init__(self,input_path):
+    def __init__(self,input_path, number_events=4, number_bases_spline=50, stimulus_names=None):
         self.input_path = input_path
+        self.number_events = number_events
+        self.number_bases_spline = number_bases_spline
+        self.stimulus_names = stimulus_names if stimulus_names is not None else DEFAULT_STIMULUS_NAMES
 
     def load_results(self, search_string = None):
         """ Results are save to temp pickle files to lower use of RAM during fit. 
@@ -50,6 +62,10 @@ class collect():
             with gzip.open(filename, "rb") as f:
                 information,_ = (os.path.basename(filename)).split('.pk')
                 day,cage,mouse,group,neuronid = information.split('_')
+                # Filenames are written as f'D{day}_C{cage}_M{mouse}_G{group}_N{neuron_number}' in
+                # engelhardglm.fit(); strip the single-letter prefix so values match neuron_info's
+                # raw day/cage/mouse/group/neuron values used elsewhere (e.g. circuit_regression's nuid).
+                day, cage, mouse, group, neuronid = day[1:], cage[1:], mouse[1:], group[1:], neuronid[1:]
                 self.model_results.append([pickle.load(f),day,cage,mouse,group,neuronid])
     
     def generate_dataframe(self):
@@ -87,63 +103,90 @@ class collect():
 
         return pd.concat(rows, ignore_index=True)
 
+    def generate_stimulus_summary(self):
+        """ Collapse each neuron's per-spline-basis GLM betas into a single encoding-strength weight
+        (and empirical p-value) per stimulus, matching circuit_regression's decoder output granularity
+        so the two models' neuron/stimulus weights can be directly compared.
+
+        For each neuron:
+          - The real-data betas (excluding the intercept added by sm.add_constant) are split into
+            `number_events` contiguous blocks of `number_bases_spline` spline-basis coefficients each,
+            one block per stimulus (assumes engelhardglm was fit with interactions=False, the default).
+          - The summary weight per stimulus is max(|beta|) across that stimulus's spline basis, i.e.
+            the strongest single-timepoint encoding effect for that odor.
+          - The empirical p-value compares that real summary weight against the same summary statistic
+            computed from the circular-lag permutation fits (the null distribution), following the
+            circular-lag permutation procedure already run in engelhardglm.linearmodel.
+
+        Returns a tidy dataframe with one row per neuron per stimulus:
+        nuid, day, cage, mouse, group, neuronid, stimulus, stimulus_idx, weight, p_value, sig.
+        `nuid` is built as cage_mouse_day_neuronid to match circuit_regression's beta_results['nuid'].
+        """
+        n_expected = self.number_events * self.number_bases_spline
+        rows = []
+
+        for neuron_data in self.model_results:
+            data, day, cage, mouse, group, neuronid = neuron_data
+
+            real_entry = next((j for j in data if j.get('type') == 'real'), None)
+            if real_entry is None:
+                continue
+
+            real_betas = np.asarray(real_entry['betas'])[1:]  # drop intercept
+            if real_betas.shape[0] != n_expected:
+                print(f"Skipping neuron {neuronid} (day={day}, cage={cage}, mouse={mouse}): "
+                      f"expected {n_expected} non-intercept betas (number_events x number_bases_spline), "
+                      f"got {real_betas.shape[0]}. Check number_events/number_bases_spline or interactions setting.")
+                continue
+
+            real_groups = np.split(real_betas, self.number_events)
+            real_summary = [np.max(np.abs(g)) for g in real_groups]
+
+            perm_summaries = []
+            for j in data:
+                perm_type = j.get('type')
+                if not (isinstance(perm_type, str) and perm_type.startswith('permutation')):
+                    continue
+                perm_betas = np.asarray(j['betas'])[1:]
+                if perm_betas.shape[0] != n_expected:
+                    continue
+                perm_groups = np.split(perm_betas, self.number_events)
+                perm_summaries.append([np.max(np.abs(g)) for g in perm_groups])
+            perm_summaries = np.array(perm_summaries) if perm_summaries else np.zeros((0, self.number_events))
+
+            nuid = f"{cage}_{mouse}_{day}_{neuronid}"
+            for ev_idx in range(self.number_events):
+                stim_name = self.stimulus_names[ev_idx] if ev_idx < len(self.stimulus_names) else f'Behavior_{ev_idx}'
+                weight = real_summary[ev_idx]
+
+                if perm_summaries.shape[0] > 0:
+                    null_dist = perm_summaries[:, ev_idx]
+                    # Empirical (permutation) p-value: fraction of null summaries at least as extreme as observed.
+                    p_value = (np.sum(null_dist >= weight) + 1) / (len(null_dist) + 1)
+                else:
+                    p_value = np.nan
+
+                rows.append({
+                    'nuid': nuid,
+                    'day': day, 'cage': cage, 'mouse': mouse, 'group': group, 'neuronid': neuronid,
+                    'stimulus': stim_name, 'stimulus_idx': ev_idx,
+                    'weight': weight, 'p_value': p_value,
+                    'sig': int(p_value < 0.05) if not np.isnan(p_value) else 0,
+                })
+
+        return pd.DataFrame(rows)
+
+    def save_stimulus_summary(self, output_path='engelhard_stimulus_summary.csv'):
+        df = self.generate_stimulus_summary()
+        df.to_csv(output_path, index=False)
+        return df
+
 def proc():
-    input_directory = cli_parser()
-    collection_obj = collect(input_path=input_directory)
+    input_directory, output_file, number_events, number_bases_spline = cli_parser()
+    collection_obj = collect(input_path=input_directory, number_events=number_events, number_bases_spline=number_bases_spline)
     collection_obj.load_results()
-    dataframe = collection_obj.generate_dataframe()
+    summary_df = collection_obj.save_stimulus_summary(output_path=output_file)
+    print(f"Saved per-neuron per-stimulus GLM summary ({len(summary_df)} rows) to {output_file}")
 
 if __name__=='__main__':
     proc()
-
-
-
-# def betaweight_collection(self):
-    #     # generate a final long dataframe
-    #     # NeuronID 
-
-    #     # Place holder for where we grab information regarding each neuron's beta weight and put into a dataset
-    #     print('getting_beta_weights')
-    #     new_list = []
-    #     grouped_neurons = defaultdict(list)
-    #     for neuron in self.linearmodel_results:
-    #         info_tuple = tuple(neuron['info'])  # day, cage, mouse, group
-    #         grouped_neurons[info_tuple].append(neuron)
-
-    #     for info_tuple, neurons in grouped_neurons.items():
-    #         for neuron in neurons:
-    #             betas = neuron['betas']  # numpy array of shape (202,)
-    #             betas_trimmed = betas[1:-1]  # now length 200
-    #             groups = np.split(betas_trimmed, 4)
-    #             max_abs_betas = [np.max(np.abs(g)) for g in groups]
-    #             new_list.append({
-    #                 'max_abs_betas': max_abs_betas,
-    #                 'type': neuron['type']
-    #             })
-
-    #     # 
-    #     os.makedirs(self.dropdir, exist_ok=True)
-
-    #     # For each of 4 events
-    #     for event_idx in range(4):
-    #         plt.figure(figsize=(6,4))
-            
-    #         # permutation values
-    #         perm_values = [n['max_abs_betas'][event_idx] 
-    #                     for n in new_list if 'permutation' in n['type']]
-    #         plt.hist(perm_values, bins=30, alpha=0.7, color='blue', label='Permutation')
-            
-    #         # real values
-    #         real_values = [n['max_abs_betas'][event_idx] 
-    #                     for n in new_list if 'real' in n['type']]
-    #         plt.scatter(real_values, [0]*len(real_values), color='red', zorder=10, label='Real')
-            
-    #         plt.title(f'Event {event_idx+1} Max Abs Beta')
-    #         plt.xlabel('Max Abs Beta')
-    #         plt.ylabel('Count')
-    #         plt.legend()
-            
-    #         # Save figure
-    #         save_path = os.path.join(self.dropdir, f'event{event_idx+1}_max_abs_beta.png')
-    #         plt.savefig(save_path)
-    #         plt.close()

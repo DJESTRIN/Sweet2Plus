@@ -112,7 +112,7 @@ class quickGUI(manual_classification):
                 self.show_vid()
                 self.root.mainloop()
                 self.save_data()
-            except:
+            except Exception:
                 self.save_data()
             #Update trace and stat
             self.traces = self.traces[np.where(self.true_classification==1)[0]]
