@@ -14,7 +14,7 @@ Date: 02-27-2025
 # Import dependencies
 import argparse
 from Sweet2Plus.core.SaveLoadObjs import LoadObj
-from Sweet2Plus.SynapticWeightModeling.NetworkArchitectures import SingleSampleNN, weighted_mse_loss
+from Sweet2Plus.SynapticWeightModeling.NetworkArchitectures import SharedTransformerNN, weighted_mse_loss
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -29,6 +29,7 @@ import scipy
 import random
 import json 
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+from Sweet2Plus.utils.parallel_helper import get_default_n_jobs
 
 
 # Custom functions and classes 
@@ -140,7 +141,7 @@ class Education():
     def __init__(self, data, model=[], num_data_points=300, epochs=100, print_training=True,
                  print_training_epoch=1, plot_neurons=False, run_study=False, device='cuda', 
                  study_trials = 50, learning_rate=0.001, weight_decay = 0, default_hidden = 64, 
-                 default_layers = 3, drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs',drop_filename='filename'):
+                 default_layers = 3, default_dropout = 0.1, drop_directory=r'C:\Users\listo\Sweet2Plus\my_figs',drop_filename='filename'):
         # Set initial attributes
         self.data = data
         self.model = model
@@ -158,6 +159,7 @@ class Education():
         self.weight_decay = weight_decay
         self.hidden_suggested = default_hidden 
         self.layers_suggested = default_layers
+        self.dropout_suggested = default_dropout
         self.drop_filename = drop_filename
 
     def __call__(self):
@@ -174,6 +176,7 @@ class Education():
                     self.weight_decay = best_hyperparameters['weight_decay']
                     self.hidden_suggested = best_hyperparameters['hidden_suggested']
                     self.layers_suggested = best_hyperparameters['layers_suggested']
+                    self.dropout_suggested = best_hyperparameters.get('dropout_suggested', self.dropout_suggested)
                     self.num_data_points = best_hyperparameters['num_data_points']
                     self.run_study = False
 
@@ -197,11 +200,12 @@ class Education():
                 train_loader, val_loader, test_loader = self.convert_to_torch_loader(X_train, y_train, X_val, y_val, X_test, y_test)
 
                 # Build model           
-                model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
+                model_oh = SharedTransformerNN(sequence_length = np.array(X_train).shape[1], 
                                     hidden_size = self.hidden_suggested, 
                                     num_layers = self.layers_suggested, 
                                     num_neurons = np.array(X_train).shape[2], 
-                                    output_size = np.array(X_train).shape[2])
+                                    output_size = np.array(X_train).shape[2],
+                                    dropout = self.dropout_suggested)
 
                 print("Setting up loss function, optimizer and scheduler ... ")
                 self.criterion = nn.MSELoss()
@@ -239,11 +243,12 @@ class Education():
 
 
                 # Build model            
-                model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
+                model_oh = SharedTransformerNN(sequence_length = np.array(X_train).shape[1], 
                                     hidden_size = self.hidden_suggested, 
                                     num_layers = self.layers_suggested, 
                                     num_neurons = np.array(X_train).shape[2], 
-                                    output_size = np.array(X_train).shape[2])
+                                    output_size = np.array(X_train).shape[2],
+                                    dropout = self.dropout_suggested)
                 
                 # Set criterion and loss
                 criterion_oh = nn.MSELoss()
@@ -285,6 +290,7 @@ class Education():
                     self.weight_decay = best_hyperparameters['weight_decay']
                     self.hidden_suggested = best_hyperparameters['hidden_suggested']
                     self.layers_suggested = best_hyperparameters['layers_suggested']
+                    self.dropout_suggested = best_hyperparameters.get('dropout_suggested', self.dropout_suggested)
                     self.num_data_points = best_hyperparameters['num_data_points']
                     self.run_study = False
 
@@ -383,6 +389,11 @@ class Education():
 
                 # Backprop 
                 loss.backward()
+                # Gradient clipping: standard practice for Transformer/attention
+                # models to prevent occasional large gradients from destabilizing
+                # training (LSTMs are comparatively more forgiving, but this is a
+                # safe no-op for them too).
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
             
             # Get current lr
@@ -525,6 +536,7 @@ class Education():
             num_data_points = trial.suggest_int('num_data_points', 2, 300)
             hidden_suggested = trial.suggest_int('hidden_suggested', 4, 128)
             layers_suggested = trial.suggest_int('layers_suggested', 1, 5)
+            dropout_suggested = trial.suggest_float('dropout_suggested', 0.0, 0.3)
 
             # Set plotting to false for study, because too many results and waste of time
             self.plot_neurons = False
@@ -534,11 +546,12 @@ class Education():
             train_loader, val_loader, test_loader = self.convert_to_torch_loader(X_train, y_train, X_val, y_val, X_test, y_test)
             
             # Build model
-            model_oh = SingleSampleNN(sequence_length = np.array(X_train).shape[1], 
+            model_oh = SharedTransformerNN(sequence_length = np.array(X_train).shape[1], 
                                   hidden_size = hidden_suggested, 
                                   num_layers = layers_suggested, 
                                   num_neurons = np.array(X_train).shape[2], 
-                                  output_size = np.array(X_train).shape[2])
+                                  output_size = np.array(X_train).shape[2],
+                                  dropout = dropout_suggested)
 
             # Set up criterion and optimizers
             criterion_oh = nn.MSELoss()
@@ -555,13 +568,14 @@ class Education():
 
         # Run Optuna study
         self.study = optuna.create_study(direction='minimize')
-        self.study.optimize(objective, n_trials=self.study_trials, n_jobs=3)
+        self.study.optimize(objective, n_trials=self.study_trials, n_jobs=get_default_n_jobs())
 
         best_hyperparameters = self.study.best_params
         self.learning_rate = best_hyperparameters['learning_rate']
         self.weight_decay = best_hyperparameters['weight_decay']
         self.hidden_suggested = best_hyperparameters['hidden_suggested']
         self.layers_suggested = best_hyperparameters['layers_suggested']
+        self.dropout_suggested = best_hyperparameters['dropout_suggested']
         self.num_data_points = best_hyperparameters['num_data_points']
 
         # Save hyperparameter data to a file
@@ -569,6 +583,7 @@ class Education():
                                 "weight_decay": self.weight_decay,
                                 "hidden_suggested": self.hidden_suggested,
                                 "layers_suggested": self.layers_suggested,
+                                "dropout_suggested": self.dropout_suggested,
                                 "num_data_points":self.num_data_points}
 
         with open(os.path.join(self.drop_directory,"best_hyperparameters.json"), "w") as f:

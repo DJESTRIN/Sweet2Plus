@@ -39,12 +39,13 @@ class currate_data(object):
         self.tsoffset_frames = tsoffset_frames # The number of frames from odor onset to offset in 2P recording. 
     
     def __call__(self):
-        self.trans_act, self.trans_ts, self.trans_info = self.reshape()
+        self.trans_act, self.trans_ts, self.trans_info, self.trans_local_id = self.reshape()
 
     def reshape(self):
         # Loop over activity list (which is activity for all neurons)
         trans_act = []
         trans_ts = []
+        trans_local_id = []  # neuron index local to its originating recording (0..n_neurons_in_recording-1)
         for recording,timestamps in tqdm.tqdm(zip(self.act,self.ts),total=len(self.act)):
 
             # Convert timestamps
@@ -59,11 +60,12 @@ class currate_data(object):
                 indices = indices.flatten().astype(int)    
                 trans_timestamps[indices,jj] = 1
 
-            for neuron in recording:
+            for local_idx, neuron in enumerate(recording):
                 trans_act.append(neuron)
                 trans_ts.append(trans_timestamps)
+                trans_local_id.append(local_idx)
 
-        return  trans_act, trans_ts, self.info
+        return  trans_act, trans_ts, self.info, trans_local_id
 
     def save(self):
         # Save collected data into a pickle file
@@ -71,7 +73,8 @@ class currate_data(object):
         attributes = {
             "trans_act.pkl": self.trans_act,
             "trans_ts.pkl": self.trans_ts,
-            "trans_info.pkl": self.trans_info,}
+            "trans_info.pkl": self.trans_info,
+            "trans_local_id.pkl": self.trans_local_id,}
 
         for filename, data in attributes.items():
             filepath = os.path.join(self.dropdirectory, filename)
@@ -83,7 +86,8 @@ class currate_data(object):
         attributes = {
             "trans_act.pkl": "trans_act", # replaced for deconvolved trace
             "trans_ts.pkl": "trans_ts",
-            "trans_info.pkl": "trans_info",}
+            "trans_info.pkl": "trans_info",
+            "trans_local_id.pkl": "trans_local_id",}
 
         # Load each file and assign as attribute
         for filename, attr_name in attributes.items():
@@ -95,12 +99,17 @@ class engelhardglm(object):
     def __init__(self, activity, timestamps, info, dropdir, post_event_frames = 20, model_type = 'glm', selected_family_glm = None, 
                  scaling_parameter = 1, spline_duration=483, number_bases_spline=50, polynom_degree=2, batch_size=20, interactions = False, 
                  graphics=False, graphing_rate = 10, auto_regressor=False, delete_previous_results = True, small_sample=False, 
-                 start_neuron=None, stop_neuron=None):
+                 start_neuron=None, stop_neuron=None, local_neuron_id=None):
         # General data attributes
         self.activity = activity
         self.timestamps = timestamps
         self.info = info
         self.dropdir = dropdir
+        # Per-recording-local neuron index (0..n_neurons_in_recording-1), matching the 'Neuron' column
+        # convention used by circuit_regression (Sweet2Plus/statistics/circuit_coefficient_clustering.py),
+        # so that output filenames/nuids from both models identify the same physical neuron. If not
+        # provided, falls back to the flat/global index across all recordings (previous behavior).
+        self.local_neuron_id = local_neuron_id
 
         # Data parameters
         self.post_event_frames = post_event_frames # The number of frames to be included after an event onset for fitting.
@@ -320,11 +329,18 @@ class engelhardglm(object):
         assert self.activity.shape[0] == self.timestamps.shape[0] == self.info.shape[0], \
             "Error, activity, timestamps and info do not match in shape."
 
+        # Per-recording-local neuron id used to label outputs (see __init__ docstring note); falls back
+        # to the flat/global index across all recordings if not supplied.
+        if self.local_neuron_id is not None:
+            self.local_neuron_id = np.array(self.local_neuron_id)
+            assert self.local_neuron_id.shape[0] == self.activity.shape[0], \
+                "Error, local_neuron_id does not match activity in length."
+
         # Takes event data and makes a set of B-splines
         self.binarytospline()
 
         # Nested function for processing neurons in parallel
-        def process_single_neuron(dropdirectory, counter, activity_oh, ts_oh, info_oh, neuron_number,kernels, scaling_parameter, graphics, 
+        def process_single_neuron(dropdirectory, counter, activity_oh, ts_oh, info_oh, neuron_number, output_neuron_id, kernels, scaling_parameter, graphics, 
                                   graphics_path_metrics,post_event_frames,linearmodel_func, include_interactions_func):
             
             # Save the results to a temp directory inside of dropdirectory
@@ -395,7 +411,7 @@ class engelhardglm(object):
             
             # Set filename and save model's results
             os.makedirs(dropdirectory+r'/temp/',exist_ok=True) # make sure directory is made
-            filename = dropdirectory+r'/temp/' + f'D{info_oh[0]}_C{info_oh[1]}_M{info_oh[2]}_G{info_oh[3]}_N{str(neuron_number)}.pkl.gz'
+            filename = dropdirectory+r'/temp/' + f'D{info_oh[0]}_C{info_oh[1]}_M{info_oh[2]}_G{info_oh[3]}_N{str(output_neuron_id)}.pkl.gz'
             save_temp_results(filename,model_result)
             return 
 
@@ -404,14 +420,15 @@ class engelhardglm(object):
         activity_subset = self.activity[selected_trials]
         timestamps_subset = self.timestamps[selected_trials]
         info_subset = self.info[selected_trials]
+        output_id_subset = self.local_neuron_id[selected_trials] if self.local_neuron_id is not None else selected_trials
 
         Parallel(n_jobs=-1, backend="loky", verbose=10)(delayed(process_single_neuron)
-                                                                  (self.dropdir, counter, act, ts, info,neuron_number,
+                                                                  (self.dropdir, counter, act, ts, info,neuron_number, output_id,
                                                                    self.kernels, self.scaling_parameter,
                                                                    self.graphics, self.graphics_path_metrics,
                                                                    self.post_event_frames,
                                                                    self.linearmodel, self.include_interactions)
-                                                                   for counter, (act, ts, info, neuron_number) in enumerate(zip(activity_subset, timestamps_subset, info_subset, selected_trials)))
+                                                                   for counter, (act, ts, info, neuron_number, output_id) in enumerate(zip(activity_subset, timestamps_subset, info_subset, selected_trials, output_id_subset)))
 
     def _modeldiagnostics(self, glm_result, observed, predictors, neuron_id=None, neu_number=None, predicted=None):
         # Compute predicted values if not provided
@@ -516,12 +533,14 @@ def proc():
                               dropdir=drop_directory, 
                               graphics=True,
                               start_neuron=start_neuron_indx,
-                              stop_neuron=stop_neuron_indx)
+                              stop_neuron=stop_neuron_indx,
+                              local_neuron_id=dataset.trans_local_id)
         glmobj()
     
     else:
         print('Running all neurons')
-        glmobj = engelhardglm(activity=dataset.trans_act,timestamps=dataset.trans_ts, info=dataset.trans_info, dropdir=drop_directory, graphics=True)
+        glmobj = engelhardglm(activity=dataset.trans_act,timestamps=dataset.trans_ts, info=dataset.trans_info,
+                               dropdir=drop_directory, graphics=True, local_neuron_id=dataset.trans_local_id)
         glmobj()
     
     #glmobj._optimize_hyper_params() # Run optimization to determine hyperparameters for model 

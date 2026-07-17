@@ -119,8 +119,9 @@ class collect():
             circular-lag permutation procedure already run in engelhardglm.linearmodel.
 
         Returns a tidy dataframe with one row per neuron per stimulus:
-        nuid, day, cage, mouse, group, neuronid, stimulus, stimulus_idx, weight, p_value, sig.
+        nuid, day, cage, mouse, group, neuronid, stimulus, stimulus_idx, weight, signed_weight, p_value, sig.
         `nuid` is built as cage_mouse_day_neuronid to match circuit_regression's beta_results['nuid'].
+        `weight` is unsigned (max |beta|); `signed_weight` retains sign for direction comparisons.
         """
         n_expected = self.number_events * self.number_bases_spline
         rows = []
@@ -132,22 +133,30 @@ class collect():
             if real_entry is None:
                 continue
 
-            real_betas = np.asarray(real_entry['betas'])[1:]  # drop intercept
+            # engelhardglm.include_interactions() always prepends a redundant constant column via
+            # sm.add_constant(X) (named "X0" in the formula), on top of which smf.glm's formula
+            # interface ("Y ~ X0 + X1 + ...") adds its *own* "Intercept" term. So result.params is
+            # ordered [Intercept, X0(const), X1, X2, ...] -- drop both leading terms to reach the
+            # actual number_events x number_bases_spline spline-basis coefficients.
+            real_betas = np.asarray(real_entry['betas'])[2:]
             if real_betas.shape[0] != n_expected:
                 print(f"Skipping neuron {neuronid} (day={day}, cage={cage}, mouse={mouse}): "
-                      f"expected {n_expected} non-intercept betas (number_events x number_bases_spline), "
+                      f"expected {n_expected} spline-basis betas (number_events x number_bases_spline), "
                       f"got {real_betas.shape[0]}. Check number_events/number_bases_spline or interactions setting.")
                 continue
 
             real_groups = np.split(real_betas, self.number_events)
             real_summary = [np.max(np.abs(g)) for g in real_groups]
+            # Signed value at the spline basis with the largest magnitude, kept for sign/direction
+            # comparisons against circuit_regression's signed Mean_Beta (max(|beta|) itself has no sign).
+            real_signed = [g[np.argmax(np.abs(g))] for g in real_groups]
 
             perm_summaries = []
             for j in data:
                 perm_type = j.get('type')
                 if not (isinstance(perm_type, str) and perm_type.startswith('permutation')):
                     continue
-                perm_betas = np.asarray(j['betas'])[1:]
+                perm_betas = np.asarray(j['betas'])[2:]
                 if perm_betas.shape[0] != n_expected:
                     continue
                 perm_groups = np.split(perm_betas, self.number_events)
@@ -170,7 +179,7 @@ class collect():
                     'nuid': nuid,
                     'day': day, 'cage': cage, 'mouse': mouse, 'group': group, 'neuronid': neuronid,
                     'stimulus': stim_name, 'stimulus_idx': ev_idx,
-                    'weight': weight, 'p_value': p_value,
+                    'weight': weight, 'signed_weight': real_signed[ev_idx], 'p_value': p_value,
                     'sig': int(p_value < 0.05) if not np.isnan(p_value) else 0,
                 })
 

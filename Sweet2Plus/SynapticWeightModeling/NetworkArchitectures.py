@@ -79,6 +79,176 @@ class SingleSampleNN(nn.Module):
         x = self.final_fc(x)  # Final output shape: (batch, output_size)
         return x
 
+class ChannelIndependentTemporalEncoder(nn.Module):
+    """
+    Encodes each neuron's own past-activity window into a single scalar summary
+    using a SHARED Transformer backbone with lightweight PER-NEURON conditioning
+    ("channel independence" + per-channel identity), instead of giving every
+    neuron a fully separate encoder the way `SingleSampleLSTMLayer` (one
+    independent LSTM per neuron) did.
+
+    Design rationale -- this matters biologically, not just statistically:
+      * The original one-LSTM-per-neuron design exists for a good reason:
+        individual neurons genuinely differ in their own temporal dynamics
+        (calcium-indicator decay kinetics, adaptation/burst statistics, noise
+        levels), so a neuron's own history predicts its own future through a
+        neuron-specific temporal filter. Forcing every neuron through an
+        IDENTICAL encoder with no notion of neuron identity would erase that
+        heterogeneity, which would be a real modeling regression, not just a
+        parameter-count improvement.
+      * At the same time, a fully private LSTM per neuron has a very large
+        number of free parameters relative to the (comparatively few) training
+        windows available per neuron, and cannot share statistical strength
+        across neurons -- making it easy to memorize spurious history rather
+        than learn genuine temporal dynamics.
+      * This class resolves that tension: the bulk of the network (the
+        self-attention Transformer backbone) is SHARED across neurons for
+        sample-efficiency and regularization, while two small, cheap
+        per-neuron conditioning mechanisms restore neuron-specific
+        specialization at a fraction of the parameter cost of a full private
+        encoder:
+          (1) a learnable per-neuron identity embedding added to the encoder
+              input (so attention can key off "which neuron is this"), and
+          (2) a per-neuron FiLM-style affine modulation (scale + shift; Perez
+              et al. 2018) applied to the pooled temporal summary before the
+              final readout.
+        Total added parameters are `~num_neurons * hidden_size * 3` (identity
+        embedding + FiLM gamma/beta) -- e.g. for hidden_size=64 and 339
+        neurons that's ~65k parameters, versus millions for 339 independent
+        2-layer LSTMs -- so neurons still retain individualized processing
+        without the previous design's overfitting risk.
+      * This "channel independence + shared backbone" pattern follows the
+        PatchTST architecture (Nie et al., "A Time Series is Worth 64 Words:
+        Long-term Forecasting with Transformers", ICLR 2023), extended here
+        with per-channel FiLM conditioning (a standard, cheap way to restore
+        channel-specific behavior to an otherwise shared backbone).
+    """
+    def __init__(self, sequence_length, num_neurons, hidden_size=32, num_layers=2, nhead=4, dropout=0.1):
+        super(ChannelIndependentTemporalEncoder, self).__init__()
+
+        # nhead must evenly divide hidden_size (the Transformer's d_model).
+        # Automatically fall back to a smaller, compatible head count instead
+        # of raising, since hidden_size is often chosen by hyperparameter search.
+        while hidden_size % nhead != 0 and nhead > 1:
+            nhead -= 1
+
+        self.sequence_length = sequence_length
+        self.num_neurons = num_neurons
+        self.hidden_size = hidden_size
+
+        # Project each scalar timepoint into the encoder's hidden dimension.
+        self.input_proj = nn.Linear(1, hidden_size)
+
+        # Learned positional embedding so the (permutation-invariant) attention
+        # mechanism can tell timepoints apart.
+        self.pos_embedding = nn.Parameter(torch.zeros(1, sequence_length, hidden_size))
+        nn.init.trunc_normal_(self.pos_embedding, std=0.02)
+
+        # Learned per-neuron identity embedding, added to the input at every
+        # timestep. Lets the shared attention weights condition on which
+        # neuron is currently being processed (restores neuron-specific
+        # specialization without a full per-neuron encoder).
+        self.neuron_embedding = nn.Parameter(torch.zeros(num_neurons, hidden_size))
+        nn.init.trunc_normal_(self.neuron_embedding, std=0.02)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=hidden_size,
+            nhead=nhead,
+            dim_feedforward=max(hidden_size * 2, 8),
+            dropout=dropout,
+            activation='gelu',
+            batch_first=True,
+        )
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=max(num_layers, 1))
+        self.norm = nn.LayerNorm(hidden_size)
+        self.input_dropout = nn.Dropout(dropout)
+
+        # Per-neuron FiLM (feature-wise linear modulation) applied to the
+        # pooled temporal summary: out = pooled * (1 + gamma) + beta.
+        # Initialized to the identity transform (gamma=0, beta=0) so training
+        # starts equivalent to the pure shared model and only learns
+        # neuron-specific deviations as needed.
+        self.film_gamma = nn.Parameter(torch.zeros(num_neurons, hidden_size))
+        self.film_beta = nn.Parameter(torch.zeros(num_neurons, hidden_size))
+
+        self.readout = nn.Linear(hidden_size, 1)
+
+    def forward(self, x):
+        # x: (batch, num_neurons, sequence_length) -- one univariate trace per neuron
+        batch, num_neurons, seq_len = x.shape
+
+        # Fold neurons into the batch dimension so that the SAME encoder
+        # weights are applied independently to every neuron's own trace.
+        # Row order after reshape is neuron-fastest: row = b * num_neurons + n.
+        x = x.reshape(batch * num_neurons, seq_len, 1)
+        neuron_ids = torch.arange(num_neurons, device=x.device).repeat(batch)  # (batch*num_neurons,)
+
+        x = self.input_proj(x) + self.pos_embedding[:, :seq_len, :]
+        x = x + self.neuron_embedding[neuron_ids].unsqueeze(1)  # broadcast identity across time
+        x = self.input_dropout(x)
+        x = self.encoder(x)
+        x = self.norm(x)
+
+        # Mean-pool across time. This is more stable than only reading out the
+        # final timestep (as the old LSTM design did) because self-attention
+        # already mixes information across all timesteps, so every position
+        # in the sequence carries a comparably informative representation.
+        pooled = x.mean(dim=1)
+
+        # Per-neuron FiLM modulation restores neuron-specific specialization
+        # to the (otherwise shared) pooled representation.
+        gamma = self.film_gamma[neuron_ids]
+        beta = self.film_beta[neuron_ids]
+        pooled = pooled * (1.0 + gamma) + beta
+
+        summary = self.readout(pooled).squeeze(-1)  # (batch * num_neurons,)
+        return summary.view(batch, num_neurons)
+
+
+class SharedTransformerNN(nn.Module):
+    """
+    Full model used to both predict next-step neuronal activity AND recover an
+    interpretable inter-neuron connectivity ("synaptic weight") matrix.
+
+    Architecture:
+      1. `ChannelIndependentTemporalEncoder` (shared Transformer backbone +
+         cheap per-neuron identity/FiLM conditioning, see that class's
+         docstring) summarizes each neuron's own recent activity window into
+         a single scalar.
+      2. `final_fc`, a single `nn.Linear(num_neurons, output_size)`, linearly
+         mixes those per-neuron summaries into the predicted next-step
+         activity of every neuron. `final_fc.weight` is therefore a directly
+         interpretable N x N matrix of inter-neuron influence -- exactly the
+         quantity later analyzed by `capture_model_weights` in
+         WeightModeling.py -- while the temporal feature extraction driving it
+         is shared/regularized across neurons (with per-neuron specialization
+         restored cheaply via identity embeddings + FiLM) rather than being
+         independently, and easily over-, fit per neuron as in the previous
+         one-LSTM-per-neuron architecture.
+
+      `final_fc` is intentionally left as a plain linear layer with no
+      activation function, so its weights remain a direct, additive measure
+      of one neuron's estimated influence on another rather than a
+      nonlinearly-warped one.
+    """
+    def __init__(self, sequence_length, hidden_size, num_layers, num_neurons, output_size,
+                 nhead=4, dropout=0.1):
+        super(SharedTransformerNN, self).__init__()
+        self.encoder = ChannelIndependentTemporalEncoder(
+            sequence_length=sequence_length,
+            num_neurons=num_neurons,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            nhead=nhead,
+            dropout=dropout,
+        )
+        self.final_fc = nn.Linear(num_neurons, output_size)
+
+    def forward(self, x):
+        summary = self.encoder(x)      # (batch, num_neurons)
+        return self.final_fc(summary)  # (batch, output_size)
+
+
 class DirectInputLayer(nn.Module):
     """ A Custom Layer where M inputs are directly input into N neurons,
       This is notably not a dense layer.  """
