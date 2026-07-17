@@ -18,7 +18,8 @@ from various behavioral computers simultaneously.
 ```
 Sweet2Plus/
 ├── Sweet2Plus/                 # the installable Python package
-│   ├── core/                   suite2p wrapper, behavior parsing, correlation & stimulation analyses
+│   ├── core/                   suite2p wrapper, behavior parsing, object serialization
+│   ├── analysis/                correlative-activity and stimulation analyses
 │   ├── statistics/              GLMs, mixed models, clustering, and heatmap statistics (Python + R helpers)
 │   ├── pose_estimation/          DeepLabCut output parsing utilities
 │   ├── weight_modeling/          modeling of synaptic weight dynamics
@@ -27,7 +28,7 @@ Sweet2Plus/
 │   ├── signalclassifier/        MLP-based real vs. noise ROI classifier
 │   ├── denoise/                 DeepCAD-based denoising and destriping utilities
 │   ├── utils/                   logging, parallelization, and misc helpers
-│   └── cloud/                   cluster/HPC job scripts
+│   └── cluster_scripts/         cluster/HPC job scripts (was cloud/)
 ├── portreader_gui/              GUI for managing multiple behavioral-computer serial ports
 ├── arduino/                     C++ firmware for running behavioral experiments
 ├── tests/                       pytest smoke-test suite (see below)

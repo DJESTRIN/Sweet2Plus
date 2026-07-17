@@ -220,4 +220,4 @@ if __name__=='__main__':
     recordings.build_dataframe(r'D:\2p_drn_inhibition\talldata.csv')
 
 
-    # python ./StimulationAnalysis.py
+    # python ./Sweet2Plus/analysis/StimulationAnalysis.py
