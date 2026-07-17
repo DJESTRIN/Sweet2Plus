@@ -45,13 +45,23 @@ clone forever unless history is rewritten:
 None of these belong in version control. They bloat every clone/fetch and have
 nothing to do with reviewing source code changes.
 
-### 2.2 Two parallel "package roots"
-`Sweet2Plus/SynapticWeightModeling/` lives next to `Sweet2Plus/Sweet2Plus/` (the
-real package) instead of inside it, so it's not part of the `Sweet2Plus` import
-namespace, isn't covered by the `tests/test_imports.py` walk, and isn't
-installed the same way as the rest of the code. It also has its own
-`NetworkArchitectures.py`, duplicated (and possibly diverging) from
-`Sweet2Plus/decoders/NetworkArchitectures.py`.
+### 2.2 Naming-convention inconsistency (corrected from initial review)
+**Correction:** an earlier draft of this document incorrectly stated that
+`SynapticWeightModeling/` lived outside the `Sweet2Plus` package namespace.
+It does not — it was already a proper subpackage at
+`Sweet2Plus/Sweet2Plus/SynapticWeightModeling/` with its own `__init__.py`,
+importable as `Sweet2Plus.SynapticWeightModeling`, and already covered by
+`tests/test_imports.py`'s `pkgutil.walk_packages` discovery. The only real
+issue was a **naming-convention mismatch**: it used PascalCase while every
+sibling subpackage (`decoders`, `signalclassifier`, `pose_estimation`, etc.)
+uses snake_case. This has been fixed by renaming it to `weight_modeling/`
+(see §4, PR2, completed).
+Its `NetworkArchitectures.py` was also checked against
+`Sweet2Plus/decoders/NetworkArchitectures.py` — they are **not duplicates**;
+they define entirely different model classes for different purposes (GNN
+decoders vs. per-neuron LSTM/transformer weight-modeling architectures). The
+shared filename is a coincidence and is harmless since each lives in its own
+subpackage namespace, so no further de-duplication is needed.
 
 ### 2.3 Inconsistent/unclear submodule boundaries
 - `core/` mixes several unrelated concerns: suite2p wrapping (`customs2p.py`,
@@ -113,8 +123,10 @@ Sweet2Plus/
 │   ├── cli/                         # was quick_run.py / quickgui.py — user entry points
 │   ├── cluster_scripts/             # was cloud/ — .sh launch scripts, clearly named as ops scripts not a package
 │   ├── decoders/                    # GNN/decoder models, single canonical NetworkArchitectures.py
-│   ├── weight_modeling/             # was SynapticWeightModeling/, merged INTO the package namespace
-│   │   └── (imports Sweet2Plus.decoders.NetworkArchitectures instead of duplicating it)
+│   ├── weight_modeling/             # was SynapticWeightModeling/ — renamed only (it was already
+│   │                                  a proper Sweet2Plus subpackage); NetworkArchitectures.py here
+│   │                                  is distinct in content/purpose from decoders/NetworkArchitectures.py
+│   │                                  and stays separate (DONE — see status table below)
 │   ├── denoise/
 │   ├── graphics/
 │   ├── pose_estimation/             # DLC_parse.py stays; DLC_parse_KWJ.py either merged in
@@ -146,10 +158,12 @@ Sweet2Plus/
 ```
 
 ### Key structural changes summarized
-1. **Merge `SynapticWeightModeling/` into `Sweet2Plus/`** as `weight_modeling/`
-   so it's importable, tested, and packaged consistently with everything
-   else. De-duplicate `NetworkArchitectures.py` — keep one copy in
-   `decoders/`, have `weight_modeling` import it.
+1. **[DONE] Rename `SynapticWeightModeling/` to `weight_modeling/`** for
+   snake_case consistency with sibling subpackages. (It was already inside
+   the `Sweet2Plus` package and already tested/packaged like everything
+   else — see §2.2 correction above.) Its `NetworkArchitectures.py` is
+   distinct in content from `decoders/NetworkArchitectures.py`, so no
+   de-duplication was needed; both stay as-is.
 2. **Split `core/` into `core/` (suite2p + serialization plumbing) and
    `analysis/` (study-specific analyses)** so "core" actually means core
    infrastructure, not a catch-all.
@@ -182,15 +196,20 @@ Sweet2Plus/
 
 ## 4. Suggested migration order (safe, incremental PRs)
 
+**Progress so far (this session):**
+- [DONE] PR 1 (partial): removed root-level `best_model_weights.pth`
+  duplicate and untracked `my_figs/` scratch output from git.
+- [DONE] PR 2 (revised scope): renamed `SynapticWeightModeling/` →
+  `weight_modeling/` for naming consistency (see §2.2 correction — it was
+  already a proper subpackage, so no namespace merge was actually needed).
+
 1. **PR 1 — cleanup only, no moves:** remove root-level stray duplicate
-   artifacts (`best_model_weights.pth`, `training_metrics.xlsx`) since they
-   are exact/near duplicates of files already inside the package or outputs
-   that shouldn't be tracked at all. Add a documented `.gitattributes`/LFS
-   plan.
-2. **PR 2 — merge `SynapticWeightModeling` into `Sweet2Plus` package** and
-   de-duplicate `NetworkArchitectures.py`. Update imports and
-   `tests/test_imports.py` will automatically start covering it via
-   `pkgutil.walk_packages`.
+   artifacts (`best_model_weights.pth`) since it is an exact duplicate of a
+   file already inside the package. Add a documented `.gitattributes`/LFS
+   plan for the remaining large tracked binaries.
+2. **PR 2 — rename `SynapticWeightModeling` → `weight_modeling`** for
+   snake_case consistency with sibling subpackages (no namespace change
+   needed — it was already part of `Sweet2Plus`).
 3. **PR 3 — split `core/` into `core/` + `analysis/`,** move `cloud/` to
    `cluster_scripts/`. Update all internal imports and any shell scripts
    referencing old paths.
@@ -214,9 +233,6 @@ install -e .` to confirm packaging still works after each move.
 - Should large model weights/data live in Git LFS, a shared lab drive, or a
   cloud bucket? This affects how `assets/` is set up and whether existing git
   history should be rewritten to shrink the repo.
-- Is `SynapticWeightModeling` still under active development as a separate
-  concern, or should it fully merge into `Sweet2Plus`'s decoder/analysis
-  layers?
 - Should `portreader_gui` and `arduino` remain in this repo at all, or would
   they be better as separate repos (they're logically independent of the
   two-photon analysis package)?

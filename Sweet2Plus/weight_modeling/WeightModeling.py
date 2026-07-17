@@ -14,7 +14,7 @@ Date: 02-27-2025
 # Import dependencies
 import argparse
 from Sweet2Plus.core.SaveLoadObjs import LoadObj
-from Sweet2Plus.SynapticWeightModeling.NetworkArchitectures import SharedTransformerNN, weighted_mse_loss
+from Sweet2Plus.weight_modeling.NetworkArchitectures import SharedTransformerNN, weighted_mse_loss
 import torch
 import torch.nn as nn
 import torch.optim as optim

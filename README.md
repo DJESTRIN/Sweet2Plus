@@ -21,7 +21,7 @@ Sweet2Plus/
 │   ├── core/                   suite2p wrapper, behavior parsing, correlation & stimulation analyses
 │   ├── statistics/              GLMs, mixed models, clustering, and heatmap statistics (Python + R helpers)
 │   ├── pose_estimation/          DeepLabCut output parsing utilities
-│   ├── SynapticWeightModeling/   modeling of synaptic weight dynamics
+│   ├── weight_modeling/          modeling of synaptic weight dynamics
 │   ├── graphics/                figure/plotting helpers
 │   ├── decoders/                neural network decoders (MLP, GNN, autoencoders)
 │   ├── signalclassifier/        MLP-based real vs. noise ROI classifier
