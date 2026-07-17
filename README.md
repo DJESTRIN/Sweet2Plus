@@ -30,7 +30,8 @@ Sweet2Plus/
 │   ├── utils/                   logging, parallelization, and misc helpers
 │   └── cluster_scripts/         cluster/HPC job scripts (was cloud/)
 ├── portreader_gui/              GUI for managing multiple behavioral-computer serial ports
-├── arduino/                     C++ firmware for running behavioral experiments
+├── firmware/arduino/            C++ firmware for running behavioral experiments (was arduino/)
+├── docs/images/                 README figures (was images/)
 ├── tests/                       pytest smoke-test suite (see below)
 ├── Dockerfile / requirements.txt  reproducible test/analysis environment
 └── setup.py                     package metadata (installable via pip)
@@ -76,14 +77,14 @@ pytest -v
 <h2> <b> Sweet2Plus's API </b></h2>
 Sweet2Plus allows for the analysis of two-photon calcium imaging data. Here are a few example images from our dataset:
 <p float="left">
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/example1.png" width="300" />
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/example2.png" width="300" /> 
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/example3.png" width="300" /> 
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/example1.png" width="300" />
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/example2.png" width="300" /> 
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/example3.png" width="300" /> 
 </p>
 
 Although there is more to come, we utalize code to functionally define neuronal cell types and then perform analyses based on these cell types. 
 <p float="left">
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/kmeans_clustering.png" width="500" />
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/kmeans_clustering.png" width="500" />
 </p>
 
 <h2> <b> Example Neural Network Classifier Performance </b></h2>
@@ -91,24 +92,24 @@ We trained a Pytorch based Neural Network (multi-layer perceptron) to parse Suit
 
 First, traces are read into python and normalized to a pre-determined number of points.
 <p float="left">
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/exampletrace.png" width="500" />
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/examplenormtrace.png" width="500" /> 
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/exampletrace.png" width="500" />
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/examplenormtrace.png" width="500" /> 
 </p>
 
 Overall, the classifier performed moderatly well with a test F1 score >0.82:
 <p float="left">
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/MLP_resultsds.png" width="500" />
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/MLP_resultsds.png" width="500" />
 </p>
 
 The classifier was optimized via Bayesian Optimization available with the Optuna library:
 <p float="left">
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/newplot.png" width="500" />
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/newplot.png" width="500" />
 </p>
 
 Now, we quickly use this classifier to parse real from not-real ROIs suggested by Suite2P. Notably, not-real ROIs include ROIs containing no-signal or extremly low signal with S:N < 3:1. 
 <p float="left">
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/RealSignal.png" width="500" />
-  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/images/Noise.png" width="500" /> 
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/RealSignal.png" width="500" />
+  <img src="https://github.com/DJESTRIN/Sweet2Plus/blob/main/docs/images/Noise.png" width="500" /> 
 </p>
 
 

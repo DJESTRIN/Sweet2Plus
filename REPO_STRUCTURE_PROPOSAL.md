@@ -202,6 +202,12 @@ Sweet2Plus/
 - [DONE] PR 2 (revised scope): renamed `SynapticWeightModeling/` →
   `weight_modeling/` for naming consistency (see §2.2 correction — it was
   already a proper subpackage, so no namespace merge was actually needed).
+- [DONE] PR 3: split `core/` into `core/` (suite2p wrapper + serialization
+  plumbing) and `analysis/` (correlative-activity and stimulation
+  analyses); renamed `cloud/` → `cluster_scripts/`. Updated hardcoded HPC
+  paths in `CAA.sh`, `parallel_CAA.sh`, and `utils/parallel_helper.py`.
+- [DONE] PR 4: renamed `arduino/` → `firmware/arduino/` and `images/` →
+  `docs/images/`; updated README image URLs and repo-layout diagram.
 
 1. **PR 1 — cleanup only, no moves:** remove root-level stray duplicate
    artifacts (`best_model_weights.pth`) since it is an exact duplicate of a
