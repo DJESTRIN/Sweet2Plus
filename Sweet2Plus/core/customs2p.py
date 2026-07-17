@@ -24,7 +24,7 @@ sns.set_style('whitegrid')
 
 class get_s2p():
     """ get suite 2P: This class is meant to run suite2P without the gui. """
-    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7,log_dir=None):
         #Set input and output directories
         self.datapath=datapath
         if os.path.exists(self.datapath):
@@ -64,9 +64,12 @@ class get_s2p():
 
         # Log boolean
         self.log_created=False
-        self.log_dir=r'/home/dje4001/Sweet2Plus/Sweet2Plus/core/logs'
+        # log_dir defaults to a package-relative "logs" folder rather than a
+        # hardcoded, machine-specific absolute path; callers can still
+        # override it explicitly via the log_dir argument.
+        self.log_dir=log_dir if log_dir is not None else os.path.join(os.path.dirname(os.path.abspath(__file__)),'logs')
     
-    def __call__(self):
+    def __call__(self,model_path=None):
         self.animal_information()
 
         # Search for previous F files 
@@ -90,14 +93,17 @@ class get_s2p():
                 message='Beginning applying MLP to F%0'
                 self.update_log(message_oh=message)
 
-                # Apply mlp to F file
-                model=r'/home/dje4001/Sweet2Plus/best_model_weights.pth'
-                mlp_obj=mlpa(data_path=F_file[0],model_path=model)
+                # Apply mlp to F file. model_path must be supplied by the
+                # caller (there is no portable default weights file shipped
+                # with the repo).
+                if model_path is None:
+                    raise ValueError("model_path must be provided to get_s2p.__call__() (no default MLP weights file is bundled with the repo)")
+                mlp_obj=mlpa(data_path=F_file[0],model_path=model_path)
                 mlp_obj()
             else:
                 print("Fmlp file was already previously calculated. Skipping this step...")
         else:
-            raise("F file was not created. Unable to calculate F_mlp file")
+            raise RuntimeError("F file was not created. Unable to calculate F_mlp file")
 
     def animal_information(self,default_pattern = r'day-(\d+)_C(\d+)_M(\d+)_R(\d+)'):
         # Pull animal information from data path
@@ -208,8 +214,12 @@ class get_s2p():
         self.corrected_images.sort(key=sort_images)
 
 class manual_classification(get_s2p):
-    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
-        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold)
+    def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7,log_dir=None):
+        # Forward the actual arguments passed in (previously these were
+        # hardcoded literals, silently ignoring any non-default fs/tau/
+        # threshold_scaling/batch_size/blocksize/reg_tif/reg_tif_chan2/
+        # denoise values the caller supplied).
+        super().__init__(datapath,fs=fs,tau=tau,threshold_scaling=threshold_scaling,batch_size=batch_size,blocksize=blocksize,reg_tif=reg_tif,reg_tif_chan2=reg_tif_chan2,denoise=denoise,cellthreshold=cellthreshold,log_dir=log_dir)
         return 
     
     def get_s2p_outputs(self):
@@ -238,8 +248,8 @@ class manual_classification(get_s2p):
         self.stat=self.stat[np.where(self.neuron_prob>self.cellthreshold)] #Need to add threshold as attirbute
         return
 
-    def __call__(self):
-        super().__call__()
+    def __call__(self,model_path=None):
+        super().__call__(model_path=model_path)
         self.get_s2p_outputs()
         self.update_log(message_oh='Getting s2p outputs%0') # Update logs
 
