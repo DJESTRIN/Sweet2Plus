@@ -8,12 +8,8 @@ quickly: syntax errors, missing/incorrect imports, undefined names used at
 module scope, and broken package metadata (see the accompanying
 `Sweet2Plus/__init__.py` files, which were previously missing entirely).
 
-A small allow-list of modules is skipped because they either:
-  * require optional/heavy dependencies not in requirements.txt
-    (torch-geometric, keras, customtkinter, projectmanager), or
-  * execute real analysis/plotting logic at module scope instead of behind
-    an `if __name__ == "__main__":` guard, so importing them has side
-    effects (file I/O, plotting) rather than just defining symbols.
+A small allow-list of modules is skipped when their dependency genuinely
+cannot be installed from PyPI (see SKIP_MODULES below for specifics).
 """
 import importlib
 import pkgutil
@@ -26,14 +22,11 @@ import Sweet2Plus
 # if a dependency becomes available, or a script is refactored to guard its
 # side effects behind `if __name__ == "__main__":`, remove it from here.
 SKIP_MODULES = {
-    "Sweet2Plus.core.quickgui": "GUI module requiring customtkinter/tkinter",
-    "Sweet2Plus.core.StimulationAnalysis": "imports Sweet2Plus.core.quickgui, which requires customtkinter",
-    "Sweet2Plus.signalclassifier.mlp_decoder": "requires keras/tensorflow (not in requirements.txt)",
-    "Sweet2Plus.graphics.zprojection_grid": "executes analysis/plotting code at import time (not guarded by __main__)",
-    "Sweet2Plus.decoders.NetworkArchitectures": "requires torch-geometric (not in requirements.txt)",
-    "Sweet2Plus.decoders.GraphNeuralNetwork": "requires torch-geometric (not in requirements.txt)",
-    "Sweet2Plus.decoders.CoderDecoders": "imports Sweet2Plus.decoders.NetworkArchitectures, which requires torch-geometric",
-    "Sweet2Plus.denoise.RunDeepCAD": "requires the deepcad package (not published on PyPI)",
+    "Sweet2Plus.denoise.RunDeepCAD": (
+        "requires the 'deepcad' PyPI package, but that package is an unrelated "
+        "namespace squat with no 'deepcad' importable module; the actual "
+        "DeepCAD-RT project this code depends on is only distributed on GitHub"
+    ),
 }
 
 

@@ -16,6 +16,12 @@ suite2p
 # Modeling / optimization
 torch
 optuna
+torch-geometric
+keras
+optkeras
+
+# GUI (used headlessly for import-testing only; requires system Tk via apt)
+customtkinter
 
 # Misc utilities used across the package
 tqdm
@@ -28,11 +34,10 @@ networkx
 # Testing
 pytest
 
-# NOTE: The following are used by a few modules but are intentionally left out
-# of the base install because they are either GUI-only, require extra
-# platform-specific setup, or are not published on PyPI:
-#   - customtkinter, tkinter  (core/quickgui.py; GUI-only, not needed for headless use)
-#   - keras / tensorflow      (signalclassifier/mlp_decoder.py)
-#   - torch-geometric         (decoders/*.py; requires a matching torch build,
-#                              see https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html)
-#   - projectmanager          (utils/logger.py; internal/private package, not on PyPI)
+# NOTE: The following is used by one module but is intentionally left out of
+# the base install because it is not published on PyPI under a matching name
+# (the actual DeepCAD-RT project lives on GitHub, not PyPI):
+#   - deepcad (denoise/RunDeepCAD.py)
+# 'projectmanager' (utils/logger.py) is also a private, unpublished package;
+# that import is now optional/lazy so the rest of the module still works
+# without it (see Sweet2Plus/utils/logger.py).
