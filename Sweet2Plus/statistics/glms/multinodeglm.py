@@ -87,6 +87,8 @@ class multinodeglm():
         if self.delete_contents_of_output_folders:
             my_first_command = f"scancel -n engelhard_glm"
             first_command_result = subprocess.run([my_first_command], shell=True, capture_output=True, text=True)
+            if first_command_result.returncode != 0:
+                print(f"Warning: '{my_first_command}' failed: {first_command_result.stderr}")
             self.delete_contents_path(path_oh = self.slurm_output_path, extensions=['.out'])
             self.delete_contents_path(path_oh = self.slurm_error_path, extensions=['.err'])
             self.delete_contents_path(path_oh = self.zipped_output_path ,extensions=['.gz'])

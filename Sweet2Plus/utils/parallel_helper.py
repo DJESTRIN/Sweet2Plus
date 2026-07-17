@@ -144,6 +144,6 @@ def job_objective(n_jobs_oh,cli_command,memory_threshold,time_out):
 # best_score = -res.fun  # since we used -1 for True, convert it back
 
 if __name__=='__main__':
-    cli_command = ["python", ".\Sweet2Plus\core\CorrelativeActivityAnalysis.py", "--root_data_directory", r"C:\Users\listo\tmt_experiment_2024_working_file"]  # Add your arguments here
+    cli_command = ["python", r".\Sweet2Plus\core\CorrelativeActivityAnalysis.py", "--root_data_directory", r"C:\Users\listo\tmt_experiment_2024_working_file"]  # Add your arguments here
     memory_threshold = 0.2  # Set RAM threshold to 80%
     job_optimization(cli_command, memory_threshold, max_n_jobs=101, time_out=180)
