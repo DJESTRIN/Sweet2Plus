@@ -9,7 +9,7 @@ DRN analysis
 (2) Correlation between neurons. 
     pre, during, between and post.
 """
-from behavior import load_serial_output
+from Sweet2Plus.core.behavior import load_serial_output
 from Sweet2Plus.core.core import pipeline,corralative_activity
 import glob,os
 import numpy as np

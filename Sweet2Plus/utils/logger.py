@@ -9,7 +9,14 @@ Date: 10-15-2024
 """
 import os, glob
 import time
-from projectmanager.CLIlogger import Logger
+try:
+    from projectmanager.CLIlogger import Logger
+except ImportError:
+    # 'projectmanager' is a private, unpublished package. It is only required
+    # by s2p_logger/watch_directory below; the write_log/read_latest_log/
+    # update_log helpers (used throughout the rest of the codebase) must
+    # remain importable without it.
+    Logger = object
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import argparse
@@ -55,6 +62,10 @@ Written for s2p pipeline which utalizes files for logging processes
 """
 class s2p_logger(Logger):
     def __init__(self, table_name, log_directory):
+        if Logger is object:
+            raise ImportError(
+                "s2p_logger requires the private 'projectmanager' package, which is not installed."
+            )
         super().__init__(table_name)
         self.log_directory = log_directory
 

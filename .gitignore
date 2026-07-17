@@ -1,7 +1,7 @@
 # Git Ignore File
 my_figs/**/*
 figures/**/*
-Sweet2PPlus.egg-info/
+Sweet2Plus.egg-info/
 my_data/**/*
 Sweet2PPlus/statistics/Stats.pdf
 **/*.tif
@@ -15,3 +15,8 @@ Sweet2PPlus/statistics/Stats.pdf
 **/*.xls
 **/*.xlsx
 **/*.csv
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/

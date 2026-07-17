@@ -1,0 +1,38 @@
+# Core scientific stack
+numpy
+scipy
+pandas
+matplotlib
+seaborn
+scikit-learn
+statsmodels
+
+# Imaging / video / pose estimation
+opencv-python-headless
+pillow
+tifffile
+suite2p
+
+# Modeling / optimization
+torch
+optuna
+
+# Misc utilities used across the package
+tqdm
+tqdm_joblib
+venn
+watchdog
+psutil
+networkx
+
+# Testing
+pytest
+
+# NOTE: The following are used by a few modules but are intentionally left out
+# of the base install because they are either GUI-only, require extra
+# platform-specific setup, or are not published on PyPI:
+#   - customtkinter, tkinter  (core/quickgui.py; GUI-only, not needed for headless use)
+#   - keras / tensorflow      (signalclassifier/mlp_decoder.py)
+#   - torch-geometric         (decoders/*.py; requires a matching torch build,
+#                              see https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html)
+#   - projectmanager          (utils/logger.py; internal/private package, not on PyPI)

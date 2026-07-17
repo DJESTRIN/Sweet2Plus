@@ -21,7 +21,7 @@ Compare correlation of acitivty:
 (4) Replicate findings from CORT study
 """
 from Sweet2Plus.core.core import pipeline, corralative_activity 
-from behavior import load_serial_output
+from Sweet2Plus.core.behavior import load_serial_output
 import numpy as np
 import warnings
 import tqdm
@@ -302,7 +302,7 @@ def delete_2p_obj_files(input_directory):
     # erify the user wants to delete all s2p objects
     response = input(f"Are you sure you want to delete all Sweet2Plus objects in '{input_directory}'? (yes/no): ").strip().lower()
     if response in {'yes', 'y'}:
-        obj_files_in_dir=glob.glob(os.path.join(input_directory,'**\objfile.json*'),recursive=True)
+        obj_files_in_dir=glob.glob(os.path.join(input_directory,'**','objfile.json*'),recursive=True)
         for obj_file_oh in obj_files_in_dir:
             os.remove(obj_file_oh)
             print(f"'{obj_file_oh}' has been deleted.")

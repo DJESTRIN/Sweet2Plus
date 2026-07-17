@@ -1,0 +1,14 @@
+.git
+.gitignore
+*.pyc
+__pycache__/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+changed_files.txt
+ToDoList.txt
+*.jpg
+*.png
+*.tif
+*.tiff
