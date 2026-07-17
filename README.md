@@ -3,6 +3,75 @@ A python API for analysis of suite2P outputs. In addition to parsing suite2P out
 We include scripts allowing for easy plug in of DeepLabCut based pose-estimation results. This repository contains C++ code for running behavioral experiments in the wet lab, as well as a guided user interface for managing multiple ports
 from various behavioral computers simultaneously.
 
+<h2> <b> Table of Contents </b></h2>
+
+- [Repository layout](#repository-layout)
+- [Installation](#installation)
+- [Running the test suite](#running-the-test-suite)
+- [Sweet2Plus's API](#sweet2pluss-api)
+- [Example Neural Network Classifier Performance](#example-neural-network-classifier-performance)
+- [References](#references)
+- [Contributions and citation](#contributions-and-citation)
+
+<h2> <b> Repository layout </b></h2>
+
+```
+Sweet2Plus/
+├── Sweet2Plus/                 # the installable Python package
+│   ├── core/                   suite2p wrapper, behavior parsing, correlation & stimulation analyses
+│   ├── statistics/              GLMs, mixed models, clustering, and heatmap statistics (Python + R helpers)
+│   ├── pose_estimation/          DeepLabCut output parsing utilities
+│   ├── SynapticWeightModeling/   modeling of synaptic weight dynamics
+│   ├── graphics/                figure/plotting helpers
+│   ├── decoders/                neural network decoders (MLP, GNN, autoencoders)
+│   ├── signalclassifier/        MLP-based real vs. noise ROI classifier
+│   ├── denoise/                 DeepCAD-based denoising and destriping utilities
+│   ├── utils/                   logging, parallelization, and misc helpers
+│   └── cloud/                   cluster/HPC job scripts
+├── portreader_gui/              GUI for managing multiple behavioral-computer serial ports
+├── arduino/                     C++ firmware for running behavioral experiments
+├── tests/                       pytest smoke-test suite (see below)
+├── Dockerfile / requirements.txt  reproducible test/analysis environment
+└── setup.py                     package metadata (installable via pip)
+```
+
+<h2> <b> Installation </b></h2>
+
+Sweet2Plus targets Python 3.10+. From the repository root:
+
+```bash
+# Editable install with the package's Python dependencies
+pip install -r requirements.txt
+pip install -e .
+```
+
+If you use conda, create an environment first (e.g. `conda create -n sweet2plus python=3.10 && conda activate sweet2plus`) and then run the commands above inside it.
+
+A few dependencies are intentionally **not** installed automatically:
+- `deepcad` (used only by `Sweet2Plus.denoise.RunDeepCAD`) is not published on PyPI under a matching name — the real [DeepCAD-RT](https://github.com/cabooster/DeepCAD-RT) project must be installed manually from GitHub if you need this module.
+- `projectmanager` (used only by `Sweet2Plus.utils.logger`'s `s2p_logger`/`watch_directory` helpers) is a private, unpublished package; the rest of the logger works fine without it.
+
+<h2> <b> Running the test suite </b></h2>
+
+The repo ships a Docker image that mirrors the tested environment, plus a pytest smoke-test suite that imports every module to catch packaging/import regressions.
+
+```bash
+# Build the image
+docker build -t sweet2plus .
+
+# Run the test suite
+docker run --rm sweet2plus
+
+# Or drop into a shell for interactive debugging
+docker run --rm -it sweet2plus bash
+```
+
+You can also run pytest directly against a local environment that has `requirements.txt` installed:
+
+```bash
+pytest -v
+```
+
 <h2> <b> Sweet2Plus's API </b></h2>
 Sweet2Plus allows for the analysis of two-photon calcium imaging data. Here are a few example images from our dataset:
 <p float="left">
