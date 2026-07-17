@@ -114,15 +114,16 @@ def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
     # Grab relevant data from files and create lists
     neuronal_activity=[]
     behavioral_timestamps=[]
-    neuron_info = pd.DataFrame(columns=['day', 'cage', 'mouse', 'group'])
+    neuron_info_frames=[] # Collect per-file frames and concat once (avoids O(n^2) growth from concat-in-a-loop)
     for file in tqdm(objfiles):
         objoh=LoadObj(FullPath=file)
         neuronal_activity.append(objoh.ztraces)
         behavioral_timestamps.append(objoh.all_evts_imagetime)
         repeated_info = np.tile([objoh.day, objoh.cage, objoh.mouse, objoh.group], objoh.ztraces.shape[0]) 
         repeated_info = repeated_info.reshape(objoh.ztraces.shape[0], 4)
-        repeated_info_df = pd.DataFrame(repeated_info, columns=['day', 'cage', 'mouse', 'group'])
-        neuron_info = pd.concat([neuron_info, repeated_info_df], ignore_index=True)
+        neuron_info_frames.append(pd.DataFrame(repeated_info, columns=['day', 'cage', 'mouse', 'group']))
+
+    neuron_info = pd.concat(neuron_info_frames, ignore_index=True) if neuron_info_frames else pd.DataFrame(columns=['day', 'cage', 'mouse', 'group'])
 
     return neuronal_activity, behavioral_timestamps, neuron_info
 

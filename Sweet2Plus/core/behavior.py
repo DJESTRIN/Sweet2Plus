@@ -139,12 +139,19 @@ class load_serial_output():
         self.all_evts=all_evts
 
         # Convert list of loop numbers to 2P Image Numbers
+        # Build a lookup once instead of scanning self.sync with np.where for every start_time
+        # (keeps the first matching row index per LoopNumber, same as np.where(...)[0][0])
+        sync_lookup={}
+        for idx,loopnum in enumerate(self.sync[:,1]):
+            if loopnum not in sync_lookup:
+                sync_lookup[loopnum]=idx
+
         self.all_evts_imagetime=[]
         for trial_list in self.all_evts:
             all_ts=[]
             for start_time in trial_list:
                 try:
-                    row_number=np.where(self.sync[:,1]==start_time)[0][0]
+                    row_number=sync_lookup[start_time]
                     image_time=self.sync[row_number,0]
                     all_ts.append(image_time)
                 except Exception:
@@ -152,11 +159,8 @@ class load_serial_output():
             self.all_evts_imagetime.append(all_ts)
 
         # Get Pre Trial Period
-        for i,listoh in enumerate(self.all_evts_imagetime):
-            if i==0:
-                alltimestamps=np.asarray(listoh)
-            else:
-                alltimestamps=np.concatenate((alltimestamps,np.asarray(listoh)),axis=0)
+        timestamp_lists=[np.asarray(listoh) for listoh in self.all_evts_imagetime] # Collect and concat once (avoids O(n^2) growth from concat-in-a-loop)
+        alltimestamps=np.concatenate(timestamp_lists,axis=0)
 
         self.pretrial_period=[0,alltimestamps[0]]
 

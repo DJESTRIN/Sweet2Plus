@@ -169,6 +169,7 @@ class pipeline(pipeline):
     
     def build_dataframe(self,output_name):
         try:
+            dfF_list=[] # Collect per-subject frames and concat once at the end (avoids O(n^2) growth)
             for i,subject in enumerate(self.correlation_data):
                 prestim_av_cor, durring_av_cor, poststim_av_cor, prestim_rec_aucs, during_rec_aucs, poststim_rec_aucs=subject
                 prestim_av_cor, durring_av_cor, poststim_av_cor, prestim_rec_aucs, during_rec_aucs, poststim_rec_aucs=pd.DataFrame(prestim_av_cor), pd.DataFrame(durring_av_cor), pd.DataFrame(poststim_av_cor), pd.DataFrame(prestim_rec_aucs), pd.DataFrame(during_rec_aucs), pd.DataFrame(poststim_rec_aucs)
@@ -204,11 +205,9 @@ class pipeline(pipeline):
 
                 #Create data frame on hand
                 dfoh=pd.concat([subjectID,labels,aucs,cordf],axis=1)
+                dfF_list.append(dfoh)
 
-                if i==0:
-                    dfF=dfoh
-                else:
-                    dfF=pd.concat([dfF,dfoh],axis=0)
+            dfF=pd.concat(dfF_list,axis=0)
             dfF.to_csv(output_name)
         except Exception as e:
             print(f"Error building/saving dataframe: {e}")

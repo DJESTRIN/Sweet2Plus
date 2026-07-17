@@ -28,7 +28,7 @@ sns.set_style('whitegrid')
 # Build custom classes for parsing suite2p
 class parse_s2p(manual_classification):
     def __init__(self,datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
-        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold) #Use initialization from previous class 
+        super().__init__(datapath,fs=fs,tau=tau,threshold_scaling=threshold_scaling,batch_size=batch_size,blocksize=blocksize,reg_tif=reg_tif,reg_tif_chan2=reg_tif_chan2,denoise=denoise,cellthreshold=cellthreshold) #Use initialization from previous class 
         # Threshold to determine whether a cell is a cell. 0.7 means only the top 30% of ROIS make it to real dataset as neurons.
         self.trial_list = ['Vanilla','PeanutButter','Water','FoxUrine']
 
@@ -72,12 +72,7 @@ class parse_s2p(manual_classification):
                 stop+=window_width
                 zscored_trace.append(window)
             
-            for i,window in enumerate(zscored_trace):
-                if i==0:
-                    zscored_trace=window
-                else:
-                    zscored_trace=np.concatenate((zscored_trace,np.asarray(window)),axis=0)
-                
+            zscored_trace=np.concatenate(zscored_trace,axis=0) #Single concat instead of repeated concat-in-loop
             ztrace.append(zscored_trace)
 
         ztrace=np.asarray(ztrace)
@@ -131,7 +126,7 @@ class parse_s2p(manual_classification):
 
 class funcational_classification(parse_s2p):
     def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
-        super().__init__(datapath,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold)
+        super().__init__(datapath,fs=fs,tau=tau,threshold_scaling=threshold_scaling,batch_size=batch_size,blocksize=blocksize,reg_tif=reg_tif,reg_tif_chan2=reg_tif_chan2,denoise=denoise,cellthreshold=cellthreshold)
         self.so=serialoutput_object #Pass in serial_output_object
         self.auc_period=30
 
@@ -420,7 +415,7 @@ class funcational_classification(parse_s2p):
 
 class corralative_activity(funcational_classification):
     def __init__(self,datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=0.7):
-        super().__init__(datapath,serialoutput_object,fs=1.315235,tau=1,threshold_scaling=2,batch_size=800,blocksize=64,reg_tif=True,reg_tif_chan2=True,denoise=1,cellthreshold=cellthreshold)
+        super().__init__(datapath,serialoutput_object,fs=fs,tau=tau,threshold_scaling=threshold_scaling,batch_size=batch_size,blocksize=blocksize,reg_tif=reg_tif,reg_tif_chan2=reg_tif_chan2,denoise=denoise,cellthreshold=cellthreshold)
 
     def get_activity_heatmap(self,data):
         plt.figure(figsize=(30,30),dpi=300)

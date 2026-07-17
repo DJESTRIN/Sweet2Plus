@@ -22,17 +22,14 @@ def build_max_projections(sessions):
             maxproj = None
             for k, image in tqdm.tqdm(enumerate(images), total=len(images)):
                 im = Image.open(image)
+                ci = np.asarray(im)
                 if k == 0:
-                    maxproj = np.asarray(im)
-                    maxproj = maxproj[..., np.newaxis]
+                    maxproj = ci
                 else:
-                    ci = np.asarray(im)
-                    ci = ci[..., np.newaxis]
-                    maxproj = np.concatenate([maxproj, ci], axis=2)
-                    maxproj = maxproj.max(axis=2)
-                    maxproj = maxproj[..., np.newaxis]
+                    # Elementwise max instead of concat-then-reduce-then-reshape each iteration
+                    maxproj = np.maximum(maxproj, ci)
 
-            all_projs.append([maxproj, m, j])
+            all_projs.append([maxproj[..., np.newaxis] if maxproj is not None else maxproj, m, j])
     return all_projs
 
 

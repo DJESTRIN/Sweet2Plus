@@ -187,12 +187,8 @@ class get_s2p():
                 stack=np.asarray(stack)
                 stacks.append(stack)
 
-            # Merge all stacks
-            for i,stack in enumerate(stacks):
-                if i==0:
-                    Stack = stack
-                else:
-                    Stack = np.concatenate((Stack,stack),axis=0)
+            # Merge all stacks (single concatenate avoids O(n^2) repeated copy from concat-in-a-loop)
+            Stack = np.concatenate(stacks,axis=0)
 
             Stack = ((Stack-Stack.min())/(Stack.max()-Stack.min()))*255
             Stack = Stack.astype(np.uint64)

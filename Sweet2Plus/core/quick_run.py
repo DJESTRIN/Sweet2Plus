@@ -135,6 +135,7 @@ def sep_correlations(objoh):
     return info,threat_blcorr,threat_rewcorr,threat_tmtcorr,threat_posttmtcorr,nonthreat_blcorr,nonthreat_rewcorr,nonthreat_tmtcorr,nonthreat_posttmtcorr,neuron_labels
 
 def build_tall(big_list):
+    frames=[] # Collect per-recording frames and concat once (avoids O(n^2) growth from concat-in-a-loop)
     for i,uid in enumerate(big_list):
         info,blcorr,rewcorr,tmtcorr,posttmtcorr,neuron_labels=uid
         rewcorr=np.nanmean(rewcorr,axis=0)
@@ -142,48 +143,37 @@ def build_tall(big_list):
         posttmtcorr=np.nanmean(posttmtcorr,axis=0)
         blcorr=np.nanmean(blcorr,axis=0)
 
-        count=0
+        rec_rows=[]
         try:
             for neuron_id,(blv,rewv,tmtv,postv,labelsoh) in enumerate(zip(blcorr,rewcorr,tmtcorr,posttmtcorr,neuron_labels)):
                 dict={'subject':info[2],'cage':info[1],'session':info[0],'neuron':neuron_id,'baseline':blv,'reward':rewv,'tmt':tmtv,'posttmt':postv,'classification':labelsoh}
-                dfoh=pd.DataFrame(dict,index=[0])
-                
-                if count==0:
-                    DF=dfoh
-                else:
-                    DF=pd.concat([DF,dfoh])
-                count+=1
+                rec_rows.append(pd.DataFrame(dict,index=[0]))
         except Exception as e:
             print(f"Error building tall dataframe for recording {i}: {e}")
 
-        if i==0:
-            DFall=DF
-        else:
-            DFall=pd.concat([DFall,DF])
-    return DFall
+        if rec_rows:
+            frames.append(pd.concat(rec_rows,ignore_index=True))
+    return pd.concat(frames,ignore_index=True) if frames else pd.DataFrame()
 
 def vector_angle(obj):
     data=obj.auc_vals
     trialnames=['Water','Vanilla','PeanutButter','TMT']
+    day,cage,mouse=stripinfo(obj.datapath)
+    rows=[] # Collect rows and concat once at the end (avoids O(n^2) growth from concat-in-a-loop)
     counter=0
     for trial1,trialname1 in zip(data[:-1].T,trialnames[:-1]):
         for trial2,trialname2 in zip(data[1:].T,trialnames[1:]):
             euclid_dist = np.linalg.norm(trial2-trial1)
             vector_angle = np.round(np.degrees(np.arccos(np.dot(trial1,trial2)/(np.linalg.norm(trial1)*np.linalg.norm(trial2)))))
-            day,cage,mouse=stripinfo(obj.datapath)
 
             if trialname1=='TMT' or trialname2=='TMT':
                 parser='TMT'
             else:
                 parser='NonTMT'
 
-            if counter==0:
-                DFinal=pd.DataFrame({'day':day,'cage':cage,'mouse':mouse,'trialname1':trialname1,'trialname2':trialname2,'trialtype':parser,'vectorangle':vector_angle,'vectordis':euclid_dist},index=[counter])
-            else:
-                dfoh=pd.DataFrame({'day':day,'cage':cage,'mouse':mouse,'trialname1':trialname1,'trialname2':trialname2,'trialtype':parser,'vectorangle':vector_angle,'vectordis':euclid_dist},index=[counter])
-                DFinal=pd.concat([DFinal,dfoh])
+            rows.append(pd.DataFrame({'day':day,'cage':cage,'mouse':mouse,'trialname1':trialname1,'trialname2':trialname2,'trialtype':parser,'vectorangle':vector_angle,'vectordis':euclid_dist},index=[counter]))
             counter+=1
-    return DFinal
+    return pd.concat(rows) if rows else pd.DataFrame()
 
 def get_auc_data(objoh):
     day,cage,mouse=stripinfo(objoh.datapath) # Get info data
@@ -211,20 +201,17 @@ def get_auc_data(objoh):
 
 def build_auc_tall(listoh):
     # Put AUC data into tall
+    rows=[] # Collect rows and concat once at the end (avoids O(n^2) growth from concat-in-a-loop)
     for i,(info,aucsoh,neuron_labels) in enumerate(listoh):
         day,cage,mouse=info
         wt,vll,pb,tmt=aucsoh.T
         for neuron_id, (wto,vllo,pbo,tmto,labeloh) in enumerate(zip(wt,vll,pb,tmt,neuron_labels)):
-            if i==0:
-                DFall=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,"label":labeloh,'water':wto,'vanilla':vllo,'peanutbutter':pbo,'tmt':tmto},index=[0])
-            else:
-                DFoh=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,"label":labeloh,'water':wto,'vanilla':vllo,'peanutbutter':pbo,'tmt':tmto},index=[0])
-                DFall=pd.concat([DFall,DFoh])
-    
-    return DFall
+            rows.append(pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,"label":labeloh,'water':wto,'vanilla':vllo,'peanutbutter':pbo,'tmt':tmto},index=[0]))
+
+    return pd.concat(rows,ignore_index=True) if rows else pd.DataFrame()
 
 def build_tall_sep(listoh):
-    count=0
+    rows=[] # Collect rows and concat once at the end (avoids O(n^2) growth from concat-in-a-loop)
     for uid in listoh:
         info,threat_blcorr,threat_rewcorr,threat_tmtcorr,threat_posttmtcorr,nonthreat_blcorr,nonthreat_rewcorr,nonthreat_tmtcorr,nonthreat_posttmtcorr,neuron_labels=uid
         day,cage,mouse=info
@@ -240,22 +227,12 @@ def build_tall_sep(listoh):
         nonthreat_posttmtcorr=np.nanmean(nonthreat_posttmtcorr,axis=1)
 
         for neuron_id, (bl,rew,tmt,post) in enumerate(zip(threat_blcorr,threat_rewcorr,threat_tmtcorr,threat_posttmtcorr)):
-            if count==0:
-                DFall=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'ThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0])
-            else:
-                DFoh=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'ThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0])
-                DFall=pd.concat([DFall,DFoh])
-            count+=1
+            rows.append(pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'ThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0]))
 
         for neuron_id, (bl,rew,tmt,post) in enumerate(zip(nonthreat_blcorr,nonthreat_rewcorr,nonthreat_tmtcorr,nonthreat_posttmtcorr)):
-            if count==0:
-                DFall=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'NonThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0])
-            else:
-                DFoh=pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'NonThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0])
-                DFall=pd.concat([DFall,DFoh])
-            count+=1
+            rows.append(pd.DataFrame({'subject':mouse,'session':day,'cage':cage,'neuron':neuron_id,'label':'NonThreatActivated','baseline':bl,'reward':rew,'tmt':tmt,'posttmt':post},index=[0]))
         
-    return DFall
+    return pd.concat(rows,ignore_index=True) if rows else pd.DataFrame()
 
 if __name__=='__main__':
     objs = glob.glob(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\twophotonimages\**\**\**\*objfile.json*')

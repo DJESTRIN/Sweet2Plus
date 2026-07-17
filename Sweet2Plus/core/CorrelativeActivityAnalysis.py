@@ -32,6 +32,7 @@ import os, glob, re
 import pandas as pd
 import argparse
 from joblib import Parallel, delayed
+from Sweet2Plus.utils.parallel_helper import get_default_n_jobs
 warnings.filterwarnings("ignore")
 
 """ NEED TO PLOT CORRELATIONS..
@@ -44,7 +45,7 @@ need auc values across trial types
 """
 def run_parallel_correlations(primary_obj):
     print('Generating correlations in parallel right now...')
-    data = Parallel(n_jobs=6)(delayed(parallel_correlations)(primary_obj.recordings[subjectnumber]) for subjectnumber in tqdm.tqdm(range(len(primary_obj.recordings))))
+    data = Parallel(n_jobs=get_default_n_jobs())(delayed(parallel_correlations)(primary_obj.recordings[subjectnumber]) for subjectnumber in tqdm.tqdm(range(len(primary_obj.recordings))))
     return data
 
 def parallel_correlations(subject_obj_oh):
@@ -141,7 +142,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
             av_corrs_data.append([[np.nan],[np.nan],[np.nan],[np.nan],np.nan])
 
     #Build tall dataset
-    counter=0
+    rows=[] # Collect row-frames and concat once at the end (avoids O(n^2) growth from concat-in-a-loop)
     for infooh,data in zip(parse_info,av_corrs_data):
         (bl,rew,tmt,post,neuron_labels)=data
         if infooh:
@@ -150,12 +151,7 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
                 for neuron_id,(blv,rewv,tmtv,postv,labelsoh) in enumerate(zip(bl[0],rew[0],tmt[0],post[0],neuron_labels)):
                     # list of name, degree, score
                     dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':rewv,'tmt':tmtv,'posttmt':postv,'classification':labelsoh}
-                    dfoh=pd.DataFrame(dict,index=[0])
-                    if counter==0:
-                        DF=dfoh
-                    else:
-                        DF=pd.concat([DF,dfoh])
-                    counter+=1
+                    rows.append(pd.DataFrame(dict,index=[0]))
             except Exception:
                 for neuron_id,(blv,labelsoh) in enumerate(zip(bl[0],neuron_labels)):
                     # list of name, degree, score
@@ -164,14 +160,10 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
                     except Exception as e:
                         print(f'Skipping neuron {neuron_id} for subject {infooh}: {e}')
                         continue
-                    dfoh=pd.DataFrame(dict,index=[0])
-                    if counter==0:
-                        DF=dfoh
-                    else:
-                        DF=pd.concat([DF,dfoh])
-                    counter+=1
+                    rows.append(pd.DataFrame(dict,index=[0]))
 
     # Save tall format dataframe to csv file in root_directory
+    DF=pd.concat(rows,ignore_index=True) if rows else pd.DataFrame()
     DF.to_csv(os.path.join(root_directory,filename), index=False)  
 
 class corralative_activity(corralative_activity):
@@ -251,11 +243,14 @@ class pipeline(pipeline):
 
 class alternative_pipeline(pipeline):
     """ Similar pipeline as above, however, written for reorganized file structure on cluster """
-    def __init__(self,base_directory,njobs,skip_new_dirs=False): 
+    def __init__(self,base_directory,njobs=None,skip_new_dirs=False): 
         self.base_directory=base_directory
         self.recordings=[]
         self.state_distances=[]
-        self.njobs=njobs
+        # Default to all available cores (respecting a SLURM allocation, if
+        # any) instead of silently running single-threaded (joblib treats
+        # n_jobs=None as n_jobs=1) when --njobs isn't passed on the CLI.
+        self.njobs=njobs if njobs is not None else get_default_n_jobs()
         self.skip_new_dirs=skip_new_dirs
 
     def find_folders_and_files(self,base_directory):

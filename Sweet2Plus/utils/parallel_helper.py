@@ -12,9 +12,39 @@ Date: 10-15-2024
 import subprocess
 import psutil
 import time
+import os
 # from skopt import gp_minimize
 # from skopt.space import Integer
 # import numpy as np
+
+def get_default_n_jobs(reserve=0):
+    """ Determine a sensible default number of parallel workers for the current
+    execution environment, instead of hardcoding a worker count that only
+    happens to fit one particular workstation.
+
+    Respects, in priority order:
+    1. SLURM_CPUS_PER_TASK (set automatically by SLURM job scheduling) so
+       this scales correctly to whatever a SLURM allocation grants.
+    2. os.cpu_count() (all logical cores available), which also works
+       correctly inside AWS instances/containers since it reflects the
+       container's cgroup-limited CPU count on modern Python/OS versions.
+
+    Inputs:
+    reserve -- (int) number of cores to leave free for other work (e.g. the
+        main process or OS). Defaults to 0.
+
+    Outputs:
+    n_jobs -- (int) number of workers to use, always >= 1.
+    """
+    slurm_cpus = os.environ.get('SLURM_CPUS_PER_TASK')
+    if slurm_cpus is not None:
+        try:
+            total_cpus = int(slurm_cpus)
+        except ValueError:
+            total_cpus = os.cpu_count() or 1
+    else:
+        total_cpus = os.cpu_count() or 1
+    return max(1, total_cpus - reserve)
 
 def run_and_monitor(cli_command, memory_threshold, time_wait=None):
     if time_wait is not None:
