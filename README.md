@@ -49,6 +49,12 @@ pip install -e .
 
 If you use conda, create an environment first (e.g. `conda create -n sweet2plus python=3.10 && conda activate sweet2plus`) and then run the commands above inside it.
 
+Alternatively, `environment-suite2p310.yml` is a full `conda env export` snapshot
+(Windows, Python 3.10) of a known-working environment for the suite2p-based
+pipeline; create it with `conda env create -f environment-suite2p310.yml`.
+This is a supplementary, platform-specific reference — prefer
+`requirements.txt` + `pip install -e .` for normal development.
+
 A few dependencies are intentionally **not** installed automatically:
 - `deepcad` (used only by `Sweet2Plus.denoise.RunDeepCAD`) is not published on PyPI under a matching name — the real [DeepCAD-RT](https://github.com/cabooster/DeepCAD-RT) project must be installed manually from GitHub if you need this module.
 - `projectmanager` (used only by `Sweet2Plus.utils.logger`'s `s2p_logger`/`watch_directory` helpers) is a private, unpublished package; the rest of the logger works fine without it.

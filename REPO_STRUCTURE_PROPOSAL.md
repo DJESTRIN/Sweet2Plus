@@ -15,7 +15,7 @@ Sweet2Plus/                      <- git repo root
 │   ├── decoders/                GNN / decoder models (+ a copy of NetworkArchitectures.py)
 │   ├── denoise/                 DeepCAD wrapper + destreak
 │   ├── graphics/                plotting helpers
-│   ├── pose_estimation/         DLC_parse.py and DLC_parse_KWJ.py (near-duplicates)
+│   ├── pose_estimation/         DLC_parse.py and DLC_parse_KWJ.py (near-duplicates — confirmed byte-identical, resolved: see §4)
 │   ├── signalclassifier/        MLP classifier code **+ committed X.npy (23 MB) and best_model_weights.pth (19 MB)**
 │   ├── statistics/               R + Python stats, includes glms/ and markdown/ subpackages
 │   ├── utils/                   logger, parallel helper, folder renaming
@@ -69,10 +69,9 @@ subpackage namespace, so no further de-duplication is needed.
   serialization (`SaveLoadObjs.py`), and two different analysis scripts
   (`CorrelativeActivityAnalysis.py`, `StimulationAnalysis.py`) that look more
   like `statistics/`-level analyses than "core" infrastructure.
-- `pose_estimation/` has `DLC_parse.py` and `DLC_parse_KWJ.py` — an unclear
-  naming convention (are personal-initial suffixes meant to be temporary
-  forks, alternate configs, or dead code?). New contributors can't tell which
-  one is canonical.
+- [DONE] `pose_estimation/DLC_parse.py` and `DLC_parse_KWJ.py` were verified
+  byte-identical (same SHA-256 hash) and not cross-referenced anywhere else
+  in the repo. Removed the `_KWJ` copy, kept `DLC_parse.py` as canonical.
 - `cloud/` only contains two `.sh` scripts for launching `CorrelativeActivityAnalysis.py`
   on a cluster — arguably these belong next to the analysis they invoke
   (`core/` or a `scripts/` folder), not as a package importable via `import Sweet2Plus.cloud`.
@@ -129,9 +128,7 @@ Sweet2Plus/
 │   │                                  and stays separate (DONE — see status table below)
 │   ├── denoise/
 │   ├── graphics/
-│   ├── pose_estimation/             # DLC_parse.py stays; DLC_parse_KWJ.py either merged in
-│   │                                  via config/parameters, renamed to reflect its actual
-│   │                                  purpose, or removed if superseded
+│   ├── pose_estimation/             # DONE: removed byte-identical DLC_parse_KWJ.py duplicate
 │   ├── signalclassifier/            # code only; X.npy / best_model_weights.pth moved out (see below)
 │   ├── statistics/
 │   │   ├── glms/
@@ -183,13 +180,17 @@ Sweet2Plus/
 5. **Rename `arduino/` → `firmware/arduino/`** and `images/` → `docs/images/`
    to make the repo's top level self-explanatory at a glance (Python package,
    apps, firmware, docs, tests).
-6. **Resolve `DLC_parse.py` vs `DLC_parse_KWJ.py`** — pick one canonical
-   implementation with configurable parameters, or clearly document why both
-   exist (e.g. rename to reflect actual behavioral difference, not initials).
-7. **Fix `suite2p310_requirements.txt`** — rename to indicate it's a Conda
-   export (`environment-suite2p310.yml`), not a pip requirements file.
-8. **Fill in `setup.py` metadata** (real description, classifiers, license
-   field consistent with README's MIT mention).
+6. **[DONE] Resolved `DLC_parse.py` vs `DLC_parse_KWJ.py`** — confirmed
+   byte-identical via SHA-256, removed the `_KWJ` duplicate.
+7. **[DONE] Fixed `suite2p310_requirements.txt`** — renamed to
+   `environment-suite2p310.yml` to indicate it's a Conda env export, not a
+   pip requirements file; documented its use in README.
+8. **[DONE, partial] Filled in `setup.py` description** (was a placeholder).
+   **Correction:** an earlier draft of this document assumed the README
+   mentioned an MIT license — it does not, and no `LICENSE` file exists in
+   the repo, even though `setup.py` currently declares an MIT classifier.
+   This is a legal/ownership decision, not a structural one, so it's left
+   as an open question for the lab (see §5) rather than assumed or changed.
 9. Consider moving `ToDoList.txt` to GitHub Issues so tasks are assignable,
    commentable, and closeable, keeping the repo itself free of a manually
    maintained task list.
@@ -208,6 +209,12 @@ Sweet2Plus/
   paths in `CAA.sh`, `parallel_CAA.sh`, and `utils/parallel_helper.py`.
 - [DONE] PR 4: renamed `arduino/` → `firmware/arduino/` and `images/` →
   `docs/images/`; updated README image URLs and repo-layout diagram.
+- [DONE] Resolved `DLC_parse.py` vs `DLC_parse_KWJ.py` duplication (removed
+  byte-identical copy), and PR 6's non-legal parts: renamed
+  `suite2p310_requirements.txt` → `environment-suite2p310.yml`, filled in
+  `setup.py`'s placeholder description.
+
+**Remaining / deferred (needs a decision — see §5):**
 
 1. **PR 1 — cleanup only, no moves:** remove root-level stray duplicate
    artifacts (`best_model_weights.pth`) since it is an exact duplicate of a
@@ -234,11 +241,15 @@ install -e .` to confirm packaging still works after each move.
 
 ## 5. Open questions for the lab (need a decision before executing)
 
-- Are `DLC_parse.py` and `DLC_parse_KWJ.py` both still in active use? If one
-  is obsolete, which one?
 - Should large model weights/data live in Git LFS, a shared lab drive, or a
   cloud bucket? This affects how `assets/` is set up and whether existing git
-  history should be rewritten to shrink the repo.
-- Should `portreader_gui` and `arduino` remain in this repo at all, or would
-  they be better as separate repos (they're logically independent of the
-  two-photon analysis package)?
+  history should be rewritten to shrink the repo (PR 5, not yet done —
+  requires lab coordination since it changes commit hashes).
+- Should `portreader_gui` and `firmware/arduino` remain in this repo at all,
+  or would they be better as separate repos (they're logically independent
+  of the two-photon analysis package)?
+- Does the repo actually have an MIT (or any) license? `setup.py` declares
+  an MIT classifier but there is no `LICENSE` file and the README doesn't
+  mention licensing terms. This should be resolved explicitly (add a
+  `LICENSE` file, or correct/remove the classifier) rather than left
+  ambiguous.

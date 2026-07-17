@@ -30,8 +30,8 @@ setup(
                       'statsmodels'],
     author='David Estrin',
     author_email='',
-    description='A short description of your project',
-    url='https://github.com/DJESTRIN/Sweet2Plus',  # Replace with your repository URL.
+    description='A Python API for analysis of suite2p two-photon calcium imaging outputs, including behavior/stimulus parsing, pose-estimation integration, signal classification, GLM/decoder statistics, and synaptic weight modeling.',
+    url='https://github.com/DJESTRIN/Sweet2Plus',
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
