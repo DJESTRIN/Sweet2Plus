@@ -14,7 +14,6 @@ from Sweet2Plus.core.core import pipeline,corralative_activity
 import glob,os
 import numpy as np
 from Sweet2Plus.core.quickgui import quickGUI
-import ipdb
 import tqdm
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -211,8 +210,8 @@ class pipeline(pipeline):
                 else:
                     dfF=pd.concat([dfF,dfoh],axis=0)
             dfF.to_csv(output_name)
-        except:
-            ipdb.set_trace()
+        except Exception as e:
+            print(f"Error building/saving dataframe: {e}")
 
 
 # Rewrite methods specific to dataset

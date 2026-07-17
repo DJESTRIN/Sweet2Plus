@@ -9,7 +9,6 @@ import tkinter as tk
 from tkinter import *
 from threading import Thread
 from tkinter import filedialog
-import ipdb
 
 class recordport():
     def __init__(self,output_directory=None,output_filename=None,readrate=9600,selected_port=None):

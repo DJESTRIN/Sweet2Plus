@@ -11,7 +11,6 @@ Date: 10-15-2024
 import numpy as np
 import suite2p as s2p
 import matplotlib.pyplot as plt 
-import ipdb
 import os,glob
 import pandas as pd
 from multiprocessing.pool import ThreadPool as Pool
@@ -240,7 +239,7 @@ class funcational_classification(parse_s2p):
         self.baselineAUCs=np.asarray(self.baselineAUCs)
         averages = self.baselineAUCs.mean(axis=0)
         stds = self.baselineAUCs.std(axis=0)
-        sems = stds/self.baselineAUCs.shape[0]
+        sems = stds/np.sqrt(self.baselineAUCs.shape[0])
         plt.errorbar(x,averages,sems,fmt='-o',color='red',markersize='3')
 
         file_string=os.path.join(self.resultpath_neur,f'preTMT_postTMT_AUCs.pdf')
@@ -289,7 +288,6 @@ class funcational_classification(parse_s2p):
         def get_silhouette_score(data,kmax):
             """ Citation: https://medium.com/analytics-vidhya/how-to-determine-the-optimal-k-for-k-means-708505d204eb """
             sil=[]
-            kmax=10
             for k in range(2,kmax+1):
                 kmeans = KMeans(n_clusters=k).fit(data)
                 labels=kmeans.labels_
@@ -482,8 +480,9 @@ class corralative_activity(funcational_classification):
             self.vanilla_peanut_d=dis(vanilla_auc_vals,peanut_auc_vals)
 
             self.state_distances=[self.water_tmt_d,self.vanilla_tmt_d,self.peanut_tmt_d,self.water_vanilla_d,self.water_peanut_d,self.vanilla_peanut_d]
-        except:
-            ipdb.set_trace()
+        except Exception as e:
+            print(f"Error computing euclidian distances: {e}")
+            raise
         
 class pipeline():
     """ A general pipeline which pulls data through corralative activity nested class
@@ -540,8 +539,8 @@ class pipeline():
 
                 #Append object as attribute to list
                 self.recordings.append(self.s2p_obj)
-            except:
-                print('error')
+            except Exception as e:
+                print(f'error processing recording {i} ({imagepath}): {e}')
         return self.recordings
     
     def __call__(self):

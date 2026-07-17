@@ -37,7 +37,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import optuna
 import tqdm
-import ipdb
 
 def quick_plot_df(X,y):
     average_traces = []
@@ -226,7 +225,6 @@ def hyperparameter_search_wrapper(data_directory, drop_directory, ntrials=1000):
     print(f"Best trial: {best_trial.number}")
     print(f"Best value: {best_trial.value}")
     print(f"Best parameters: {best_trial.params}")
-    ipdb.set_trace()
 
 if __name__=='__main__':
     # Check CUDA gpu capability

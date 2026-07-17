@@ -8,7 +8,6 @@ Version: 1.0
 Date: 11-06-2025
 """
 import argparse
-import ipdb
 from Sweet2Plus.core.SaveLoadObjs import SaveObj, LoadObj, SaveList, OpenList, gather_data
 import numpy as np
 import pandas as pd
@@ -57,8 +56,8 @@ class StateDynamics:
                 valid_ts = [ts for ts in odor_timestamps if ts + window_size <= subject_neurons.shape[1]]
                 try:
                     windows = np.array([subject_neurons[:, int(ts):int(ts+window_size)] for ts in valid_ts])  
-                except:
-                    ipdb.set_trace()
+                except Exception as e:
+                    raise ValueError(f"Failed to build AUC windows for odor '{odor_names}': {e}") from e
                 windows = np.swapaxes(windows, 0, 1)
                 aucs = np.trapz(windows, axis=2)  
                 AUCs_oh_mean = aucs.mean(axis=1) 
@@ -67,7 +66,7 @@ class StateDynamics:
 
             # Add baseline period AUC (0-5 minutes before first trial)
             first_odor = min([t for sublist in subject_odors for t in sublist])
-            baseline_auc = np.trapz(subject_neurons[:, int(first_odor-round(self.baseline_width/self.fps)):int(first_odor-5)]) # Baseline period is from -baselinewidth to first odor - 5 frames
+            baseline_auc = np.trapz(subject_neurons[:, int(first_odor-round(self.baseline_width/self.fps)):int(first_odor-5)], axis=1) # Baseline period is from -baselinewidth to first odor - 5 frames
             AUCs.append(baseline_auc)
             Odors.append('baseline')
 
@@ -179,7 +178,6 @@ class StateStatistics:
             axis=1
         )
         df_norm['euclid_norm'] = df_norm['euclidean_distance'] / df_norm['baseline_value']
-        ipdb.set_trace()
 
         summary_df = df_norm.groupby(['group', 'day', 'odor1', 'odor2']).agg(
             mean_distance=('euclid_norm', 'mean'),
@@ -278,8 +276,6 @@ class StateStatistics:
         )
         df_norm['angle_rad_norm'] = df_norm['angle_rad'] / df_norm['baseline_value']
 
-        ipdb.set_trace()
-
         summary_df = df_norm.groupby(['group', 'day', 'odor1', 'odor2']).agg(
             mean_ang=('angle_rad_norm', 'mean'),
             sem_ang=('angle_rad_norm', lambda x: np.std(x, ddof=1)/np.sqrt(len(x)))
@@ -361,7 +357,6 @@ def cli_parser():
 if __name__=='__main__':
     data_directory, drop_directory = cli_parser()
     neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
-    ipdb.set_trace()
     States_oh = StateDynamics(neuronal_activity, behavioral_timestamps, neuron_info)
     States_oh()
     summary_stats = StateStatistics(dataframe=States_oh.result_dataframe)

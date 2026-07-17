@@ -228,8 +228,8 @@ class engelhardglm(object):
         results=[]
 
         if self.model_type=="lm":
-            model = sm.OLS(Y, X).fit()
-            predicted = model.predict(X)
+            result = sm.OLS(Y, X).fit()
+            predicted = result.predict(X)
 
             # Save relevant data to list
             results.append({
@@ -344,7 +344,7 @@ class engelhardglm(object):
 
             trial_segments.sort(key=lambda x: x[0])
             if len(trial_segments) == 0:
-                return KeyError('No trials') 
+                raise KeyError('No trials') 
 
             # Crop out beginning and end of recording where there are no trials. 
             trial_id_full = np.zeros(timestamps_len, dtype=int)
@@ -468,7 +468,8 @@ class engelhardglm(object):
                 if median_r2 > best_median_r2:
                     best_median_r2 = median_r2
                     best_params = (sd, nb, deg)
-            except:
+            except Exception as e:
+                print(f"Skipping params (spline_duration={sd}, num_bases={nb}, degree={deg}) due to error: {e}")
                 continue
 
         # Set best parameters

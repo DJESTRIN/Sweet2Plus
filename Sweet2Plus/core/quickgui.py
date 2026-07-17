@@ -4,7 +4,6 @@ from PIL import Image, ImageTk
 import numpy as np
 from Sweet2Plus.core.customs2p import manual_classification
 from threading import Thread
-import ipdb
 import matplotlib.pyplot as plt
 import cv2
 import os

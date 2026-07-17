@@ -13,12 +13,12 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from statsmodels.stats.multitest import multipletests
 import scipy.stats as stats
+from scipy.stats import t
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import numpy as np
 import argparse 
-import ipdb
 import itertools
 
 class mixedmodels():
@@ -76,12 +76,10 @@ class mixedmodels():
 
         # Plot data distribution
         self.data_distributions()
-        ipdb.set_trace()
 
         # Run model and get emms
         self.generate_model()
         self.residual_evaluation()
-        ipdb.set_trace()
 
         self.model_predictions()
         self.EMM()
@@ -102,7 +100,7 @@ class mixedmodels():
         IQR = Q3 - Q1
         lower_bound = Q1 - 1.5 * IQR
         upper_bound = Q3 + 1.5 * IQR
-        self.dataframe = self.dataframe[~((self.dataframe[self.dependent_var_name] < lower_bound) | (self.dataframe[self.dependent_var_name] > upper_bound)).any(axis=1)]
+        self.dataframe = self.dataframe[~((self.dataframe[self.dependent_var_name] < lower_bound) | (self.dataframe[self.dependent_var_name] > upper_bound))]
 
     def generate_model(self):
         """ Build and run LinearMixed model based on attributes """
@@ -115,6 +113,8 @@ class mixedmodels():
         
         self.full_model_result = self.full_model.fit()
         self.params = self.full_model_result.params
+        # Store per-row fitted values so EMM() can compute estimated marginal means
+        self.dataframe['predictions'] = self.full_model_result.fittedvalues
 
     def model_predictions(self):
 
@@ -188,14 +188,12 @@ class mixedmodels():
 
         # Debugging: Print to check if values change across conditions
         print(combinations[['group', 'cluster', 'predicted']])
-        ipdb.set_trace()
 
 
     def EMM(self):
         """ Python does not have a package that does this, so I needed to code it """
         # Group by categorical variables and calculate the mean prediction for each group
         emmeans = self.dataframe.groupby(['group', 'day', 'trialtype', 'period'])['predictions'].mean().reset_index()
-        ipdb.set_trace()
         std_devs = self.dataframe.groupby(['group', 'day', 'trialtype', 'period'])['predictions'].std().reset_index()
         group_sizes = self.dataframe.groupby(['group', 'day', 'trialtype', 'period']).size().reset_index(name='n')
         emmeans = emmeans.merge(std_devs, on=['group', 'day', 'trialtype', 'period'])
@@ -245,7 +243,6 @@ class mixedmodels():
                   (self.emmeans['day'] == combo2[1]) & 
                   (self.emmeans['trialtype'] == combo2[2]) & 
                   (self.emmeans['period'] == combo2[3])]['n']
-                ipdb.set_trace()
 
     def multiple_comparisons(self):
         """ Run multiple comparisons on significant interactions and/or main effects """
@@ -355,8 +352,6 @@ class compare_models():
                     AIC_value = np.nan
 
                 all_aic_data.append([model_oh, AIC_value])
-        
-        ipdb.set_trace()
 
     def get_all_models(self):
         model_specifications = []
@@ -367,13 +362,13 @@ class compare_models():
         for re_combo in random_effect_combos:
             nested_structure = {}
             for re in re_combo:
-                if re in nested_effects:
+                if re in self.nested_effects:
                     for nested in self.powerset(self.nested_effects[re]):
                         if nested: 
                             nested_structure[re] = "1"
             nested_combos.append(nested_structure)
 
-        for fixed_combo, re_combo, nested_combo in product(fixed_effect_combos, random_effect_combos, nested_combos):
+        for fixed_combo, re_combo, nested_combo in itertools.product(fixed_effect_combos, random_effect_combos, nested_combos):
             fixed_part = " + ".join(fixed_combo)
             groups = re_combo[0] if re_combo else None
             random_parts = [f"(1|{re})" for re in re_combo] 
@@ -393,7 +388,7 @@ class compare_models():
 
     def powerset(self, itoh):
         s = list(itoh)
-        return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
+        return itertools.chain.from_iterable(itertools.combinations(s, r) for r in range(len(s) + 1))
     
 def cli_parser():
     parser = argparse.ArgumentParser()
@@ -417,4 +412,3 @@ def main(arguments):
 if __name__=='__main__':
     args = cli_parser()
     main(arguments=args)
-    ipdb.set_trace()

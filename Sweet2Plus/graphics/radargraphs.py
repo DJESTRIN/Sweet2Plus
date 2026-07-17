@@ -1,11 +1,14 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import ipdb
 
-def radar_plot(labels,values,title,filename_path,single_neuron=True,Grouping=[]):
+def radar_plot(labels,values,title,filename_path,single_neuron=True,Grouping=None):
     """
     Citation: https://www.pythoncharts.com/matplotlib/radar-charts/
     """
+    if Grouping is None:
+        Grouping = []
+    labels = list(labels)
+    values = list(values)
     if not Grouping:
         num_vars = len(labels)
         angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
@@ -22,9 +25,9 @@ def radar_plot(labels,values,title,filename_path,single_neuron=True,Grouping=[])
             ax.fill(angles, values, color='#1aaf6c', alpha=0.1)
         else:
             for value in values:
-                value += value[:1]
+                value = value + value[:1]
                 arr=np.asarray(value)
-                if value[3]==arr.max():
+                if np.argmax(arr)==3:
                     ax.plot(angles, value, linewidth=2,color='red')
                 else:
                     ax.plot(angles, value, linewidth=2,color='black')
@@ -60,6 +63,7 @@ def radar_plot(labels,values,title,filename_path,single_neuron=True,Grouping=[])
         ax.set_facecolor('#FAFAFA')
         ax.set_title(title, y=1.08)
         plt.savefig(filename_path)
+        plt.close(fig)
     else:
         Grouping=Grouping[0]
         num_vars = len(labels)
@@ -115,3 +119,4 @@ def radar_plot(labels,values,title,filename_path,single_neuron=True,Grouping=[])
         ax.set_facecolor('#FAFAFA')
         ax.set_title(title, y=1.08)
         plt.savefig(filename_path)
+        plt.close(fig)

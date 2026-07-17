@@ -11,7 +11,7 @@ Date: 11-14-2024
 from setuptools import setup, find_packages
 
 setup(
-    name='Sweet2PPlus',
+    name='Sweet2Plus',
     version='0.1',
     packages=find_packages(),  # Automatically find subfolder1 and subfolder2 as packages.
     install_requires=['numpy',
@@ -24,14 +24,14 @@ setup(
                       'tqdm',
                       'opencv-python',
                       'pillow',
-                      'tiffile',
+                      'tifffile',
                       'optuna',
                       'watchdog',
                       'statsmodels'],
     author='David Estrin',
     author_email='',
     description='A short description of your project',
-    url='https://github.com/DJESTRIN/Sweet2PPlus',  # Replace with your repository URL.
+    url='https://github.com/DJESTRIN/Sweet2Plus',  # Replace with your repository URL.
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',

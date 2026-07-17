@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import cv2
 import glob as gb
 import os 
-import ipdb
 from multiprocessing import Pool
 from math import dist as dist
 
@@ -42,27 +41,32 @@ class DLCparser():
         #Get data for X and Y coordinates
         self.data=self.data.iloc[1:] #Strip annoying headers
         self.xs=self.data[self.data.columns[1::3]] #Puts specific column of data into new variable  in this example it starts at column 1 and skips by 3 untill the end
-        self.xs=self.xs.iloc[1:, :].to_numpy().astype(float)
+        self.xs=self.xs.to_numpy().astype(float)
         self.ys=self.data[self.data.columns[2::3]]
-        self.ys=self.ys.iloc[1:, :].to_numpy().astype(float)
+        self.ys=self.ys.to_numpy().astype(float)
         self.ps=self.data[self.data.columns[3::3]]
-        self.ps=self.ps.iloc[1:, :].to_numpy().astype(float)
+        self.ps=self.ps.to_numpy().astype(float)
         self.psthreshold = np.where(self.ps >self.threshold, self.ps,np.nan)
         self.xsthreshold = np.where(self.ps>self.threshold,self.xs,np.nan)
         self.ysthreshold = np.where(self.ps>self.threshold,self.ys,np.nan)
         
         
     def get_example_image(self):
-        real,_ = self.fileoh.split('DLC')
+        real,_ = self.fileoh.split('DLC', 1)
         real+='.avi'
         cap = cv2.VideoCapture(real)
         breakpoint_oh=0
+        frame = None
         while cap.isOpened():
-            ret, frame = cap.read()
+            ret, frame_oh = cap.read()
+            if not ret:
+                break
+            frame = frame_oh
             if breakpoint_oh==self.framenumber:
                 break
             else:
                 breakpoint_oh+=1
+        cap.release()
         self.exampleframe = frame
         
     def plottrajectory(self):
@@ -75,8 +79,7 @@ class DLCparser():
         ax.set_xlim([40,800])
         ax.set_ylim([700,220])
         
-        ipdb.set_trace()
-        filename,_ =self.fileoh.split('DLC') 
+        filename,_ =self.fileoh.split('DLC', 1) 
         filename += 'trajectory_image.jpg'
         plt.savefig(filename)
         plt.close()
@@ -98,7 +101,7 @@ class DLCparser():
             plt.tight_layout()
             plt.plot(doh)
             plt.title(self.headers[i])
-        filename,_ =self.fileoh.split('DLC') 
+        filename,_ =self.fileoh.split('DLC', 1) 
         filename += 'distancesperbodypart.pdf'
         plt.savefig(filename)
         plt.close()

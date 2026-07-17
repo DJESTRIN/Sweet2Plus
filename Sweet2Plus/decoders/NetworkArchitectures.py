@@ -12,7 +12,6 @@ import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import numpy as np
-import ipdb
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, global_mean_pool

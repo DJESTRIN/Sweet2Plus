@@ -22,7 +22,6 @@ import argparse
 import glob, os
 import gzip
 import pickle
-import ipdb
 import pandas as pd
 import numpy as np
 
@@ -93,7 +92,6 @@ def proc():
     collection_obj = collect(input_path=input_directory)
     collection_obj.load_results()
     dataframe = collection_obj.generate_dataframe()
-    ipdb.set_trace()
 
 if __name__=='__main__':
     proc()

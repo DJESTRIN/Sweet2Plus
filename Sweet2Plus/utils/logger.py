@@ -12,7 +12,6 @@ import time
 from projectmanager.CLIlogger import Logger
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import ipdb
 import argparse
 
 """ Custom Functions

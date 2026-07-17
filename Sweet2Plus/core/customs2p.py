@@ -12,7 +12,6 @@ import suite2p as s2p
 import matplotlib.pyplot as plt 
 import os,glob
 import seaborn as sns
-import ipdb
 import numpy as np
 import cv2
 import tqdm

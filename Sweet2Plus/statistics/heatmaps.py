@@ -21,7 +21,6 @@ from sklearn.model_selection import GridSearchCV
 from Sweet2Plus.statistics.coefficient_clustering import regression_coeffecient_pca_clustering, gather_data, cli_parser
 import pandas as pd
 import tqdm 
-import ipdb 
 
 class heatmap(regression_coeffecient_pca_clustering):
     def __call__(self):
@@ -179,8 +178,6 @@ class heatmap(regression_coeffecient_pca_clustering):
         # Convert list to DataFrame in one go (much faster than appending)
         self.final_dataframe = pd.DataFrame(data_list, columns=columns)
         self.final_dataframe.to_csv(os.path.join(self.drop_directory, "auc_dataset.csv"), index=False)
-
-        ipdb.set_trace()
 
         self.final_activity_dataframe = pd.DataFrame(data_activity, columns=columns_activity)
         df_long = self.final_activity_dataframe.copy()
@@ -364,7 +361,6 @@ class heatmap(regression_coeffecient_pca_clustering):
 
         plt.xticks(rotation=45)  
         plt.savefig(os.path.join(self.drop_directory, "violin_all_data_day.jpg"))
-        ipdb.set_trace()
 
     def generate_singular_neuronal_onehot(self):
         """ 

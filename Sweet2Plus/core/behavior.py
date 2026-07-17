@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os,glob
 import pandas as pd
-import ipdb
 
 # Create custom functions and classes
 class load_serial_output():
@@ -236,20 +235,7 @@ class load_serial_output():
         plt.close()
 
 if __name__=='__main__':
-    # behdirs = glob.glob(r'C:\tmt_assay\tmt_experiment_2024_clean\twophoton_recordings\serialoutputdata\Day1\**\*24*')
-
-    # ipdb.set_trace()
-    # #behdirs=behdirs[1:]
-    # working=[]
-    # for pathoh in behdirs:
-    #     print(pathoh)
-    #     so_obj = load_serial_output(pathoh)
-    #     last_trial = so_obj()
-    #     working.append(last_trial)
-    #     break
-
     pathoh = r'C:\Users\listo\tmt_experiment_2024_working_file\C4749356_cohort-2_M2_cort\day_0'
     objoh = load_serial_output(path=pathoh)
     objoh()
-    ipdb.set_trace()
 

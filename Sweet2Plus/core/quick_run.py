@@ -1,6 +1,5 @@
 from Sweet2Plus.core.SaveLoadObjs import LoadObj
 import glob,os
-import ipdb
 from itertools import combinations
 import numpy as np
 import pandas as pd
@@ -129,8 +128,9 @@ def sep_correlations(objoh):
 
         day,cage,mouse=stripinfo(objoh.datapath)
         info = [day,cage,mouse] #Get info data
-    except:
-        ipdb.set_trace()
+    except Exception as e:
+        print(f"Error processing recording: {e}")
+        raise
     
     return info,threat_blcorr,threat_rewcorr,threat_tmtcorr,threat_posttmtcorr,nonthreat_blcorr,nonthreat_rewcorr,nonthreat_tmtcorr,nonthreat_posttmtcorr,neuron_labels
 
@@ -153,8 +153,8 @@ def build_tall(big_list):
                 else:
                     DF=pd.concat([DF,dfoh])
                 count+=1
-        except:
-            ipdb.set_trace()
+        except Exception as e:
+            print(f"Error building tall dataframe for recording {i}: {e}")
 
         if i==0:
             DFall=DF
@@ -282,5 +282,4 @@ if __name__=='__main__':
     #DFinal2.to_csv('correlation_by_group.csv',index=False)
     DFinal_sep=build_tall_sep(parsed_list)
     DFinal_sep.to_csv('correlation_by_group_sep.csv',index=False)
-    ipdb.set_trace()
 

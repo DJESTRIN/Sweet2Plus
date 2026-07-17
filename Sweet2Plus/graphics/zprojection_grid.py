@@ -1,5 +1,4 @@
 import glob, os
-import ipdb
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
@@ -33,7 +32,6 @@ for j,session in enumerate(sessions):
 
         all_projs.append([maxproj,m,j])
 
-ipdb.set_trace()
 fig=plt.figure(figsize=(15,15),dpi=400)
 spot=1
 prevday=all_projs[0][2]

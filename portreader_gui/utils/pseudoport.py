@@ -3,7 +3,6 @@ import serial
 from threading import Thread
 import os
 from winpty import PtyProcess
-import ipdb
 
 class fakeport():
     def __init__(self,number_of_ports):

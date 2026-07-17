@@ -87,7 +87,10 @@ class spinup:
             for line in output.splitlines():
                 if line.startswith('JOBID'):
                     continue
-                job_id, status = line.split()
+                parts = line.split()
+                if len(parts) != 2:
+                    continue
+                job_id, status = parts
                 job_status[job_id] = status
         else:
             print("Failed to query job statuses")
@@ -107,7 +110,7 @@ class spinup:
 
     def run_final_stats(self):
         # Run statistics code
-        path_to_python_script = os.path.join(os.path.abspath(__file__).split('WeighModelingSpinup')[0],'WeightModelingStats.py')
+        path_to_python_script = os.path.join(os.path.abspath(__file__).split('WeightModelingSpinup')[0],'WeightModelingStats.py')
         run_stats_command = f"sbatch --job-name=StatsWeightModeling \
                         --output={self.slurm_output_directory}/output_%j.log \
                         --error={self.slurm_output_directory}/error_%j.log \

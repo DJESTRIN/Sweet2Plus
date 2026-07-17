@@ -31,7 +31,6 @@ import seaborn as sns
 import os, glob
 from scipy.stats import ttest_ind
 from statsmodels.stats.anova import anova_lm
-import ipdb
 
 class weightdata():
     """ Gathers and organizes all weight data into several tables """
@@ -69,12 +68,7 @@ class weightdata():
         print('creating model...')
         full_model = smf.mixedlm("abs_synaptic_weight ~ group * day", self.weights, groups=self.weights["suid"], re_formula="1", vc_formula={"connectionid": "1"}).fit()
         reduced_model = smf.mixedlm("abs_synaptic_weight ~ group + day", self.weights, groups=self.weights["suid"], re_formula="1", vc_formula={"connectionid": "1"}).fit()
-        ipdb.set_trace()
         print(anova_lm(reduced_model, full_model))
-
-        
-
-        ipdb.set_trace()
 
 
 class graphics(weightdata):
@@ -82,10 +76,8 @@ class graphics(weightdata):
         self.average_sem()
 
     def average_sem(self):
-        ipdb.set_trace()
         running_average = self.weights.groupby(['day', 'suid', 'group','neuron_id_2'])['abs_synaptic_weight'].mean().reset_index()
         running_average = running_average.groupby(['suid','group','day'])['abs_synaptic_weight'].mean().reset_index()
-        running_average2 = running_average
         running_average = running_average.groupby(['group','day']).agg( mean=('abs_synaptic_weight', 'mean'),
                                                           std_error=('abs_synaptic_weight', lambda x: np.std(x, ddof=1) / np.sqrt(len(x))))
         running_average = running_average.reset_index()
@@ -109,7 +101,6 @@ class graphics(weightdata):
 
 
         # Calculate the baseline std
-        ipdb.set_trace()
         baseline = self.weights[self.weights['day'] == 0].groupby(['suid', 'group', 'neuron_id_2'])['abs_synaptic_weight'].mean().reset_index()
         baseline.rename(columns={'abs_synaptic_weight': 'baseline'}, inplace=True)
 
@@ -127,9 +118,9 @@ class graphics(weightdata):
         self.weights['normalized_weight'] = (self.weights['abs_synaptic_weight'] - self.weights['baseline']) / self.weights['std_baseline']
 
         # Step 3: Group by suid, calculate mean normalized weight
-        running_average = self.weights.groupby(['day', 'suid', 'group', 'neuron_id_2'])['synaptic_weight'].mean().reset_index()
-        running_average = running_average.dropna(subset=['synaptic_weight'])
-        running_average = running_average.groupby(['day', 'suid', 'group'])['synaptic_weight'].mean().reset_index()
+        running_average = self.weights.groupby(['day', 'suid', 'group', 'neuron_id_2'])['normalized_weight'].mean().reset_index()
+        running_average = running_average.dropna(subset=['normalized_weight'])
+        running_average = running_average.groupby(['day', 'suid', 'group'])['normalized_weight'].mean().reset_index()
         # Step 4: Group by day and group and calculate the mean and std error over suid
         running_average = running_average.groupby(['day', 'group']).agg(
             mean=('normalized_weight', lambda x: np.nanmean(x)),
@@ -137,7 +128,6 @@ class graphics(weightdata):
         ).reset_index()
 
         running_average['std_error'] = pd.to_numeric(running_average['std_error'], errors='coerce')
-        ipdb.set_trace()
         # Step 5: Faceting using Seaborn
         # Create a Seaborn FacetGrid, facet by 'day' column
         g = sns.FacetGrid(running_average, col="day", hue="group", height=6, aspect=1.2, margin_titles=True)

@@ -10,7 +10,6 @@ Date: 03-06-2026
 from suite2p.extraction import dcnv
 import pickle
 import os
-import ipdb
 import numpy as np
 import matplotlib.pyplot as plt
 

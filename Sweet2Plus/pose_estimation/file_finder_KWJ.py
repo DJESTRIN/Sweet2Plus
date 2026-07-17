@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import cv2
 import glob as gb
 import os 
-import ipdb
 from multiprocessing import Pool
 from math import dist as dist
 
@@ -16,13 +15,13 @@ for fileoh in tqdm.tqdm(files):
     data = pd.read_csv(fileoh)
     data=data.iloc[1:] #Strip annoying headers
     xs=data[data.columns[1::3]] #Puts specific column of data into new variable  in this example it starts at column 1 and skips by 3 untill the end
-    xs=xs.iloc[1:, :].to_numpy().astype(float)
+    xs=xs.to_numpy().astype(float)
     print(xs)
     print (xs.shape)
     ys=data[data.columns[2::3]]
-    ys=ys.iloc[1:, :].to_numpy().astype(float)
+    ys=ys.to_numpy().astype(float)
     ps=data[data.columns[3::3]]
-    ps=ps.iloc[1:, :].to_numpy().astype(float)
+    ps=ps.to_numpy().astype(float)
     psthreshold = np.where(ps >threshold, ps,np.nan)
     xsthreshold = np.where(ps>threshold,xs,np.nan)
     ysthreshold = np.where(ps>threshold,ys,np.nan)

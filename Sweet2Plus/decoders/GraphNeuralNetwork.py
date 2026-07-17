@@ -9,7 +9,6 @@ Date: 12-06-2024
 """
 from Sweet2Plus.statistics.coefficient_clustering import cli_parser, gather_data
 from Sweet2Plus.decoders.NetworkArchitectures import GCNTrialClassifier, NeuralNetworkFigures
-import ipdb
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, f1_score
@@ -260,7 +259,6 @@ class Education:
                 data = data.to(self.device)
                 self.optimizer.zero_grad()
                 outputs = self.model_oh(data)
-                ipdb.set_trace()
                 loss = self.criterion(outputs.view(-1, outputs.size(-1)), data.y)
                 loss.backward()
                 self.optimizer.step()

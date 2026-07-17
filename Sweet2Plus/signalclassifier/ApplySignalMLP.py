@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 import glob,os
-import ipdb
 import tqdm
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -281,8 +280,6 @@ class RunMLPFull():
         # Create DataFrame and save
         df_export = pd.DataFrame(rows)
         df_export.to_csv("trace_percentile_summary.csv", index=False)
-
-        ipdb.set_trace()
 
     
     def quickplot_all(self):

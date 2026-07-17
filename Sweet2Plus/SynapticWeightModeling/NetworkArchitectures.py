@@ -12,7 +12,6 @@ import torch.nn as nn
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch
-import ipdb
 
 class SingleSampleLinearLayer(nn.Module):
     """ Each neuron has its own independent linear layer. """
@@ -54,14 +53,14 @@ class SingleSampleLSTMLayer(nn.Module):
             nn.LSTM(input_size=1, hidden_size=hidden_size, num_layers=num_layers, batch_first=True) 
             for _ in range(num_neurons)
         ])
-        self.fc = nn.Linear(sequence_length, 1)
+        self.fc = nn.Linear(hidden_size, 1)
 
     def forward(self, x):
         outputs = []
         for i in range(self.num_neurons):
             sample_input = x[:, i, :].unsqueeze(-1)  # Shape: (batch_size, sequence_length, 1)
             lstm_out, _ = self.lstm_layers[i](sample_input)  # Pass through LSTM
-            last_output = lstm_out[:, :, -1]  # Take last time step output
+            last_output = lstm_out[:, -1, :]  # Take last time step's hidden state
             prediction = self.fc(last_output)
             outputs.append(prediction)
         return torch.cat(outputs, dim=1)  # Shape: (batch_size, num_neurons)
@@ -106,8 +105,8 @@ class DirectInputLayer(nn.Module):
             x = self.drop_out(self.l_relu(self.d_layer2(x)))
             x = self.drop_out(self.l_relu(self.d_layer3(x)))
             x = self.drop_out(self.l_relu(self.d_layer4(x)))
-        except:
-            ipdb.set_trace()
+        except Exception as e:
+            raise RuntimeError(f"Forward pass failed: {e}") from e
             
         return x.squeeze(-1)
 

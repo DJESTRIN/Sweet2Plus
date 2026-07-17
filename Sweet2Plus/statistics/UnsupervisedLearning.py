@@ -20,7 +20,6 @@ from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 import matplotlib
 import matplotlib.pyplot as plt
-import ipdb
 import tqdm
 import pandas as pd
 import seaborn as sns
@@ -52,8 +51,10 @@ class DimensionalityReduction:
 
     def pca(self):
         if self.components is None:
+            scaler = StandardScaler()
+            self.activitydata_scaled = scaler.fit_transform(self.activitydata)
             pca = PCA()
-            pca.fit(self.activitydata)
+            self.pca_data = pca.fit_transform(self.activitydata_scaled)
 
             # Calculate the cumulative explained variance
             explained_variance = pca.explained_variance_ratio_
@@ -122,7 +123,6 @@ class Clustering(DimensionalityReduction):
         dbscan_labels = dbscan.fit_predict(self.pca_data)
 
         # Remove noise points (where label == -1)
-        ipdb.set_trace()
         mask = dbscan_labels != -1
         pca_data_filtered = self.pca_data[mask]
         dbscan_labels_filtered = dbscan_labels[mask]
@@ -140,7 +140,6 @@ class Clustering(DimensionalityReduction):
         ax.set_ylabel("PCA 2")
         ax.set_zlabel("PCA 3")
         plt.savefig('dbscanresults.jpg')
-        ipdb.set_trace()
 
 def gather_data(parent_data_directory,drop_directory,file_indicator='obj'):
     """ Gather all data into lists from parent directory """

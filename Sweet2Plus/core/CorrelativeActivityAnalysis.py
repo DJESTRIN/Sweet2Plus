@@ -20,7 +20,6 @@ Compare correlation of acitivty:
     Does the state change differ with respect to stress (Day 1 vs Day 14)
 (4) Replicate findings from CORT study
 """
-import ipdb
 from Sweet2Plus.core.core import pipeline, corralative_activity 
 from behavior import load_serial_output
 import numpy as np
@@ -162,8 +161,9 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
                     # list of name, degree, score
                     try:
                         dict={'subject':infooh[2],'cage':infooh[1],'session':infooh[0],'group':infooh[3],'neuron':neuron_id,'baseline':blv,'reward':np.nan,'tmt':np.nan,'posttmt':np.nan,'classification':labelsoh}
-                    except:
-                        ipdb.set_trace()
+                    except Exception as e:
+                        print(f'Skipping neuron {neuron_id} for subject {infooh}: {e}')
+                        continue
                     dfoh=pd.DataFrame(dict,index=[0])
                     if counter==0:
                         DF=dfoh
@@ -171,7 +171,6 @@ def generate_tall_dataset(parse_info,correlation_data,root_directory,filename='R
                         DF=pd.concat([DF,dfoh])
                     counter+=1
 
-    ipdb.set_trace()
     # Save tall format dataframe to csv file in root_directory
     DF.to_csv(os.path.join(root_directory,filename), index=False)  
 
@@ -298,7 +297,7 @@ class alternative_pipeline(pipeline):
 def delete_2p_obj_files(input_directory):
     """Delete a file after single user confirmation."""
     if not os.path.exists(input_directory):
-        raise(f"Error: this path  '{input_directory}' does not exist.")
+        raise FileNotFoundError(f"Error: this path  '{input_directory}' does not exist.")
     
     # erify the user wants to delete all s2p objects
     response = input(f"Are you sure you want to delete all Sweet2Plus objects in '{input_directory}'? (yes/no): ").strip().lower()

@@ -19,8 +19,6 @@ from Sweet2Plus.core.SaveLoadObjs import LoadObj
 from sklearn.preprocessing import StandardScaler
 import matplotlib
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-import ipdb
 import pandas as pd
 import seaborn as sns
 from itertools import combinations
@@ -57,7 +55,7 @@ class circuit_regression:
         # Set regression type
         self.regression_type = regression_type
         if self.regression_type!='ridge' and self.regression_type!='OLS':
-            raise("regression_type must equal 'ridge' or 'OLS'. regression_type is currently incorrectly set...")
+            raise ValueError("regression_type must equal 'ridge' or 'OLS'. regression_type is currently incorrectly set...")
         
         #neural_activity = StandardScaler().fit_transform(neural_activity.T).T
 
@@ -100,7 +98,7 @@ class circuit_regression:
     def normalize_activity(self):
         if self.normalize_neural_activity:
             print("Normalizing Neuronal Activity for each neuron via z-score ....")
-            for idx,neuron_activity in self.neuronal_activity:
+            for idx,neuron_activity in enumerate(self.neuronal_activity):
                 self.neuronal_activity[idx]=(neuron_activity-np.mean(neuron_activity))/np.std(neuron_activity)
     
     @staticmethod
@@ -656,7 +654,6 @@ class circuit_regression:
             stacked = np.vstack(traces)
             return stacked.mean(axis=0)
 
-        ipdb.set_trace()
         avg_traces_df = (
             df.groupby(['Behavior_num', 'group', 'beta_cat'])['trace']
             .apply(lambda traces: np.mean(np.vstack(traces.tolist()),axis=0))

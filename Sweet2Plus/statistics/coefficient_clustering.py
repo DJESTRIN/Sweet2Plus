@@ -29,7 +29,7 @@ import matplotlib.cm as cm
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 from sklearn.model_selection import cross_val_score
-import ipdb
+
 import tqdm
 import pandas as pd
 import seaborn as sns
@@ -79,7 +79,7 @@ class regression_coeffecient_pca_clustering:
         # Set regression type
         self.regression_type = regression_type
         if self.regression_type!='ridge' and self.regression_type!='OLS':
-            raise("regression_type must equal 'ridge' or 'OLS'. regression_type is currently incorrectly set...")
+            raise ValueError("regression_type must equal 'ridge' or 'OLS'. regression_type is currently incorrectly set...")
         
         #neural_activity = StandardScaler().fit_transform(neural_activity.T).T
 
@@ -123,7 +123,7 @@ class regression_coeffecient_pca_clustering:
     def normalize_activity(self):
         if self.normalize_neural_activity:
             print("Normalizing Neuronal Activity for each neuron via z-score ....")
-            for idx,neuron_activity in self.neuronal_activity:
+            for idx,neuron_activity in enumerate(self.neuronal_activity):
                 self.neuronal_activity[idx]=(neuron_activity-np.mean(neuron_activity))/np.std(neuron_activity)
         
     def ols_regression(self):
@@ -185,9 +185,9 @@ class regression_coeffecient_pca_clustering:
                 X = neuron.reshape(-1, 1)
                 y = recording_beh[:,:4]
                 X, y = self.keep_balanced_zeros_before_ones(X,y)
-                X = sm.add_constant(X)
                 scaler = StandardScaler()
                 X = scaler.fit_transform(X)
+                X = sm.add_constant(X)
                 
                 neurondf = pd.DataFrame(np.hstack((X,y)))
                 if not os.path.exists(os.path.join(self.drop_directory,r'individual_neuron_data')):
@@ -238,7 +238,6 @@ class regression_coeffecient_pca_clustering:
 
 
             # Create a DataFrame with results for each column
-            ipdb.set_trace()
             results_df = pd.DataFrame({
                 'Beh':trialnum,
                 'Accuracy': accuracies,
@@ -249,7 +248,6 @@ class regression_coeffecient_pca_clustering:
                 't-value': t_values_list,
                 'p-value': p_values_list
             })
-            ipdb.set_trace()
  
 
     def calculate_auc_and_behavior_comb(self, filtered_neuron_data, filtered_behavior_data):
@@ -521,8 +519,6 @@ class regression_coeffecient_pca_clustering:
         plt.legend(loc='upper left', bbox_to_anchor=(1.05, 1), fontsize=10, frameon=False)
         plt.tight_layout()
         plt.savefig("ClusterAverages_with_Heatmaps.jpg")
-        ipdb.set_trace()
-       
 
         time = np.arange(0, 20, 1)  # Time range
         fig, axes = plt.subplots(nrows=4, ncols=1, figsize=(14, 28), sharex=True)  # 4 rows, 1 column, shared x-axis
@@ -634,7 +630,6 @@ class regression_coeffecient_pca_clustering:
         lowest_sil = silhouette_scores.argmax()
         final_cluster_number = list(cluster_range)[lowest_sil]
         print(f'The final cluster number is {final_cluster_number} clusters with a silhouette score of {lowest_sil}.')
-        ipdb.set_trace()
 
         # Perform final kmeans clustering via correct number of clusters
         final_clusters = kmeans(n_clusters=final_cluster_number).fit(pca_results)

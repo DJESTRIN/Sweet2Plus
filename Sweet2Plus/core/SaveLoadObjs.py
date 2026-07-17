@@ -12,7 +12,6 @@ import json
 import numpy as np
 from Sweet2Plus.core.core import corralative_activity 
 import pickle
-import numpy as np
 import os, glob
 import pandas as pd
 from tqdm import tqdm
@@ -26,9 +25,6 @@ def SaveObj(FullPath: str, s2p_obj_input):
     Outputs:
     None .... File will be saved to specified location
     """
-    import json
-    import numpy as np
-
     #Concatenate large list
     big_list=[]
 
@@ -68,9 +64,6 @@ def LoadObj(FullPath: str):
     Outputs:
     The object you saved in that json file
     """
-    import json
-    import numpy as np
-
     with open(FullPath, 'r') as file:
         big_list = json.load(file)
 
