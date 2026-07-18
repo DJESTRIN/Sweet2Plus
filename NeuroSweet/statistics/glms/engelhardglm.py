@@ -514,12 +514,23 @@ def cli_parser():
     parser.add_argument('--data_provided',action='store_true',help='If data was already provided in correct format')
     parser.add_argument('--start_neuron',type=int, default=None, help='start neuron index')
     parser.add_argument('--stop_neuron',type=int, default=None, help='stop neuron index')
+    parser.add_argument('--n_jobs',type=int, default=None,
+                         help='Parallel workers for fitting neurons in this chunk (default: '
+                              'SLURM_CPUS_PER_TASK, or all logical cores)')
+    parser.add_argument('--graphics',action='store_true',
+                         help='Save per-neuron diagnostic plots (off by default; expensive at scale, '
+                              'e.g. across a SLURM array covering thousands of neurons)')
     args=parser.parse_args()
-    return args.data_directory, args.drop_directory, args.data_provided, args.start_neuron, args.stop_neuron
+    return (args.data_directory, args.drop_directory, args.data_provided, args.start_neuron,
+            args.stop_neuron, args.n_jobs, args.graphics)
 
 def proc():
     # General procedure 
-    data_directory, drop_directory, data_provided, start_neuron_indx, stop_neuron_indx = cli_parser()
+    (data_directory, drop_directory, data_provided, start_neuron_indx, stop_neuron_indx,
+     n_jobs, graphics) = cli_parser()
+    if n_jobs is None:
+        from NeuroSweet.utils.parallel_helper import get_default_n_jobs
+        n_jobs = get_default_n_jobs()
 
     # If data was already processed and is in drop directory, skip this step
     if not data_provided:
@@ -540,22 +551,22 @@ def proc():
         dataset.load()
 
     if (start_neuron_indx  is not None) and (stop_neuron_indx is not None):
-        print(f'Running neuron {start_neuron_indx} to {stop_neuron_indx}')
+        print(f'Running neuron {start_neuron_indx} to {stop_neuron_indx} with n_jobs={n_jobs}')
         glmobj = engelhardglm(activity=dataset.trans_act,
                               timestamps=dataset.trans_ts, 
                               info=dataset.trans_info, 
                               dropdir=drop_directory, 
-                              graphics=True,
+                              graphics=graphics,
                               start_neuron=start_neuron_indx,
                               stop_neuron=stop_neuron_indx,
                               local_neuron_id=dataset.trans_local_id)
-        glmobj()
+        glmobj(n_jobs=n_jobs)
     
     else:
-        print('Running all neurons')
+        print(f'Running all neurons with n_jobs={n_jobs}')
         glmobj = engelhardglm(activity=dataset.trans_act,timestamps=dataset.trans_ts, info=dataset.trans_info,
-                               dropdir=drop_directory, graphics=True, local_neuron_id=dataset.trans_local_id)
-        glmobj()
+                               dropdir=drop_directory, graphics=graphics, local_neuron_id=dataset.trans_local_id)
+        glmobj(n_jobs=n_jobs)
     
     #glmobj._optimize_hyper_params() # Run optimization to determine hyperparameters for model 
     return 

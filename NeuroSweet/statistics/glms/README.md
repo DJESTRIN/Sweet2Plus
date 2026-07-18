@@ -80,6 +80,33 @@ Differing temporal windows (short fixed window in circuit_regression vs. a long 
 kernel in engelhardglm) and differing significance procedures (bootstrap CI/t-test vs.
 circular-lag permutation) can also drive disagreement independent of true encoding strength.
 
+## Running the full pipeline on a SLURM cluster
+
+`engelhardglm`'s per-neuron fits (500 circular-lag permutations + 1 real GLM fit per neuron) are the
+bottleneck: benchmarked at ~0.6s/fit locally, that's ~5 min/neuron single-threaded, or **many CPU-days**
+across a full dataset of tens of thousands of neurons -- infeasible on a single desktop. Use
+`NeuroSweet/cluster_scripts/submit_full_glm_pipeline.sh` to run it on SLURM instead, split across an
+array job (one array task per chunk of neurons):
+
+```
+NeuroSweet/cluster_scripts/submit_full_glm_pipeline.sh <data_directory> <drop_directory> [chunk_size] [repo_root] [conda_env]
+```
+
+This submits, in order:
+1. **`glm_prep.sh`** (single job, blocking): loads the raw recordings once, runs the cheap population
+   decoder (`circuit_regression` -> `beta_filtered.csv`), and curates + saves the per-neuron dataset
+   (`trans_*.pkl`, `glm_manifest.json`) that the encoder array needs.
+2. **`glm_encoder_array.sh`** (SLURM array, `--array=0-N`, one task per `chunk_size` neurons): each task
+   calls `engelhardglm --data_provided --start_neuron ... --stop_neuron ...` to fit its chunk, sized
+   automatically from the neuron count in `glm_manifest.json`.
+3. **`glm_summarize_compare.sh`** (single job, `--dependency=afterok:<array_job_id>`): runs
+   `glmsummary.collect` then `compare_decoder_encoder.py` once every array task has finished.
+
+**Before running for real:** check your cluster's `MaxArraySize`/QOS core limits, confirm the conda
+env name and `repo_root` path match your cluster, and re-benchmark per-neuron fit time on the
+cluster's hardware to tune `chunk_size` / `--cpus-per-task` / `--time` in `glm_encoder_array.sh` --
+these scripts were written from local benchmarking and have not yet been run on the actual cluster.
+
 ## Stimulus ordering
 
 All three modules assume the canonical odor order set in `Sweet2Plus/core/behavior.py`'s
