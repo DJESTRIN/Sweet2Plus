@@ -11,9 +11,12 @@
 # across a SLURM array, one array task per contiguous chunk of neurons. Must run *after*
 # glm_prep.sh has written <drop_directory>/trans_*.pkl and glm_manifest.json.
 #
-# Runtime note (benchmarked on a 32-core desktop): ~0.6s per GLM fit x 501 fits/neuron ~= 5 min/neuron
-# single-threaded. With CPUS_PER_TASK workers splitting CHUNK_SIZE neurons within a task, wall time per
-# array task is roughly ceil(CHUNK_SIZE / CPUS_PER_TASK) x 5 min (+overhead). Tune CHUNK_SIZE,
+# Runtime note: an isolated single-fit benchmark on a 32-core desktop gave ~0.6s/fit x 501 fits/neuron
+# ~= 5 min/neuron, but an actual end-to-end smoke test of this exact CLI path (synthetic data, 2000
+# frames/neuron, 11 neurons total) measured ~7-9 CPU-min/neuron once patsy formula parsing, trial
+# cropping, and spline convolution overhead are included -- use ~8 min/neuron as the planning number.
+# With CPUS_PER_TASK workers splitting CHUNK_SIZE neurons within a task, wall time per array task is
+# roughly ceil(CHUNK_SIZE / CPUS_PER_TASK) x 8 min (+overhead). Tune CHUNK_SIZE,
 # --cpus-per-task, and --time together, and check your cluster's MaxArraySize / QOS core limits before
 # submitting a large array (see submit_full_glm_pipeline.sh, which computes --array from the actual
 # neuron count in glm_manifest.json).

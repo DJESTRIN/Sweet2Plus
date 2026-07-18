@@ -18,9 +18,9 @@
 #   - Confirm the conda env name (default "sweet2p") and repo_root path match your cluster setup --
 #     these scripts were written from local benchmarking and have NOT been tested on the actual
 #     cluster yet.
-#   - Each glm_encoder_array.sh task was benchmarked locally at ~5 min/neuron single-threaded (500
-#     circular-lag permutations + 1 real GLM fit per neuron); tune --time accordingly once you've
-#     confirmed per-neuron timing on the cluster's hardware.
+#   - Each glm_encoder_array.sh task was benchmarked with an end-to-end smoke test (synthetic data,
+#     this exact CLI path) at ~7-9 CPU-min/neuron -- plan for ~8 min/neuron and tune --time
+#     accordingly once you've confirmed per-neuron timing on the cluster's hardware.
 set -e
 
 data_directory=$1

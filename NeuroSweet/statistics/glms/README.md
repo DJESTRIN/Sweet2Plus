@@ -83,10 +83,10 @@ circular-lag permutation) can also drive disagreement independent of true encodi
 ## Running the full pipeline on a SLURM cluster
 
 `engelhardglm`'s per-neuron fits (500 circular-lag permutations + 1 real GLM fit per neuron) are the
-bottleneck: benchmarked at ~0.6s/fit locally, that's ~5 min/neuron single-threaded, or **many CPU-days**
-across a full dataset of tens of thousands of neurons -- infeasible on a single desktop. Use
-`NeuroSweet/cluster_scripts/submit_full_glm_pipeline.sh` to run it on SLURM instead, split across an
-array job (one array task per chunk of neurons):
+bottleneck: an end-to-end smoke test of the actual CLI path measured ~7-9 CPU-min/neuron (plan for
+~8 min/neuron), which across a full dataset of tens of thousands of neurons is **many CPU-days** --
+infeasible on a single desktop. Use `NeuroSweet/cluster_scripts/submit_full_glm_pipeline.sh` to run it
+on SLURM instead, split across an array job (one array task per chunk of neurons):
 
 ```
 NeuroSweet/cluster_scripts/submit_full_glm_pipeline.sh <data_directory> <drop_directory> [chunk_size] [repo_root] [conda_env]
@@ -104,8 +104,11 @@ This submits, in order:
 
 **Before running for real:** check your cluster's `MaxArraySize`/QOS core limits, confirm the conda
 env name and `repo_root` path match your cluster, and re-benchmark per-neuron fit time on the
-cluster's hardware to tune `chunk_size` / `--cpus-per-task` / `--time` in `glm_encoder_array.sh` --
-these scripts were written from local benchmarking and have not yet been run on the actual cluster.
+cluster's hardware to tune `chunk_size` / `--cpus-per-task` / `--time` in `glm_encoder_array.sh`.
+The full prep -> encoder-chunk -> summarize -> compare chain has been smoke-tested end-to-end locally
+(synthetic data, exercising the exact same CLI commands these scripts call) and produces correct
+output, but the scripts themselves have not yet been submitted on the actual cluster -- verify the
+cluster-specific settings above before a real submission.
 
 ## Stimulus ordering
 
