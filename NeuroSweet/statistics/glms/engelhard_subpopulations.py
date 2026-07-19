@@ -49,17 +49,23 @@ def categorize_weight(row, weight_col='signed_weight', sig_col='sig'):
 
 
 def distribution_of_neurons_in_subpopulations(df, weight_col='signed_weight', sig_col='sig',
-                                               output_dir='.'):
+                                               output_dir='.', subject_col=None, label_prefix='engelhard',
+                                               model_label='Encoder'):
     """ Generate, per stimulus, a plot of the average normalized proportion of neurons in each
     weight-based subpopulation (pos_sig/neg_sig/non_sig) w.r.t. group and day.
 
     The primary purpose is to analyze how the proportion of neurons in each subpopulation
-    changes as a function of day -- i.e. are there more or fewer encoder-defined
+    changes as a function of day -- i.e. are there more or fewer model-defined
     stimulus-responsive neurons per group during a given session? Mirrors
     coefficient_clustering.py's distribution_of_neurons_in_clusters() normalization: for each
     subject, counts are normalized by that subject's total neuron-stimulus-day observations
     within the same stimulus (a neuron gets an independent subpopulation label per stimulus,
-    since engelhardglm fits one weight per stimulus per neuron).
+    since both engelhardglm and circuit_regression fit one weight per stimulus per neuron).
+
+    subject_col -- column already holding a per-animal subject id (e.g. circuit_regression's
+    'suid'). If None (the default, used for engelhardglm's per-recording 'cage'/'mouse' columns),
+    subjectid is built as mouse_cage instead. label_prefix/model_label control output filenames
+    and plot titles so decoder and encoder runs don't clobber each other's outputs.
 
     Returns (counts, plot_data) -- the per-subject-day counts/proportions and the group/day/
     subpopulation summary (mean +/- sem) used for plotting. Also writes both to CSV under
@@ -67,7 +73,10 @@ def distribution_of_neurons_in_subpopulations(df, weight_col='signed_weight', si
     """
     df = df.copy()
     df['subpopulation'] = df.apply(lambda row: categorize_weight(row, weight_col, sig_col), axis=1)
-    df['subjectid'] = df['mouse'].astype(str) + "_" + df['cage'].astype(str)
+    if subject_col is not None:
+        df['subjectid'] = df[subject_col].astype(str)
+    else:
+        df['subjectid'] = df['mouse'].astype(str) + "_" + df['cage'].astype(str)
     df['day'] = pd.to_numeric(df['day'], errors='coerce')
 
     counts = (
@@ -85,8 +94,8 @@ def distribution_of_neurons_in_subpopulations(df, weight_col='signed_weight', si
     )
 
     os.makedirs(output_dir, exist_ok=True)
-    counts.to_csv(os.path.join(output_dir, 'engelhard_subpopulation_counts.csv'), index=False)
-    plot_data.to_csv(os.path.join(output_dir, 'engelhard_subpopulation_proportions.csv'), index=False)
+    counts.to_csv(os.path.join(output_dir, f'{label_prefix}_subpopulation_counts.csv'), index=False)
+    plot_data.to_csv(os.path.join(output_dir, f'{label_prefix}_subpopulation_proportions.csv'), index=False)
 
     for stim in sorted(plot_data['stimulus'].dropna().unique()):
         stim_data = plot_data[plot_data['stimulus'] == stim]
@@ -107,7 +116,7 @@ def distribution_of_neurons_in_subpopulations(df, weight_col='signed_weight', si
         g.set_axis_labels('Session', 'Normalized # Neurons')
         g.set_titles('Group: {col_name}')
         g.set(ylim=(0, None))
-        g.figure.suptitle(f'Encoder ({stim}): Distribution of Weight-Based Subpopulations by Group and Session')
+        g.figure.suptitle(f'{model_label} ({stim}): Distribution of Weight-Based Subpopulations by Group and Session')
         plt.legend(
             title='subpopulation',
             bbox_to_anchor=(1.05, 1),
@@ -115,7 +124,7 @@ def distribution_of_neurons_in_subpopulations(df, weight_col='signed_weight', si
             borderaxespad=0
         )
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f'engelhard_subpopulation_distribution_{stim}.jpg'))
+        plt.savefig(os.path.join(output_dir, f'{label_prefix}_subpopulation_distribution_{stim}.jpg'))
         plt.close()
 
     return counts, plot_data
