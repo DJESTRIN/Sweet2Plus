@@ -40,7 +40,7 @@ class MPFCModelRNN(nn.Module):
         Number of real neurons in this session -- the readout dimensionality.
     """
     def __init__(self, n_input_channels, hidden_size, n_neurons, nonlinearity="tanh",
-                 cell_type="gru", use_calcium_decay=True, init_decay=0.8):
+                 cell_type="gru", use_calcium_decay=False, init_decay=0.8):
         super().__init__()
         self.n_input_channels = n_input_channels
         self.hidden_size = hidden_size

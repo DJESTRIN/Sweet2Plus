@@ -96,7 +96,7 @@ def _is_live_terminal():
 def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, seed=0,
                        window_len=200, stride=100, val_frac=0.2, device="cpu",
                        progress_label="session", cell_type="gru", batch_size=16,
-                       weight_decay=1e-3, early_stop_patience=40, use_calcium_decay=True,
+                       weight_decay=1e-3, early_stop_patience=40, use_calcium_decay=False,
                        grad_clip_norm=1.0):
     """Trains one MPFCModelRNN on one session's data. Returns (model, history) where history
     is a list of dicts with per-epoch train/val loss.
@@ -125,7 +125,19 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
     parameter is excluded from weight_decay (L2 shrinkage pulls it toward gamma=0.5, which
     actively fights it learning a large gamma) and gets its own faster learning rate.
     grad_clip_norm clips the global gradient norm each step (standard RNN training stability
-    practice)."""
+    practice).
+
+    IMPORTANT CAVEAT (why the default is False here): enabling use_calcium_decay gives the
+    model a "free", odor-independent way to explain most of the trace variance via AR(1)
+    persistence, which sharply reduces the gradient pressure on hidden units to encode odor
+    identity. Empirically this collapsed hidden-unit odor decodability from ~0.96 AUC
+    (no-decay unmixed architecture) to ~0.50 AUC (chance) once use_calcium_decay=True, even
+    though it also improved held-out trace-prediction MSE from ~0.93 to ~0.40. Since the
+    architecture-comparison experiment (control vs cort, unmixed/semi-mixed/fully-mixed) is
+    scored on hidden-unit decodability, NOT raw trace MSE, the main scientific sweep should
+    keep use_calcium_decay=False (the default). Only enable it for a separate
+    trace-prediction-quality demonstration/sanity-check, not for the group-comparison
+    pipeline."""
     set_seed(seed)
     n_channels = channels.shape[0]
     n_neurons = target.shape[0]
