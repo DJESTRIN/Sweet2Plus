@@ -10,6 +10,8 @@
 # Get inputs from command line
 beh_folder=$1
 image_folder=$2
+repo_root=${3:-"/home/dje4001/NeuroSweet"}
+conda_env=${4:-"sweet2p"}
 
 # Set up log_directory
 # log_dir="/home/dje4001/slurm_logs/sweet2plus/"
@@ -19,7 +21,9 @@ image_folder=$2
 
 # Load correct anaconda enviornment
 source ~/.bashrc
-conda activate sweet2p
+conda activate "$conda_env"
 
-# Run the Python script
-python /home/dje4001/Sweet2Plus/Sweet2Plus/analysis/CorrelativeActivityAnalysis.py --data_directory $image_folder --beh_directory $beh_folder --single_subject_flag --force_redo
+# Run the Python script (repo was renamed Sweet2Plus -> NeuroSweet; package now lives at
+# <repo_root>/NeuroSweet, so run it as a module against repo_root on PYTHONPATH)
+export PYTHONPATH="$repo_root:$PYTHONPATH"
+python -m NeuroSweet.analysis.CorrelativeActivityAnalysis --data_directory "$image_folder" --beh_directory "$beh_folder" --single_subject_flag --force_redo
