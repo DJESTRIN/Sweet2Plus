@@ -67,7 +67,11 @@ def LoadObj(FullPath: str):
     with open(FullPath, 'r') as file:
         big_list = json.load(file)
 
-    CurrentObject = corralative_activity(datapath=big_list[0],serialoutput_object=None)
+    # Build a bare shell instance without running __init__ (which would otherwise re-run the
+    # full suite2p pipeline setup, e.g. get_s2p(), just to load already-cached results -- slow,
+    # unnecessary, and brittle across suite2p API/version changes). Every attribute the object
+    # needs is restored explicitly below.
+    CurrentObject = corralative_activity.__new__(corralative_activity)
 
     #Append everything of interest
     CurrentObject.datapath=big_list[0]

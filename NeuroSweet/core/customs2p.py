@@ -47,8 +47,8 @@ class get_s2p():
         if not os.path.exists(self.resultpath_neur): #Make subfolder for neural data
             os.mkdir(self.resultpath_neur)
 
-        #Set suite2P ops
-        self.ops = s2p.default_ops()
+        #Set suite2P ops (newer suite2p releases renamed default_ops -> default_settings)
+        self.ops = s2p.default_ops() if hasattr(s2p, 'default_ops') else s2p.default_settings()
         self.ops['batch_size'] = batch_size # we will decrease the batch_size in case low RAM on computer
         self.ops['threshold_scaling'] = threshold_scaling # we are increasing the threshold for finding ROIs to limit the number of non-cell ROIs found (sometimes useful in gcamp injections)
         self.ops['fs'] = fs # sampling rate of recording, determines binning for cell detection

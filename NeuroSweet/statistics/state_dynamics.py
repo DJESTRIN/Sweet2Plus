@@ -39,6 +39,12 @@ class StateDynamics:
                                          on=['suid', 'day', 'group', 'odor1', 'odor2'],
                                          how='outer')
 
+        # Number of imaged neurons per subject-day. Euclidean distance between population
+        # vectors mechanically scales with the number of neurons (dimensions), so this is
+        # tracked as a potential confound for run_group_day_stats(control_for_neuron_count=True).
+        neuron_counts = self.df.groupby('suid').size().rename('neuron_count').reset_index()
+        self.result_dataframe = self.result_dataframe.merge(neuron_counts, on='suid', how='left')
+
 
     def get_AUC(self):
         """ Calculate the AUC for baseline, water, peanut, vanilla and TMT odors """
@@ -158,7 +164,7 @@ class StateStatistics:
     def __init__(self, dataframe):
         self.df = dataframe
 
-    def run_group_day_stats(self, dependent_var, drop_directory='.'):
+    def run_group_day_stats(self, dependent_var, drop_directory='.', control_for_neuron_count=False):
         """ Test whether population coding (Euclidean distance or vector angle between
         odor-evoked population vectors) changes with respect to Group (cort vs vehicle)
         across Day.
@@ -172,6 +178,12 @@ class StateStatistics:
         Inputs
         dependent_var -- (str) column name to test, e.g. 'euclidean_distance' or 'angle_rad'
         drop_directory -- (str) where result CSVs are saved
+        control_for_neuron_count -- (bool) if True, adds 'neuron_count' as an additive covariate
+            to the mixed model. Euclidean distance between population vectors mechanically grows
+            with the number of neurons (dimensions) sampled per subject, and cort/vehicle subjects
+            can differ substantially in imaged neuron counts, so this guards against reporting a
+            dimensionality artifact as a coding difference. Requires a 'neuron_count' column in
+            self.df (populated by StateDynamics.result_dataframe).
 
         Outputs (written to drop_directory)
         {dependent_var}_mixedmodel_summary.csv -- fixed-effect coefficients, SE, z, p-values
@@ -182,7 +194,10 @@ class StateStatistics:
         model_result -- fitted statsmodels MixedLMResults object
         """
         os.makedirs(drop_directory, exist_ok=True)
-        df = self.df.copy().dropna(subset=[dependent_var, 'group', 'day', 'odor1', 'odor2', 'suid'])
+        required_cols = [dependent_var, 'group', 'day', 'odor1', 'odor2', 'suid']
+        if control_for_neuron_count:
+            required_cols.append('neuron_count')
+        df = self.df.copy().dropna(subset=required_cols)
         df['odor_pair'] = df['odor1'].astype(str) + '_' + df['odor2'].astype(str)
         df['group'] = df['group'].astype('category')
         df['day'] = df['day'].astype(str).astype('category')
@@ -190,6 +205,8 @@ class StateStatistics:
 
         # Fit the mixed model with subject as the random effect (repeated odor pairs/days per animal)
         formula = f"{dependent_var} ~ group * day * odor_pair"
+        if control_for_neuron_count:
+            formula += " + neuron_count"
         model = smf.mixedlm(formula, df, groups=df['suid'])
         model_result = model.fit()
 
@@ -452,9 +469,10 @@ if __name__=='__main__':
 
     # Test whether population coding (state separability) changes with respect to
     # Group (cort vs vehicle) across Day, for both the Euclidean-distance and
-    # vector-angle measures of population separability.
-    summary_stats.run_group_day_stats('euclidean_distance', drop_directory=drop_directory)
+    # vector-angle measures of population separability. Euclidean distance is controlled
+    # for per-subject neuron count, since it mechanically scales with the number of imaged
+    # neurons (dimensions) and cort/vehicle subjects can differ substantially in neuron
+    # count -- without this control, a group difference in distance can reflect a
+    # dimensionality artifact rather than a true coding difference.
+    summary_stats.run_group_day_stats('euclidean_distance', drop_directory=drop_directory, control_for_neuron_count=True)
     summary_stats.run_group_day_stats('angle_rad', drop_directory=drop_directory)
-    summary_stats = StateStatistics(dataframe=States_oh.result_dataframe)
-    summary_stats.graph_euclid_distance_summary()
-    summary_stats.graph_vector_angle_summary()
