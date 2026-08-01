@@ -124,10 +124,15 @@ def cli_parser():
     parser.add_argument("--architecture", type=str, default="unmixed",
                          choices=["unmixed", "semi-mixed", "fully-mixed"])
     parser.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
-    parser.add_argument("--epochs", type=int, default=150)
+    parser.add_argument("--epochs", type=int, default=400)
     parser.add_argument("--max_hidden_size", type=int, default=128)
-    parser.add_argument("--window_len", type=int, default=200)
-    parser.add_argument("--stride", type=int, default=100)
+    # window_len/stride tuned during the training-accuracy audit: shorter, denser windows
+    # (100/20 vs the original 200/100) give ~5x more training windows per session, which
+    # matters a lot given mini-batch training now takes many steps per epoch. epochs raised
+    # to 400 with early stopping (see rnn_train.train_one_session) since actual epoch count
+    # used will typically be far lower -- early stopping halts once val loss stops improving.
+    parser.add_argument("--window_len", type=int, default=100)
+    parser.add_argument("--stride", type=int, default=20)
     parser.add_argument("--manifest_row_index", type=int, default=None,
                          help="If set, only process this one row of the session manifest "
                               "(used for SLURM array tasks -- one array task per session).")

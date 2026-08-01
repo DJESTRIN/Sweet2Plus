@@ -80,8 +80,8 @@ def _is_live_terminal():
 
 def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, seed=0,
                        window_len=200, stride=100, val_frac=0.2, device="cpu",
-                       progress_label="session", cell_type="gru", batch_size=8,
-                       weight_decay=1e-3, early_stop_patience=30):
+                       progress_label="session", cell_type="gru", batch_size=16,
+                       weight_decay=1e-3, early_stop_patience=40):
     """Trains one MPFCModelRNN on one session's data. Returns (model, history) where history
     is a list of dicts with per-epoch train/val loss.
 
@@ -125,6 +125,7 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
     eff_batch_size = min(batch_size, n_train)
 
     best_val_loss = float("inf")
+    best_train_loss = None
     best_state = None
     epochs_since_best = 0
 
@@ -179,6 +180,7 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
 
                 if val_loss < best_val_loss - 1e-5:
                     best_val_loss = val_loss
+                    best_train_loss = train_loss
                     best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
                     epochs_since_best = 0
                 else:
@@ -220,6 +222,7 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
 
             if val_loss < best_val_loss - 1e-5:
                 best_val_loss = val_loss
+                best_train_loss = train_loss
                 best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
                 epochs_since_best = 0
             else:
@@ -229,7 +232,7 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
 
     if best_state is not None:
         model.load_state_dict(best_state)
-        history.append({"epoch": "restored_best", "train_loss": None,
+        history.append({"epoch": "restored_best", "train_loss": best_train_loss,
                          "val_loss": best_val_loss, "elapsed_s": history[-1]["elapsed_s"]})
 
     return model, history
