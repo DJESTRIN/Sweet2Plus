@@ -62,7 +62,9 @@ class StateDynamics:
         for subject_odors, subject_neurons in tqdm.tqdm(zip(self.behavioral_timestamps, self.neuronal_activity)):
             AUCs=[] # AUCs for subject's neurons will be temporarily stored here
             Odors = []  # Names of odors are temporarily stored here
-            for odor_timestamps,odor_names in zip(subject_odors,['water','peanut','vanilla','tmt']):
+            # NOTE: index order must match core/behavior.py's quick_timestamps() construction
+            # order (['Vanilla','PeanutButter','Water','FoxUrine']) -- do not reorder.
+            for odor_timestamps,odor_names in zip(subject_odors,['vanilla','peanut','water','tmt']):
                 window_size = round(10 / self.fps) 
                 valid_ts = [ts for ts in odor_timestamps if ts + window_size <= subject_neurons.shape[1]]
                 try:
@@ -164,7 +166,47 @@ class StateStatistics:
     def __init__(self, dataframe):
         self.df = dataframe
 
-    def run_group_day_stats(self, dependent_var, drop_directory='.', control_for_neuron_count=False):
+    def normalize_to_day0(self, dependent_var, mouse_id_col='mouse_id'):
+        """ Z-score normalize dependent_var per subject relative to that subject's own Day-0
+        distribution (across odor pairs).
+
+        The cohort/batch structure of this dataset partially confounds Group (cort/vehicle) --
+        e.g. one cohort in the tmt_experiment_2024 dataset contains only cort subjects -- so raw
+        cross-subject comparisons at later days can reflect cohort/batch differences rather than
+        a true longitudinal Group effect. Per-subject Day-0 z-scoring removes both this batch
+        effect and any per-subject scale differences (e.g. neuron-count-driven differences in
+        raw Euclidean distance), since every subject's own Day-0 values become the baseline
+        (z ~ 0) against which their own later days are compared. This is the recommended default
+        for any longitudinal (across-Day) analysis of this dataset.
+
+        Inputs
+        dependent_var -- (str) column name to normalize, e.g. 'euclidean_distance' or 'angle_rad'
+        mouse_id_col -- (str) column identifying the individual animal across days (derived from
+            'suid' if not already present: suid is '{day}_{mouse}_{cage}', so mouse_id is
+            '{mouse}_{cage}')
+
+        Adds a new column '{dependent_var}_day0z' to self.df (NaN for subjects lacking >=2 valid
+        Day-0 observations, since a z-score requires a non-zero SD).
+
+        Returns
+        self.df -- with the new normalized column added
+        """
+        if mouse_id_col not in self.df.columns:
+            self.df[mouse_id_col] = self.df['suid'].apply(lambda s: '_'.join(str(s).split('_')[1:]))
+
+        def _day0_zscore(sub_df):
+            day0_vals = sub_df.loc[sub_df['day'].astype(str) == '0', dependent_var]
+            if len(day0_vals) < 2 or not np.isfinite(day0_vals.std(ddof=1)) or day0_vals.std(ddof=1) == 0:
+                return pd.Series(np.nan, index=sub_df.index)
+            mu, sigma = day0_vals.mean(), day0_vals.std(ddof=1)
+            return (sub_df[dependent_var] - mu) / sigma
+
+        self.df[f'{dependent_var}_day0z'] = self.df.groupby(mouse_id_col, group_keys=False).apply(
+            lambda g: _day0_zscore(g), include_groups=False)
+        return self.df
+
+    def run_group_day_stats(self, dependent_var, drop_directory='.', control_for_neuron_count=False,
+                             normalize_to_day0=False):
         """ Test whether population coding (Euclidean distance or vector angle between
         odor-evoked population vectors) changes with respect to Group (cort vs vehicle)
         across Day.
@@ -184,6 +226,13 @@ class StateStatistics:
             can differ substantially in imaged neuron counts, so this guards against reporting a
             dimensionality artifact as a coding difference. Requires a 'neuron_count' column in
             self.df (populated by StateDynamics.result_dataframe).
+        normalize_to_day0 -- (bool) RECOMMENDED for this dataset. If True, first z-score
+            normalizes dependent_var per subject relative to that subject's own Day-0 values
+            (via normalize_to_day0()), then tests the normalized column instead of the raw one,
+            with Day 0 excluded from the test (it is the normalization anchor: z ~ 0 by
+            construction, not an independent observation). This is the standard way to control
+            for cohort/batch effects in this dataset (e.g. one cohort contains only cort
+            subjects, confounding raw cross-sectional comparisons).
 
         Outputs (written to drop_directory)
         {dependent_var}_mixedmodel_summary.csv -- fixed-effect coefficients, SE, z, p-values
@@ -194,10 +243,16 @@ class StateStatistics:
         model_result -- fitted statsmodels MixedLMResults object
         """
         os.makedirs(drop_directory, exist_ok=True)
+        if normalize_to_day0:
+            self.normalize_to_day0(dependent_var)
+            dependent_var = f'{dependent_var}_day0z'
+
         required_cols = [dependent_var, 'group', 'day', 'odor1', 'odor2', 'suid']
         if control_for_neuron_count:
             required_cols.append('neuron_count')
         df = self.df.copy().dropna(subset=required_cols)
+        if normalize_to_day0:
+            df = df[df['day'].astype(str) != '0']  # day 0 is the normalization anchor (z ~ 0), not an independent obs
         df['odor_pair'] = df['odor1'].astype(str) + '_' + df['odor2'].astype(str)
         df['group'] = df['group'].astype('category')
         df['day'] = df['day'].astype(str).astype('category')
@@ -469,10 +524,12 @@ if __name__=='__main__':
 
     # Test whether population coding (state separability) changes with respect to
     # Group (cort vs vehicle) across Day, for both the Euclidean-distance and
-    # vector-angle measures of population separability. Euclidean distance is controlled
-    # for per-subject neuron count, since it mechanically scales with the number of imaged
-    # neurons (dimensions) and cort/vehicle subjects can differ substantially in neuron
-    # count -- without this control, a group difference in distance can reflect a
-    # dimensionality artifact rather than a true coding difference.
-    summary_stats.run_group_day_stats('euclidean_distance', drop_directory=drop_directory, control_for_neuron_count=True)
-    summary_stats.run_group_day_stats('angle_rad', drop_directory=drop_directory)
+    # vector-angle measures of population separability. Both are normalized per-subject to
+    # their own Day-0 values (normalize_to_day0=True), which is the standard way to control for
+    # cohort/batch effects in this dataset (one cohort contains only cort subjects, confounding
+    # raw cross-sectional comparisons) and, as a side effect, also removes most of the
+    # neuron-count scaling confound in euclidean_distance (kept as an additional covariate here
+    # for robustness).
+    summary_stats.run_group_day_stats('euclidean_distance', drop_directory=drop_directory,
+                                       control_for_neuron_count=True, normalize_to_day0=True)
+    summary_stats.run_group_day_stats('angle_rad', drop_directory=drop_directory, normalize_to_day0=True)
