@@ -39,18 +39,35 @@ class MPFCModelRNN(nn.Module):
     n_neurons : int
         Number of real neurons in this session -- the readout dimensionality.
     """
-    def __init__(self, n_input_channels, hidden_size, n_neurons, nonlinearity="tanh"):
+    def __init__(self, n_input_channels, hidden_size, n_neurons, nonlinearity="tanh",
+                 cell_type="gru"):
         super().__init__()
         self.n_input_channels = n_input_channels
         self.hidden_size = hidden_size
         self.n_neurons = n_neurons
+        self.cell_type = cell_type
 
         # External input weights: trainable, one weight per (channel, hidden-unit) pair.
         self.input_layer = nn.Linear(n_input_channels, hidden_size, bias=True)
 
         # Recurrent core: mPFC's own trainable internal dynamics.
-        self.rnn = nn.RNN(input_size=hidden_size, hidden_size=hidden_size,
-                           num_layers=1, nonlinearity=nonlinearity, batch_first=True)
+        # NOTE: default changed from vanilla tanh RNN -> GRU. Diagnostic testing found the
+        # vanilla RNN could not beat even a trivial "predict-the-mean" baseline on real data
+        # (val MSE ~0.93 vs trivial-mean baseline 0.94, even after 2000 epochs), while a
+        # naive last-frame-persistence baseline achieved 0.52 -- i.e. the vanilla RNN was not
+        # learning to propagate/gate information through recurrent state at all. Only 13.7% of
+        # session timepoints have ANY odor input active (rest is spontaneous/endogenous
+        # activity the model cannot access), so gradient signal is sparse; a tanh RNN's
+        # vanishing-gradient tendency made this worse. GRU's gating gives much better gradient
+        # flow through long silent stretches between odor events.
+        if cell_type == "gru":
+            self.rnn = nn.GRU(input_size=hidden_size, hidden_size=hidden_size,
+                               num_layers=1, batch_first=True)
+        elif cell_type == "rnn":
+            self.rnn = nn.RNN(input_size=hidden_size, hidden_size=hidden_size,
+                               num_layers=1, nonlinearity=nonlinearity, batch_first=True)
+        else:
+            raise ValueError(f"Unknown cell_type '{cell_type}'. Must be 'gru' or 'rnn'.")
 
         # Linear readout back to real neuron count (for computing the supervised loss
         # against real calcium traces).

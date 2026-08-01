@@ -80,9 +80,23 @@ def _is_live_terminal():
 
 def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, seed=0,
                        window_len=200, stride=100, val_frac=0.2, device="cpu",
-                       progress_label="session"):
+                       progress_label="session", cell_type="gru", batch_size=8,
+                       weight_decay=1e-3, early_stop_patience=30):
     """Trains one MPFCModelRNN on one session's data. Returns (model, history) where history
-    is a list of dicts with per-epoch train/val loss."""
+    is a list of dicts with per-epoch train/val loss.
+
+    NOTE on batch_size: training was originally full-batch (one optimizer step per epoch,
+    across all ~36-45 windows of a session at once). Diagnostic testing showed this, combined
+    with a vanilla tanh RNN, could not beat a trivial "predict-the-mean" baseline even after
+    2000 epochs. Training now takes multiple mini-batch gradient steps per epoch (shuffled
+    each epoch), giving many more optimizer updates for the same epoch budget -- standard
+    practice, and cheap here since windows are small.
+
+    NOTE on weight_decay/early_stop_patience: mini-batching alone let the model drive train
+    loss down but caused val loss to steadily WORSEN (classic overfitting -- a single session
+    only has ~30-40 independent training windows). L2 weight decay plus early stopping
+    (restore the best-val-loss model seen so far if val loss hasn't improved for
+    `early_stop_patience` epochs) keeps the model from memorizing training windows."""
     set_seed(seed)
     n_channels = channels.shape[0]
     n_neurons = target.shape[0]
@@ -103,9 +117,16 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
     Y_val = torch.from_numpy(Y[val_idx]).to(device)
 
     model = MPFCModelRNN(n_input_channels=n_channels, hidden_size=hidden_size,
-                          n_neurons=n_neurons).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+                          n_neurons=n_neurons, cell_type=cell_type).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_fn = nn.MSELoss()
+
+    n_train = X_train.shape[0]
+    eff_batch_size = min(batch_size, n_train)
+
+    best_val_loss = float("inf")
+    best_state = None
+    epochs_since_best = 0
 
     history = []
     use_rich = _is_live_terminal()
@@ -133,11 +154,17 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
         with Live(console=console, refresh_per_second=4) as live:
             for epoch in range(epochs):
                 model.train()
-                optimizer.zero_grad()
-                pred, _ = model(X_train)
-                loss = loss_fn(pred, Y_train)
-                loss.backward()
-                optimizer.step()
+                perm = torch.randperm(n_train)
+                epoch_losses = []
+                for b0 in range(0, n_train, eff_batch_size):
+                    b_idx = perm[b0:b0 + eff_batch_size]
+                    optimizer.zero_grad()
+                    pred, _ = model(X_train[b_idx])
+                    loss = loss_fn(pred, Y_train[b_idx])
+                    loss.backward()
+                    optimizer.step()
+                    epoch_losses.append(loss.item())
+                train_loss = float(np.mean(epoch_losses))
 
                 model.eval()
                 with torch.no_grad():
@@ -146,20 +173,35 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
 
                 t_elapsed = time.time() - t0
                 t_per_epoch = t_elapsed / (epoch + 1)
-                history.append({"epoch": epoch, "train_loss": loss.item(), "val_loss": val_loss,
+                history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss,
                                  "elapsed_s": t_elapsed})
-                live.update(render_table(epoch, loss.item(), val_loss, t_elapsed, t_per_epoch))
+                live.update(render_table(epoch, train_loss, val_loss, t_elapsed, t_per_epoch))
+
+                if val_loss < best_val_loss - 1e-5:
+                    best_val_loss = val_loss
+                    best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+                    epochs_since_best = 0
+                else:
+                    epochs_since_best += 1
+                    if early_stop_patience is not None and epochs_since_best >= early_stop_patience:
+                        break
     else:
         # Plain periodic-print fallback for non-interactive (e.g. SLURM .out log) contexts.
         t0 = time.time()
         print_every = max(1, epochs // 20)
         for epoch in range(epochs):
             model.train()
-            optimizer.zero_grad()
-            pred, _ = model(X_train)
-            loss = loss_fn(pred, Y_train)
-            loss.backward()
-            optimizer.step()
+            perm = torch.randperm(n_train)
+            epoch_losses = []
+            for b0 in range(0, n_train, eff_batch_size):
+                b_idx = perm[b0:b0 + eff_batch_size]
+                optimizer.zero_grad()
+                pred, _ = model(X_train[b_idx])
+                loss = loss_fn(pred, Y_train[b_idx])
+                loss.backward()
+                optimizer.step()
+                epoch_losses.append(loss.item())
+            train_loss = float(np.mean(epoch_losses))
 
             model.eval()
             with torch.no_grad():
@@ -167,14 +209,28 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
                 val_loss = loss_fn(val_pred, Y_val).item()
 
             t_elapsed = time.time() - t0
-            history.append({"epoch": epoch, "train_loss": loss.item(), "val_loss": val_loss,
+            history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss,
                              "elapsed_s": t_elapsed})
             if (epoch + 1) % print_every == 0 or epoch == epochs - 1:
                 t_per_epoch = t_elapsed / (epoch + 1)
                 eta = t_per_epoch * (epochs - epoch - 1)
                 print(f"[{progress_label}] epoch {epoch + 1}/{epochs} "
-                      f"train_loss={loss.item():.5f} val_loss={val_loss:.5f} "
+                      f"train_loss={train_loss:.5f} val_loss={val_loss:.5f} "
                       f"elapsed={t_elapsed:.1f}s eta={eta:.1f}s", flush=True)
+
+            if val_loss < best_val_loss - 1e-5:
+                best_val_loss = val_loss
+                best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+                epochs_since_best = 0
+            else:
+                epochs_since_best += 1
+                if early_stop_patience is not None and epochs_since_best >= early_stop_patience:
+                    break
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+        history.append({"epoch": "restored_best", "train_loss": None,
+                         "val_loss": best_val_loss, "elapsed_s": history[-1]["elapsed_s"]})
 
     return model, history
 
@@ -203,6 +259,8 @@ def cli_parser():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--window_len", type=int, default=200)
     parser.add_argument("--stride", type=int, default=100)
+    parser.add_argument("--cell_type", type=str, default="gru", choices=["gru", "rnn"])
+    parser.add_argument("--batch_size", type=int, default=8)
     return parser.parse_args()
 
 
@@ -221,6 +279,7 @@ def main():
     model, history = train_one_session(
         channels, target, hidden_size=hidden_size, epochs=args.epochs, lr=args.lr,
         seed=args.seed, window_len=args.window_len, stride=args.stride,
+        cell_type=args.cell_type, batch_size=args.batch_size,
         progress_label=label)
 
     hidden_states = get_hidden_states(model, channels)
