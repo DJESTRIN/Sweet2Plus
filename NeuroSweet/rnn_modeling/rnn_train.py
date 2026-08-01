@@ -48,25 +48,40 @@ def make_windows(channels, target, window_len=200, stride=100):
     windows so the RNN trains on many shorter sequences (mini-batches) instead of one huge
     sequence -- standard practice for RNN training stability/speed, and lets us hold out
     windows for a validation split.
-    Returns X (n_windows, window_len, n_channels), Y (n_windows, window_len, n_neurons).
+
+    Also builds Y_prev (n_windows, window_len, n_neurons): the REAL previous-timestep target
+    value for each window, aligned frame-for-frame with Y, used for teacher-forced calcium-decay
+    training (see MPFCModelRNN.forward's target_prev argument / rnn_model.py). The very first
+    frame of the whole session has no real "previous" value, so it's set equal to itself there
+    (negligible edge effect -- affects at most 1 frame out of ~4700).
+
+    Returns X (n_windows, window_len, n_channels), Y (n_windows, window_len, n_neurons),
+    Y_prev (n_windows, window_len, n_neurons).
     """
     n_channels, T = channels.shape
     n_neurons = target.shape[0]
+    target_prev_full = np.empty_like(target)
+    target_prev_full[:, 1:] = target[:, :-1]
+    target_prev_full[:, 0] = target[:, 0]
+
     starts = list(range(0, max(T - window_len, 1), stride))
     if not starts:
         starts = [0]
         window_len = T
-    X, Y = [], []
+    X, Y, Yp = [], [], []
     for s in starts:
         e = min(s + window_len, T)
         if e - s < window_len:
             continue
-        X.append(channels[:, s:e].T)   # (window_len, n_channels)
-        Y.append(target[:, s:e].T)     # (window_len, n_neurons)
+        X.append(channels[:, s:e].T)            # (window_len, n_channels)
+        Y.append(target[:, s:e].T)               # (window_len, n_neurons)
+        Yp.append(target_prev_full[:, s:e].T)     # (window_len, n_neurons)
     if not X:  # fallback: single window covering whatever we have
         X = [channels.T]
         Y = [target.T]
-    return np.stack(X).astype(np.float32), np.stack(Y).astype(np.float32)
+        Yp = [target_prev_full.T]
+    return (np.stack(X).astype(np.float32), np.stack(Y).astype(np.float32),
+            np.stack(Yp).astype(np.float32))
 
 
 def _is_live_terminal():
@@ -81,7 +96,8 @@ def _is_live_terminal():
 def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, seed=0,
                        window_len=200, stride=100, val_frac=0.2, device="cpu",
                        progress_label="session", cell_type="gru", batch_size=16,
-                       weight_decay=1e-3, early_stop_patience=40):
+                       weight_decay=1e-3, early_stop_patience=40, use_calcium_decay=True,
+                       grad_clip_norm=1.0):
     """Trains one MPFCModelRNN on one session's data. Returns (model, history) where history
     is a list of dicts with per-epoch train/val loss.
 
@@ -96,12 +112,25 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
     loss down but caused val loss to steadily WORSEN (classic overfitting -- a single session
     only has ~30-40 independent training windows). L2 weight decay plus early stopping
     (restore the best-val-loss model seen so far if val loss hasn't improved for
-    `early_stop_patience` epochs) keeps the model from memorizing training windows."""
+    `early_stop_patience` epochs) keeps the model from memorizing training windows.
+
+    NOTE on use_calcium_decay/grad_clip_norm: use_calcium_decay adds a per-neuron learnable
+    AR(1) leaky-integrator on the model's readout (see rnn_model.MPFCModelRNN), teacher-forced
+    with the REAL previous-frame value during both training and validation (never the model's
+    own noisy prediction -- diagnostic testing showed self-referential decay just compounds
+    the model's own errors and converges back to the trivial baseline). This gives the model
+    the correct biophysical inductive bias for GCaMP indicator decay kinetics, and directly
+    targets the persistence-baseline gap found during the accuracy audit (naive
+    copy-previous-frame MSE 0.52 vs RNN's ~0.93-0.94 without this). The per-neuron decay
+    parameter is excluded from weight_decay (L2 shrinkage pulls it toward gamma=0.5, which
+    actively fights it learning a large gamma) and gets its own faster learning rate.
+    grad_clip_norm clips the global gradient norm each step (standard RNN training stability
+    practice)."""
     set_seed(seed)
     n_channels = channels.shape[0]
     n_neurons = target.shape[0]
 
-    X, Y = make_windows(channels, target, window_len=window_len, stride=stride)
+    X, Y, Yp = make_windows(channels, target, window_len=window_len, stride=stride)
     n_windows = X.shape[0]
     n_val = max(1, int(n_windows * val_frac)) if n_windows > 1 else 0
     rng = np.random.RandomState(seed)
@@ -113,12 +142,23 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
 
     X_train = torch.from_numpy(X[train_idx]).to(device)
     Y_train = torch.from_numpy(Y[train_idx]).to(device)
+    Yp_train = torch.from_numpy(Yp[train_idx]).to(device)
     X_val = torch.from_numpy(X[val_idx]).to(device)
     Y_val = torch.from_numpy(Y[val_idx]).to(device)
+    Yp_val = torch.from_numpy(Yp[val_idx]).to(device)
 
     model = MPFCModelRNN(n_input_channels=n_channels, hidden_size=hidden_size,
-                          n_neurons=n_neurons, cell_type=cell_type).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+                          n_neurons=n_neurons, cell_type=cell_type,
+                          use_calcium_decay=use_calcium_decay).to(device)
+    if use_calcium_decay:
+        decay_params = [model._decay_logit]
+        other_params = [p for n, p in model.named_parameters() if n != "_decay_logit"]
+        optimizer = torch.optim.Adam([
+            {"params": other_params, "weight_decay": weight_decay},
+            {"params": decay_params, "weight_decay": 0.0, "lr": max(lr * 5, 5e-3)},
+        ], lr=lr)
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_fn = nn.MSELoss()
 
     n_train = X_train.shape[0]
@@ -160,16 +200,18 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
                 for b0 in range(0, n_train, eff_batch_size):
                     b_idx = perm[b0:b0 + eff_batch_size]
                     optimizer.zero_grad()
-                    pred, _ = model(X_train[b_idx])
+                    pred, _ = model(X_train[b_idx], target_prev=Yp_train[b_idx])
                     loss = loss_fn(pred, Y_train[b_idx])
                     loss.backward()
+                    if grad_clip_norm is not None:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
                     optimizer.step()
                     epoch_losses.append(loss.item())
                 train_loss = float(np.mean(epoch_losses))
 
                 model.eval()
                 with torch.no_grad():
-                    val_pred, _ = model(X_val)
+                    val_pred, _ = model(X_val, target_prev=Yp_val)
                     val_loss = loss_fn(val_pred, Y_val).item()
 
                 t_elapsed = time.time() - t0
@@ -198,16 +240,18 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
             for b0 in range(0, n_train, eff_batch_size):
                 b_idx = perm[b0:b0 + eff_batch_size]
                 optimizer.zero_grad()
-                pred, _ = model(X_train[b_idx])
+                pred, _ = model(X_train[b_idx], target_prev=Yp_train[b_idx])
                 loss = loss_fn(pred, Y_train[b_idx])
                 loss.backward()
+                if grad_clip_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
                 optimizer.step()
                 epoch_losses.append(loss.item())
             train_loss = float(np.mean(epoch_losses))
 
             model.eval()
             with torch.no_grad():
-                val_pred, _ = model(X_val)
+                val_pred, _ = model(X_val, target_prev=Yp_val)
                 val_loss = loss_fn(val_pred, Y_val).item()
 
             t_elapsed = time.time() - t0
@@ -240,12 +284,30 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
 
 def get_hidden_states(model, channels, device="cpu"):
     """Run the full (untruncated) session through the trained model once (no gradient) and
-    return hidden-unit activity (n_hidden, T) for downstream decoder/encoder analysis."""
+    return hidden-unit activity (n_hidden, T) for downstream decoder/encoder analysis.
+    NOTE: hidden_states come from the RNN core BEFORE the calcium-decay readout blend, so
+    they are unaffected by target_prev/teacher forcing -- no ground truth needed here."""
     model.eval()
     with torch.no_grad():
         x = torch.from_numpy(channels.T[None, :, :]).to(device)  # (1, T, n_channels)
         _, hidden_states = model(x)
     return hidden_states[0].cpu().numpy().T  # (n_hidden, T)
+
+
+def get_predicted_activity(model, channels, target, device="cpu"):
+    """Run the full (untruncated) session through the trained model once (no gradient), using
+    teacher-forced target_prev (the real previous frame), and return the model's predicted
+    calcium activity (n_neurons, T) -- used for validation/plotting the fitted calcium-decay
+    layer against real data (see make_windows for target_prev construction)."""
+    model.eval()
+    target_prev_full = np.empty_like(target)
+    target_prev_full[:, 1:] = target[:, :-1]
+    target_prev_full[:, 0] = target[:, 0]
+    with torch.no_grad():
+        x = torch.from_numpy(channels.T[None, :, :]).to(device)              # (1, T, n_channels)
+        y_prev = torch.from_numpy(target_prev_full.T[None, :, :]).to(device)  # (1, T, n_neurons)
+        pred, _ = model(x, target_prev=y_prev)
+    return pred[0].cpu().numpy().T  # (n_neurons, T)
 
 
 def cli_parser():

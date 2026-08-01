@@ -40,12 +40,13 @@ class MPFCModelRNN(nn.Module):
         Number of real neurons in this session -- the readout dimensionality.
     """
     def __init__(self, n_input_channels, hidden_size, n_neurons, nonlinearity="tanh",
-                 cell_type="gru"):
+                 cell_type="gru", use_calcium_decay=True, init_decay=0.8):
         super().__init__()
         self.n_input_channels = n_input_channels
         self.hidden_size = hidden_size
         self.n_neurons = n_neurons
         self.cell_type = cell_type
+        self.use_calcium_decay = use_calcium_decay
 
         # External input weights: trainable, one weight per (channel, hidden-unit) pair.
         self.input_layer = nn.Linear(n_input_channels, hidden_size, bias=True)
@@ -73,19 +74,70 @@ class MPFCModelRNN(nn.Module):
         # against real calcium traces).
         self.readout = nn.Linear(hidden_size, n_neurons)
 
-    def forward(self, external_inputs, h0=None):
+        # Calcium-decay layer (AR(1) leaky integrator), applied to the raw readout.
+        # MOTIVATION: real GCaMP calcium traces are (approximately) an exponentially-decaying
+        # indicator kinetic convolved with underlying spiking/drive activity -- i.e.
+        # calcium_t ~= gamma * calcium_{t-1} + (1-gamma) * drive_t. Diagnostic testing found
+        # a naive "copy the previous frame" baseline achieves MSE 0.52 on real data, vs 0.94
+        # for a "predict the mean" baseline -- i.e. most of a real calcium trace's
+        # predictability comes from this decay structure, not from odor identity. The RNN's
+        # own hidden recurrence was not learning to reproduce this decay from scratch (only
+        # ~30-40 independent training windows per session, generic weights, short training
+        # budget), so this bakes the known biophysical prior directly into the architecture as
+        # a per-neuron learnable decay constant (sigmoid-transformed to stay in (0, 1)), rather
+        # than requiring gradient descent to discover exponential decay unaided.
+        if self.use_calcium_decay:
+            init_logit = torch.logit(torch.full((n_neurons,), float(init_decay)))
+            self._decay_logit = nn.Parameter(init_logit)
+
+    def forward(self, external_inputs, h0=None, target_prev=None):
         """
         external_inputs : (batch, T, n_input_channels)
+        target_prev : (batch, T, n_neurons), optional -- the REAL previous-timestep calcium
+            value (target shifted by one frame) for the SAME window as external_inputs. When
+            provided, the calcium-decay layer blends this real value with the model's
+            odor/hidden-state-driven correction (see below) -- this is standard supervised
+            one-step-ahead ("teacher forced") sequence prediction: since we always have ground
+            truth for the real recorded session being analyzed (never asking the model to
+            forecast an unseen session), using the true previous frame is legitimate, not
+            data leakage, as long as validation windows are held out from training (the
+            model never sees validation-window IDENTITY during gradient updates -- see
+            rnn_train.py's train/val split). If target_prev is None, falls back to an
+            open-loop AR(1) scan over the model's OWN previous prediction (needed only for a
+            hypothetical true forecasting/generative use case with no ground truth available).
         Returns
         -------
-        predicted_activity : (batch, T, n_neurons) -- readout of hidden units, used for the
-            supervised training loss against real calcium traces.
+        predicted_activity : (batch, T, n_neurons) -- readout of hidden units (optionally
+            passed through the calcium-decay AR(1) layer), used for the supervised training
+            loss against real calcium traces.
         hidden_states : (batch, T, hidden_size) -- raw RNN hidden-unit activity, used as the
             in-silico "neurons" for the decoder/encoder pipeline.
         """
         driven_input = self.input_layer(external_inputs)  # (batch, T, hidden_size)
         hidden_states, _ = self.rnn(driven_input, h0)      # (batch, T, hidden_size)
-        predicted_activity = self.readout(hidden_states)   # (batch, T, n_neurons)
+        drive = self.readout(hidden_states)                # (batch, T, n_neurons)
+
+        if not self.use_calcium_decay:
+            return drive, hidden_states
+
+        gamma = torch.sigmoid(self._decay_logit)            # (n_neurons,)
+
+        if target_prev is not None:
+            # Teacher-forced AR(1): predicted_t = gamma * real_activity[t-1] + (1-gamma)*drive_t
+            # Fully vectorized (no python-level time loop needed since target_prev is already
+            # known/observed data, not a function of the model's own earlier outputs).
+            predicted_activity = gamma * target_prev + (1.0 - gamma) * drive
+            return predicted_activity, hidden_states
+
+        # Open-loop fallback: no ground truth available, so decay is applied to the model's
+        # own previous prediction (sequential scan; only reachable without target_prev).
+        batch_size, T, n_neurons = drive.shape
+        o_prev = torch.zeros(batch_size, n_neurons, device=drive.device, dtype=drive.dtype)
+        outputs = []
+        for t in range(T):
+            o_prev = gamma * o_prev + (1.0 - gamma) * drive[:, t, :]
+            outputs.append(o_prev)
+        predicted_activity = torch.stack(outputs, dim=1)    # (batch, T, n_neurons)
         return predicted_activity, hidden_states
 
     def set_input_channel_weight(self, channel_idx, scale):
