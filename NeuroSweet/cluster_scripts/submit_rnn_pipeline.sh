@@ -11,7 +11,7 @@
 #
 # Example:
 #   ./submit_rnn_pipeline.sh /athena/listonlab/scratch/dje4001/.../tmt_experiment_2024_working_file \
-#       /athena/listonlab/scratch/dje4001/.../rnn_drop "0 1 2" 150 128
+#       /athena/listonlab/scratch/dje4001/.../rnn_drop "0 1 2" 400 128
 #
 # IMPORTANT -- verify before running on a real allocation:
 #   - Check your cluster's MaxArraySize / QOS core limits before submitting (this dataset currently
@@ -19,17 +19,19 @@
 #     across 3 jobs).
 #   - Confirm the conda env name (default "pytorch") has torch/rich/pandas/scikit-learn installed
 #     matching the local prototype environment (see rnn_array.sh's OMP/BLAS thread pinning).
-#   - Local benchmark (single desktop, hidden_size=339, 300 epochs): ~42s train time per
-#     (session, seed); the bootstrapped decoder/encoder step adds a few more CPU-minutes per
-#     (session, seed) on top of that -- rnn_array.sh's --time=02:00:00 default budgets generously
-#     for multiple seeds run sequentially within one array task, but re-check actual per-task
-#     wall time from the first array's .out logs before relying on this for a much larger dataset.
+#   - Local benchmark after the training-accuracy-audit fixes (GRU cell, mini-batch training,
+#     weight decay, early stopping; window_len=100/stride=20): ~60s per (session, seed) with
+#     early stopping typically halting well before the 400-epoch cap; the bootstrapped
+#     decoder/encoder step adds a few more CPU-minutes per (session, seed) on top of that --
+#     rnn_array.sh's --time=02:00:00 default budgets generously for multiple seeds run
+#     sequentially within one array task, but re-check actual per-task wall time from the
+#     first array's .out logs before relying on this for a much larger dataset.
 set -e
 
 data_directory=$1
 drop_directory=$2
 seeds=${3:-"0 1 2"}
-epochs=${4:-150}
+epochs=${4:-400}
 max_hidden_size=${5:-128}
 repo_root=${6:-"/home/dje4001/NeuroSweet"}
 conda_env=${7:-"pytorch"}

@@ -8,11 +8,14 @@
                                                            # fine) + headroom for the bootstrapped
                                                            # decoder's internal BLAS calls.
 #SBATCH --mem=16G                                         # Memory per array element
-#SBATCH --time=02:00:00                                   # Local benchmark: ~13s train (hidden=48,
-                                                           # 60 epochs) + ~a few CPU-min for the
-                                                           # bootstrapped decoder/encoder step per
-                                                           # (session, seed). Budget generously since
-                                                           # larger sessions (up to ~1800 real
+#SBATCH --time=02:00:00                                   # Local benchmark after training-accuracy-audit
+                                                           # fixes (GRU cell, mini-batch training, weight
+                                                           # decay, early stopping): ~60s per (session,
+                                                           # seed) with early stopping typically halting
+                                                           # well before the 400-epoch cap, + a few
+                                                           # CPU-min for the bootstrapped decoder/encoder
+                                                           # step per (session, seed). Budget generously
+                                                           # since larger sessions (up to ~1800 real
                                                            # neurons, capped at --max_hidden_size) and
                                                            # multiple seeds run sequentially per task.
 
@@ -35,7 +38,7 @@ data_directory=$1
 drop_directory=$2
 architecture=$3
 seeds=${4:-"0 1 2"}
-epochs=${5:-150}
+epochs=${5:-400}
 max_hidden_size=${6:-128}
 repo_root=${7:-"/home/dje4001/NeuroSweet"}
 conda_env=${8:-"pytorch"}
