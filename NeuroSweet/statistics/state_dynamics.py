@@ -8,12 +8,17 @@ Version: 1.0
 Date: 11-06-2025
 """
 import argparse
+import os
+import itertools
 from NeuroSweet.core.SaveLoadObjs import SaveObj, LoadObj, SaveList, OpenList, gather_data
 import numpy as np
 import pandas as pd
 import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
+import scipy.stats as stats
+import statsmodels.formula.api as smf
+from statsmodels.stats.multitest import multipletests
 
 class StateDynamics:
     def __init__(self, neuronal_activity, behavioral_timestamps, neuron_info, fps=1.3, baseline=300):
@@ -152,6 +157,88 @@ class StateDynamics:
 class StateStatistics:
     def __init__(self, dataframe):
         self.df = dataframe
+
+    def run_group_day_stats(self, dependent_var, drop_directory='.'):
+        """ Test whether population coding (Euclidean distance or vector angle between
+        odor-evoked population vectors) changes with respect to Group (cort vs vehicle)
+        across Day.
+
+        Fits a linear mixed model: dependent_var ~ group * day * odor_pair, with a random
+        intercept per subject (suid), to account for repeated odor-pair comparisons and
+        repeated days within the same animal. Also computes estimated marginal means (EMMs)
+        per group x day, and FDR-corrected pairwise group (cort vs vehicle) comparisons within
+        each day.
+
+        Inputs
+        dependent_var -- (str) column name to test, e.g. 'euclidean_distance' or 'angle_rad'
+        drop_directory -- (str) where result CSVs are saved
+
+        Outputs (written to drop_directory)
+        {dependent_var}_mixedmodel_summary.csv -- fixed-effect coefficients, SE, z, p-values
+        {dependent_var}_group_day_emmeans.csv -- mean +/- SEM per group x day
+        {dependent_var}_group_day_posthoc.csv -- FDR-corrected cort vs vehicle comparison per day
+
+        Returns
+        model_result -- fitted statsmodels MixedLMResults object
+        """
+        os.makedirs(drop_directory, exist_ok=True)
+        df = self.df.copy().dropna(subset=[dependent_var, 'group', 'day', 'odor1', 'odor2', 'suid'])
+        df['odor_pair'] = df['odor1'].astype(str) + '_' + df['odor2'].astype(str)
+        df['group'] = df['group'].astype('category')
+        df['day'] = df['day'].astype(str).astype('category')
+        df['odor_pair'] = df['odor_pair'].astype('category')
+
+        # Fit the mixed model with subject as the random effect (repeated odor pairs/days per animal)
+        formula = f"{dependent_var} ~ group * day * odor_pair"
+        model = smf.mixedlm(formula, df, groups=df['suid'])
+        model_result = model.fit()
+
+        conf_int = model_result.conf_int()
+        coef_df = pd.DataFrame({
+            'term': model_result.params.index,
+            'coef': model_result.params.values,
+            'std_err': model_result.bse.values,
+            'z': model_result.tvalues.values,
+            'p_value': model_result.pvalues.values,
+            'ci_lower': conf_int[0].values,
+            'ci_upper': conf_int[1].values,
+        })
+        coef_df.to_csv(os.path.join(drop_directory, f'{dependent_var}_mixedmodel_summary.csv'), index=False)
+
+        # Estimated marginal means per group x day (averaged across odor pairs)
+        emmeans = df.groupby(['group', 'day'], observed=True)[dependent_var].agg(
+            mean='mean',
+            sem=lambda x: np.std(x, ddof=1) / np.sqrt(len(x)),
+            n='count'
+        ).reset_index()
+        emmeans.to_csv(os.path.join(drop_directory, f'{dependent_var}_group_day_emmeans.csv'), index=False)
+
+        # Post-hoc: cort vs vehicle comparison within each day (Welch's t-test, FDR-corrected)
+        groups_present = df['group'].unique().tolist()
+        posthoc_rows = []
+        if len(groups_present) == 2:
+            group_a, group_b = groups_present
+            for day_oh, day_df in df.groupby('day', observed=True):
+                vals_a = day_df.loc[day_df['group'] == group_a, dependent_var]
+                vals_b = day_df.loc[day_df['group'] == group_b, dependent_var]
+                if len(vals_a) > 1 and len(vals_b) > 1:
+                    t_stat, p_val = stats.ttest_ind(vals_a, vals_b, equal_var=False)
+                    posthoc_rows.append({'day': day_oh, 'group_a': group_a, 'group_b': group_b,
+                                          't_stat': t_stat, 'p_value': p_val, 'n_a': len(vals_a), 'n_b': len(vals_b)})
+
+        posthoc_df = pd.DataFrame(posthoc_rows)
+        if not posthoc_df.empty:
+            _, p_corrected, _, _ = multipletests(posthoc_df['p_value'], method='fdr_bh')
+            posthoc_df['p_value_fdr'] = p_corrected
+        posthoc_df.to_csv(os.path.join(drop_directory, f'{dependent_var}_group_day_posthoc.csv'), index=False)
+
+        print(f"[{dependent_var}] Mixed model fit -- see {dependent_var}_mixedmodel_summary.csv")
+        print(coef_df)
+        print(f"[{dependent_var}] Group x Day post-hoc (cort vs vehicle) -- see {dependent_var}_group_day_posthoc.csv")
+        if not posthoc_df.empty:
+            print(posthoc_df)
+
+        return model_result
 
     def graph_euclid_distance_summary(self):
         """ Generate summary graph of Euclidean distance normalized to baseline day 0 """
@@ -359,6 +446,15 @@ if __name__=='__main__':
     neuronal_activity, behavioral_timestamps, neuron_info = gather_data(parent_data_directory=data_directory,drop_directory=drop_directory)
     States_oh = StateDynamics(neuronal_activity, behavioral_timestamps, neuron_info)
     States_oh()
+    summary_stats = StateStatistics(dataframe=States_oh.result_dataframe)
+    summary_stats.graph_euclid_distance_summary()
+    summary_stats.graph_vector_angle_summary()
+
+    # Test whether population coding (state separability) changes with respect to
+    # Group (cort vs vehicle) across Day, for both the Euclidean-distance and
+    # vector-angle measures of population separability.
+    summary_stats.run_group_day_stats('euclidean_distance', drop_directory=drop_directory)
+    summary_stats.run_group_day_stats('angle_rad', drop_directory=drop_directory)
     summary_stats = StateStatistics(dataframe=States_oh.result_dataframe)
     summary_stats.graph_euclid_distance_summary()
     summary_stats.graph_vector_angle_summary()
