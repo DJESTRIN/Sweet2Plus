@@ -114,7 +114,7 @@ def _is_live_terminal():
 def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, seed=0,
                        window_len=200, stride=100, val_frac=0.2, device="cpu",
                        progress_label="session", cell_type="gru", batch_size=16,
-                       weight_decay=1e-3, early_stop_patience=40, use_odor_kernel=True,
+                       weight_decay=1e-3, early_stop_patience=40, use_odor_kernel=False,
                        kernel_length=60, grad_clip_norm=1.0):
     """Trains one MPFCModelRNN on one session's data. Returns (model, history) where history
     is a list of dicts with per-epoch train/val loss.

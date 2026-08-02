@@ -123,12 +123,27 @@ class MPFCModelRNN(nn.Module):
         production `train_one_session` split) can look misleadingly bad purely from sampling
         noise -- treat any single-session, single-split val metric with that caveat, and prefer
         pooling across sessions/seeds when judging overall model quality.
+
+        DEFAULT FLIPPED BACK TO False: after the above was confirmed, we decided the project's
+        actual question does not require matching real calcium trace SHAPE at all -- only
+        honest, held-out decodability of odor identity from hidden-unit dynamics matters (see
+        plan.md). The odor-kernel branch was a second, feedforward-only pathway added purely
+        to also satisfy trace-shape fidelity; since that requirement is no longer in scope, it
+        adds architectural complexity (two parallel pathways feeding the loss) without being
+        needed, and is off by default again. A 5-fold honest re-check of the SIMPLER
+        single-branch model (GRU only, no kernel; `rnn_simplified_gru_only_check.py`) confirmed
+        decodability remains excellent without it: pooled held-out odor-decode AUC = 0.973
+        (vs 0.998 with the kernel enabled) -- i.e. the kernel branch was not what was driving
+        decodability (decoding is computed from `hidden_states`, upstream of the kernel/readout
+        sum, so it was never mechanically dependent on the kernel branch in the first place).
+        The kernel remains available (use_odor_kernel=True) for any future work that does need
+        honest trace-shape fidelity, but is not part of the default decoding-focused pipeline.
     kernel_length : int, default 60
         Causal convolution kernel length in frames (~2s at ~30Hz, matching previously-observed
         calcium decay timescales) -- only used when use_odor_kernel=True.
     """
     def __init__(self, n_input_channels, hidden_size, n_neurons, nonlinearity="tanh",
-                 cell_type="gru", use_odor_kernel=True, kernel_length=60):
+                 cell_type="gru", use_odor_kernel=False, kernel_length=60):
         super().__init__()
         self.n_input_channels = n_input_channels
         self.hidden_size = hidden_size
