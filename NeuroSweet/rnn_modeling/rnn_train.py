@@ -46,42 +46,60 @@ def set_seed(seed):
 def make_windows(channels, target, window_len=200, stride=100):
     """Chop a single long (n_channels, T) / (n_neurons, T) session recording into overlapping
     windows so the RNN trains on many shorter sequences (mini-batches) instead of one huge
-    sequence -- standard practice for RNN training stability/speed, and lets us hold out
-    windows for a validation split.
+    sequence -- standard practice for RNN training stability/speed.
 
-    Also builds Y_prev (n_windows, window_len, n_neurons): the REAL previous-timestep target
-    value for each window, aligned frame-for-frame with Y, used for teacher-forced calcium-decay
-    training (see MPFCModelRNN.forward's target_prev argument / rnn_model.py). The very first
-    frame of the whole session has no real "previous" value, so it's set equal to itself there
-    (negligible edge effect -- affects at most 1 frame out of ~4700).
+    Returns X (n_windows, window_len, n_channels), Y (n_windows, window_len, n_neurons).
 
-    Returns X (n_windows, window_len, n_channels), Y (n_windows, window_len, n_neurons),
-    Y_prev (n_windows, window_len, n_neurons).
-    """
+    NOTE: this only cuts windows WITHIN a single contiguous region of the timeline (e.g. the
+    train region or the val region separately -- see split_train_val_regions/
+    train_one_session). It must NOT be called on the whole session and then split by window
+    INDEX, because with stride < window_len windows overlap heavily in time; a random
+    index-level split would then put nearly-identical (just shifted a few frames) windows on
+    both sides, so "held-out" validation windows would actually have already been seen (in
+    slightly shifted form) during training. Verified empirically (`rnn_leakage_quantify.py`):
+    for window_len=100/stride=20 (this pipeline's earlier defaults), 99.6% of "validation"
+    frames were also covered by some "training" window under an index-level split -- i.e. the
+    held-out set was not actually held out. Splitting on contiguous TIME REGIONS first (this
+    module's current approach) and only then windowing each region separately eliminates this."""
     n_channels, T = channels.shape
     n_neurons = target.shape[0]
-    target_prev_full = np.empty_like(target)
-    target_prev_full[:, 1:] = target[:, :-1]
-    target_prev_full[:, 0] = target[:, 0]
 
     starts = list(range(0, max(T - window_len, 1), stride))
     if not starts:
         starts = [0]
         window_len = T
-    X, Y, Yp = [], [], []
+    X, Y = [], []
     for s in starts:
         e = min(s + window_len, T)
         if e - s < window_len:
             continue
         X.append(channels[:, s:e].T)            # (window_len, n_channels)
         Y.append(target[:, s:e].T)               # (window_len, n_neurons)
-        Yp.append(target_prev_full[:, s:e].T)     # (window_len, n_neurons)
     if not X:  # fallback: single window covering whatever we have
         X = [channels.T]
         Y = [target.T]
-        Yp = [target_prev_full.T]
-    return (np.stack(X).astype(np.float32), np.stack(Y).astype(np.float32),
-            np.stack(Yp).astype(np.float32))
+    return np.stack(X).astype(np.float32), np.stack(Y).astype(np.float32)
+
+
+def split_train_val_regions(T, val_frac, window_len):
+    """Returns (train_slice, val_slice) -- two DISJOINT, CONTIGUOUS time regions (as python
+    `slice` objects over the T timepoints), separated by a `window_len`-sized guard gap on
+    each side of the val block so that no train window and no val window can ever share a
+    single real frame, regardless of the stride used to window each region afterward. This is
+    the fix for the overlapping-window train/val leakage described in make_windows's
+    docstring: instead of generating overlapping windows over the WHOLE session and then
+    randomly splitting by window index (which leaks -- see above), we first hold out a
+    contiguous, guard-buffered BLOCK of real time, and only then build (possibly overlapping)
+    windows independently within the train region and within the val region.
+
+    The held-out val block is placed at the END of the session (last val_frac of T) --
+    arbitrary but simple; what matters for honesty is that it is contiguous and guarded, not
+    its position."""
+    val_len = max(window_len, int(T * val_frac))
+    val_start = max(0, T - val_len)
+    guard = window_len  # no window on either side may cross into the other region
+    train_end = max(0, val_start - guard)
+    return slice(0, train_end), slice(val_start, T)
 
 
 def _is_live_terminal():
@@ -96,8 +114,8 @@ def _is_live_terminal():
 def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, seed=0,
                        window_len=200, stride=100, val_frac=0.2, device="cpu",
                        progress_label="session", cell_type="gru", batch_size=16,
-                       weight_decay=1e-3, early_stop_patience=40, use_calcium_decay=False,
-                       grad_clip_norm=1.0):
+                       weight_decay=1e-3, early_stop_patience=40, use_odor_kernel=True,
+                       kernel_length=60, grad_clip_norm=1.0):
     """Trains one MPFCModelRNN on one session's data. Returns (model, history) where history
     is a list of dicts with per-epoch train/val loss.
 
@@ -114,63 +132,49 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
     (restore the best-val-loss model seen so far if val loss hasn't improved for
     `early_stop_patience` epochs) keeps the model from memorizing training windows.
 
-    NOTE on use_calcium_decay/grad_clip_norm: use_calcium_decay adds a per-neuron learnable
-    AR(1) leaky-integrator on the model's readout (see rnn_model.MPFCModelRNN), teacher-forced
-    with the REAL previous-frame value during both training and validation (never the model's
-    own noisy prediction -- diagnostic testing showed self-referential decay just compounds
-    the model's own errors and converges back to the trivial baseline). This gives the model
-    the correct biophysical inductive bias for GCaMP indicator decay kinetics, and directly
-    targets the persistence-baseline gap found during the accuracy audit (naive
-    copy-previous-frame MSE 0.52 vs RNN's ~0.93-0.94 without this). The per-neuron decay
-    parameter is excluded from weight_decay (L2 shrinkage pulls it toward gamma=0.5, which
-    actively fights it learning a large gamma) and gets its own faster learning rate.
+    NOTE on use_odor_kernel/kernel_length/grad_clip_norm: use_odor_kernel adds a per-neuron
+    causal convolution kernel over the external odor inputs, added directly to the GRU
+    readout (see rnn_model.MPFCModelRNN) -- a PURE FEEDFORWARD function of external inputs
+    that never touches any real or self-generated calcium value, so there is no teacher
+    forcing and NOTHING for training or validation to cheat with, by construction. This
+    replaced an earlier AR(1) teacher-forced calcium-decay design that was found (via direct
+    empirical testing) to make validation dishonestly easy (real data was being re-injected
+    every timestep during "validation" too) while also collapsing hidden-unit odor
+    decodability to chance -- see rnn_model.py's MPFCModelRNN docstring for the full history.
     grad_clip_norm clips the global gradient norm each step (standard RNN training stability
     practice).
 
-    IMPORTANT CAVEAT (why the default is False here): enabling use_calcium_decay gives the
-    model a "free", odor-independent way to explain most of the trace variance via AR(1)
-    persistence, which sharply reduces the gradient pressure on hidden units to encode odor
-    identity. Empirically this collapsed hidden-unit odor decodability from ~0.96 AUC
-    (no-decay unmixed architecture) to ~0.50 AUC (chance) once use_calcium_decay=True, even
-    though it also improved held-out trace-prediction MSE from ~0.93 to ~0.40. Since the
-    architecture-comparison experiment (control vs cort, unmixed/semi-mixed/fully-mixed) is
-    scored on hidden-unit decodability, NOT raw trace MSE, the main scientific sweep should
-    keep use_calcium_decay=False (the default). Only enable it for a separate
-    trace-prediction-quality demonstration/sanity-check, not for the group-comparison
-    pipeline."""
+    Both training AND validation losses reported here are always fully honest in TWO
+    independent respects: (1) the model architecture never sees the target it is trying to
+    predict at any point in forward() (see MPFCModelRNN), and (2) the train/val split is done
+    on contiguous, guard-buffered TIME REGIONS first (split_train_val_regions), not by
+    randomly assigning overlapping windows to train/val by index -- the latter was found
+    (via `rnn_leakage_quantify.py`) to leak up to 99.6% of "validation" frames into windows
+    also used for training when stride < window_len, since nearby overlapping windows just
+    shift the same frames by a few timesteps. With a region-level split, no single real frame
+    can ever appear in both a training window and a validation window."""
     set_seed(seed)
     n_channels = channels.shape[0]
     n_neurons = target.shape[0]
+    T_total = channels.shape[1]
 
-    X, Y, Yp = make_windows(channels, target, window_len=window_len, stride=stride)
-    n_windows = X.shape[0]
-    n_val = max(1, int(n_windows * val_frac)) if n_windows > 1 else 0
-    rng = np.random.RandomState(seed)
-    idx = rng.permutation(n_windows)
-    val_idx, train_idx = idx[:n_val], idx[n_val:]
-    if len(train_idx) == 0:  # too few windows to split -- train on everything, val==train
-        train_idx = idx
-        val_idx = idx
+    train_slice, val_slice = split_train_val_regions(T_total, val_frac, window_len)
+    X_train, Y_train_np = make_windows(channels[:, train_slice], target[:, train_slice],
+                                        window_len=window_len, stride=stride)
+    X_val, Y_val_np = make_windows(channels[:, val_slice], target[:, val_slice],
+                                    window_len=window_len, stride=window_len)
+    if X_train.shape[0] == 0:  # region too short to fit even one window -- fall back to val
+        X_train, Y_train_np = X_val, Y_val_np
 
-    X_train = torch.from_numpy(X[train_idx]).to(device)
-    Y_train = torch.from_numpy(Y[train_idx]).to(device)
-    Yp_train = torch.from_numpy(Yp[train_idx]).to(device)
-    X_val = torch.from_numpy(X[val_idx]).to(device)
-    Y_val = torch.from_numpy(Y[val_idx]).to(device)
-    Yp_val = torch.from_numpy(Yp[val_idx]).to(device)
+    X_train = torch.from_numpy(X_train).to(device)
+    Y_train = torch.from_numpy(Y_train_np).to(device)
+    X_val = torch.from_numpy(X_val).to(device)
+    Y_val = torch.from_numpy(Y_val_np).to(device)
 
     model = MPFCModelRNN(n_input_channels=n_channels, hidden_size=hidden_size,
                           n_neurons=n_neurons, cell_type=cell_type,
-                          use_calcium_decay=use_calcium_decay).to(device)
-    if use_calcium_decay:
-        decay_params = [model._decay_logit]
-        other_params = [p for n, p in model.named_parameters() if n != "_decay_logit"]
-        optimizer = torch.optim.Adam([
-            {"params": other_params, "weight_decay": weight_decay},
-            {"params": decay_params, "weight_decay": 0.0, "lr": max(lr * 5, 5e-3)},
-        ], lr=lr)
-    else:
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+                          use_odor_kernel=use_odor_kernel, kernel_length=kernel_length).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_fn = nn.MSELoss()
 
     n_train = X_train.shape[0]
@@ -212,7 +216,7 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
                 for b0 in range(0, n_train, eff_batch_size):
                     b_idx = perm[b0:b0 + eff_batch_size]
                     optimizer.zero_grad()
-                    pred, _ = model(X_train[b_idx], target_prev=Yp_train[b_idx])
+                    pred, _ = model(X_train[b_idx])
                     loss = loss_fn(pred, Y_train[b_idx])
                     loss.backward()
                     if grad_clip_norm is not None:
@@ -223,7 +227,7 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
 
                 model.eval()
                 with torch.no_grad():
-                    val_pred, _ = model(X_val, target_prev=Yp_val)
+                    val_pred, _ = model(X_val)
                     val_loss = loss_fn(val_pred, Y_val).item()
 
                 t_elapsed = time.time() - t0
@@ -252,7 +256,7 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
             for b0 in range(0, n_train, eff_batch_size):
                 b_idx = perm[b0:b0 + eff_batch_size]
                 optimizer.zero_grad()
-                pred, _ = model(X_train[b_idx], target_prev=Yp_train[b_idx])
+                pred, _ = model(X_train[b_idx])
                 loss = loss_fn(pred, Y_train[b_idx])
                 loss.backward()
                 if grad_clip_norm is not None:
@@ -263,7 +267,7 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
 
             model.eval()
             with torch.no_grad():
-                val_pred, _ = model(X_val, target_prev=Yp_val)
+                val_pred, _ = model(X_val)
                 val_loss = loss_fn(val_pred, Y_val).item()
 
             t_elapsed = time.time() - t0
@@ -297,8 +301,8 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
 def get_hidden_states(model, channels, device="cpu"):
     """Run the full (untruncated) session through the trained model once (no gradient) and
     return hidden-unit activity (n_hidden, T) for downstream decoder/encoder analysis.
-    NOTE: hidden_states come from the RNN core BEFORE the calcium-decay readout blend, so
-    they are unaffected by target_prev/teacher forcing -- no ground truth needed here."""
+    NOTE: hidden_states come from the RNN core BEFORE the readout/odor-kernel sum, so they are
+    always computed purely from external_inputs -- never from target/calcium values."""
     model.eval()
     with torch.no_grad():
         x = torch.from_numpy(channels.T[None, :, :]).to(device)  # (1, T, n_channels)
@@ -306,19 +310,15 @@ def get_hidden_states(model, channels, device="cpu"):
     return hidden_states[0].cpu().numpy().T  # (n_hidden, T)
 
 
-def get_predicted_activity(model, channels, target, device="cpu"):
-    """Run the full (untruncated) session through the trained model once (no gradient), using
-    teacher-forced target_prev (the real previous frame), and return the model's predicted
-    calcium activity (n_neurons, T) -- used for validation/plotting the fitted calcium-decay
-    layer against real data (see make_windows for target_prev construction)."""
+def get_predicted_activity(model, channels, device="cpu"):
+    """Run the full (untruncated) session through the trained model once (no gradient) and
+    return the model's predicted calcium activity (n_neurons, T) -- used for
+    validation/plotting against real data. Purely feedforward over external_inputs; honest
+    and non-cheating by construction (see MPFCModelRNN.forward)."""
     model.eval()
-    target_prev_full = np.empty_like(target)
-    target_prev_full[:, 1:] = target[:, :-1]
-    target_prev_full[:, 0] = target[:, 0]
     with torch.no_grad():
-        x = torch.from_numpy(channels.T[None, :, :]).to(device)              # (1, T, n_channels)
-        y_prev = torch.from_numpy(target_prev_full.T[None, :, :]).to(device)  # (1, T, n_neurons)
-        pred, _ = model(x, target_prev=y_prev)
+        x = torch.from_numpy(channels.T[None, :, :]).to(device)  # (1, T, n_channels)
+        pred, _ = model(x)
     return pred[0].cpu().numpy().T  # (n_neurons, T)
 
 

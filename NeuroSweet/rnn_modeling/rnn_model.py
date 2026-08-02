@@ -9,7 +9,9 @@ Description: The trainable RNN core used by the in-silico mPFC model (see plan.m
       - a trainable recurrent core (torch.nn.RNN) representing mPFC's own recurrent dynamics,
       - a trainable linear readout (hidden_size -> n_neurons) mapping hidden units back onto
         the session's real neuron count, so the model's *output* is directly comparable
-        (same shape) to the session's real calcium traces.
+        (same shape) to the session's real calcium traces,
+      - an OPTIONAL per-neuron causal odor-response convolution kernel (see use_odor_kernel
+        below), added directly to the readout.
 
     Training objective is SUPERVISED next-timestep prediction of the session's own real
     calcium activity (see rnn_train.py) -- NOT a classification/discrimination task, since
@@ -38,15 +40,87 @@ class MPFCModelRNN(nn.Module):
         though this is not a strict requirement of the architecture itself.
     n_neurons : int
         Number of real neurons in this session -- the readout dimensionality.
+    use_odor_kernel : bool, default True
+        Adds a per-neuron LEARNABLE CAUSAL CONVOLUTION over the external odor inputs directly
+        to the readout: predicted_t = readout(hidden_t) + sum_c (kernel_{neuron,c} * inputs_c)_t.
+        This is a pure feedforward function of external_inputs ONLY -- it never receives, uses,
+        or has access to any real OR self-generated calcium value at any timestep, so it is
+        architecturally IMPOSSIBLE for it to leak/cheat on validation, unlike the earlier
+        teacher-forced AR(1) decay-layer design (removed -- see history below).
+
+        MOTIVATION / HISTORY: an earlier version added an AR(1) leaky-integrator readout,
+        teacher-forced with the REAL previous-frame calcium value, on the reasoning that GCaMP
+        decay is well described by calcium_t ~= gamma*calcium_{t-1} + (1-gamma)*drive_t. That
+        design was flawed in two ways found through direct empirical testing: (1) validation
+        was ALSO teacher-forced (real data injected every single timestep), so the reported
+        "improvement" was largely an artifact of continuously re-copying ground truth, not a
+        real forecast -- once validation was fixed to be fully autonomous/non-cheating
+        (single legitimate real anchor at the window start, then a pure self-generated
+        cascade), held-out MSE collapsed back to baseline (~0.94) regardless of training
+        curriculum. (2) Even before that was noticed, full per-step teacher forcing collapsed
+        hidden-unit odor decodability from ~0.96 AUC to chance (~0.50), since the decay term
+        gave the model a free way to explain trace variance without needing the hidden state
+        to encode odor identity at all.
+
+        Root cause once investigated honestly: per-timestep raw calcium is dominated by
+        spontaneous/noise variance (~94% of total variance), while the true odor-evoked signal
+        is small in comparison -- MSE-based gradient descent on the whole raw trace has no
+        incentive to fit that small signal and simply learns to predict close to the mean. A
+        recurrent AR(1) autoregression on raw values cannot fix this: it either needs real data
+        fed back in (which is cheating) or it needs to hallucinate future values from its own
+        possibly-wrong past outputs (which just compounds noise).
+
+        The FIX is this feedforward causal-convolution kernel: instead of trying to
+        autoregressively reconstruct noisy raw calcium values step by step, it directly learns
+        each neuron's own odor-triggered impulse-response SHAPE from the (sparse, exactly-known)
+        odor onset timing -- exactly the structure a trial-averaged/event-triggered analysis
+        would recover, but folded into the model and evaluated per-timepoint. Verified via a
+        standalone diagnostic (`rnn_fir_kernel_test.py`, pure FIR kernel alone, no GRU) and then
+        in the combined architecture (`rnn_unified_model_test.py`) that this design:
+        (a) improves whole-session honest MSE (combined model: 0.916 vs 0.940 trivial-mean
+        baseline),
+        (b) recovers real, noise-cancelled trial-averaged transient SHAPE with population
+        correlation 0.94 and per-neuron mean correlation 0.93 (100% of neurons > 0.3) against
+        real data, and
+        (c) hidden-unit odor decodability is UNCHANGED OR BETTER (0.98 AUC vs ~0.96 for the
+        plain GRU with no kernel) -- while being structurally impossible to cheat (no
+        target/self-generated feedback of any kind), and additive to (not competing/blended
+        with) the GRU readout, so it does not dilute gradient pressure on hidden units to
+        encode odor identity (unlike the old gamma-blend design).
+
+        IMPORTANT CAVEAT found in a later skeptical re-audit (not architectural cheating, but a
+        train/val SPLIT flaw -- see rnn_train.py's make_windows/split_train_val_regions
+        docstrings for the full fix): the (a)/(b) numbers above were computed on the WHOLE
+        session (train-region frames + val-region frames combined), and at the time the
+        train/val split itself randomly assigned overlapping windows to train vs val by index,
+        so up to 99.6% of "val" frames were also covered by some training window (see
+        `rnn_leakage_quantify.py`). After fixing the split to a genuine contiguous,
+        guard-buffered held-out time block, re-checking metrics on ONLY that truly-unseen
+        block (not the whole session) showed: hidden-unit odor decodability remains high
+        out-of-sample (~0.97-0.99 AUC, though estimated from a small number of held-out
+        trials), but the whole-session-style trace MSE/trial-averaged-correlation numbers
+        above do NOT hold on strictly held-out data -- restricted to the true val block, MSE is
+        essentially at baseline (no real improvement) and trial-averaged correlation collapses
+        (mean per-neuron ~0.14, only ~44% of neurons > 0.3). In other words: this architecture
+        reliably learns a representation from which odor identity can be decoded even
+        out-of-sample, but claims of genuinely forecasting held-out calcium trace SHAPE were
+        inflated by measuring "whole session" performance that mixed in the training region --
+        that stronger claim is NOT supported once evaluated honestly on data the model never
+        trained on. Treat trace-fitting-quality numbers from this era with this caveat; the
+        decodability finding is the part that has held up under a genuinely held-out check.
+    kernel_length : int, default 60
+        Causal convolution kernel length in frames (~2s at ~30Hz, matching previously-observed
+        calcium decay timescales) -- only used when use_odor_kernel=True.
     """
     def __init__(self, n_input_channels, hidden_size, n_neurons, nonlinearity="tanh",
-                 cell_type="gru", use_calcium_decay=False, init_decay=0.8):
+                 cell_type="gru", use_odor_kernel=True, kernel_length=60):
         super().__init__()
         self.n_input_channels = n_input_channels
         self.hidden_size = hidden_size
         self.n_neurons = n_neurons
         self.cell_type = cell_type
-        self.use_calcium_decay = use_calcium_decay
+        self.use_odor_kernel = use_odor_kernel
+        self.kernel_length = kernel_length
 
         # External input weights: trainable, one weight per (channel, hidden-unit) pair.
         self.input_layer = nn.Linear(n_input_channels, hidden_size, bias=True)
@@ -74,42 +148,26 @@ class MPFCModelRNN(nn.Module):
         # against real calcium traces).
         self.readout = nn.Linear(hidden_size, n_neurons)
 
-        # Calcium-decay layer (AR(1) leaky integrator), applied to the raw readout.
-        # MOTIVATION: real GCaMP calcium traces are (approximately) an exponentially-decaying
-        # indicator kinetic convolved with underlying spiking/drive activity -- i.e.
-        # calcium_t ~= gamma * calcium_{t-1} + (1-gamma) * drive_t. Diagnostic testing found
-        # a naive "copy the previous frame" baseline achieves MSE 0.52 on real data, vs 0.94
-        # for a "predict the mean" baseline -- i.e. most of a real calcium trace's
-        # predictability comes from this decay structure, not from odor identity. The RNN's
-        # own hidden recurrence was not learning to reproduce this decay from scratch (only
-        # ~30-40 independent training windows per session, generic weights, short training
-        # budget), so this bakes the known biophysical prior directly into the architecture as
-        # a per-neuron learnable decay constant (sigmoid-transformed to stay in (0, 1)), rather
-        # than requiring gradient descent to discover exponential decay unaided.
-        if self.use_calcium_decay:
-            init_logit = torch.logit(torch.full((n_neurons,), float(init_decay)))
-            self._decay_logit = nn.Parameter(init_logit)
+        # Per-neuron causal odor-response convolution kernel (see use_odor_kernel docstring
+        # above). Purely feedforward over external_inputs -- never touches calcium values.
+        if self.use_odor_kernel:
+            self.odor_kernel = nn.Conv1d(n_input_channels, n_neurons,
+                                          kernel_size=kernel_length,
+                                          padding=kernel_length - 1, bias=False)
 
-    def forward(self, external_inputs, h0=None, target_prev=None):
+    def forward(self, external_inputs, h0=None):
         """
         external_inputs : (batch, T, n_input_channels)
-        target_prev : (batch, T, n_neurons), optional -- the REAL previous-timestep calcium
-            value (target shifted by one frame) for the SAME window as external_inputs. When
-            provided, the calcium-decay layer blends this real value with the model's
-            odor/hidden-state-driven correction (see below) -- this is standard supervised
-            one-step-ahead ("teacher forced") sequence prediction: since we always have ground
-            truth for the real recorded session being analyzed (never asking the model to
-            forecast an unseen session), using the true previous frame is legitimate, not
-            data leakage, as long as validation windows are held out from training (the
-            model never sees validation-window IDENTITY during gradient updates -- see
-            rnn_train.py's train/val split). If target_prev is None, falls back to an
-            open-loop AR(1) scan over the model's OWN previous prediction (needed only for a
-            hypothetical true forecasting/generative use case with no ground truth available).
+
         Returns
         -------
-        predicted_activity : (batch, T, n_neurons) -- readout of hidden units (optionally
-            passed through the calcium-decay AR(1) layer), used for the supervised training
-            loss against real calcium traces.
+        predicted_activity : (batch, T, n_neurons) -- readout of hidden units, optionally plus
+            the per-neuron odor-response convolution kernel's output (see use_odor_kernel).
+            Used for the supervised training/validation loss against real calcium traces.
+            NOTE: this is a pure function of external_inputs (and h0) -- it never depends on
+            target/real calcium values at all, so there is no teacher forcing, no
+            self-referential feedback, and no way for validation to be dishonest by
+            construction.
         hidden_states : (batch, T, hidden_size) -- raw RNN hidden-unit activity, used as the
             in-silico "neurons" for the decoder/encoder pipeline.
         """
@@ -117,27 +175,14 @@ class MPFCModelRNN(nn.Module):
         hidden_states, _ = self.rnn(driven_input, h0)      # (batch, T, hidden_size)
         drive = self.readout(hidden_states)                # (batch, T, n_neurons)
 
-        if not self.use_calcium_decay:
+        if not self.use_odor_kernel:
             return drive, hidden_states
 
-        gamma = torch.sigmoid(self._decay_logit)            # (n_neurons,)
-
-        if target_prev is not None:
-            # Teacher-forced AR(1): predicted_t = gamma * real_activity[t-1] + (1-gamma)*drive_t
-            # Fully vectorized (no python-level time loop needed since target_prev is already
-            # known/observed data, not a function of the model's own earlier outputs).
-            predicted_activity = gamma * target_prev + (1.0 - gamma) * drive
-            return predicted_activity, hidden_states
-
-        # Open-loop fallback: no ground truth available, so decay is applied to the model's
-        # own previous prediction (sequential scan; only reachable without target_prev).
-        batch_size, T, n_neurons = drive.shape
-        o_prev = torch.zeros(batch_size, n_neurons, device=drive.device, dtype=drive.dtype)
-        outputs = []
-        for t in range(T):
-            o_prev = gamma * o_prev + (1.0 - gamma) * drive[:, t, :]
-            outputs.append(o_prev)
-        predicted_activity = torch.stack(outputs, dim=1)    # (batch, T, n_neurons)
+        T = external_inputs.shape[1]
+        conv_in = external_inputs.transpose(1, 2)                    # (batch, C, T)
+        kernel_out = self.odor_kernel(conv_in)[:, :, :T]              # causal: drop future tail
+        kernel_out = kernel_out.transpose(1, 2)                       # (batch, T, n_neurons)
+        predicted_activity = drive + kernel_out
         return predicted_activity, hidden_states
 
     def set_input_channel_weight(self, channel_idx, scale):
