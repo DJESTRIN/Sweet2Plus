@@ -17,10 +17,11 @@ Description: Orchestrates the full in-silico RNN pipeline across many sessions: 
           --manifest_row_index selecting a single row to process per array task, following the
           same one-task-per-chunk pattern as glm_encoder_array.sh.
 
-Caps hidden_size at --max_hidden_size (default 128) for sessions with very large real neuron
-counts (some sessions in this dataset have 500-1800+ neurons) purely for tractable runtime;
-this is a compute-budget cap, not a modeling assumption, and should be revisited if compute
-resources allow larger runs on SLURM.
+By default, hidden_size exactly matches each session's real neuron count (no cap) -- per the
+project's design intent, this keeps the in-silico population the same SIZE as the real one so
+decoder/encoder summary stats are directly comparable. --max_hidden_size is available as an
+opt-in compute-budget override for sessions with very large real neuron counts (some sessions
+in this dataset have 500-1800+ neurons) if runtime becomes prohibitive, but is off by default.
 Author: David Estrin (GitHub Copilot CLI assisted)
 Version: 1.0
 """
@@ -58,7 +59,14 @@ def run_one(session_row, architecture, seed, epochs, max_hidden_size, window_len
             drop_directory):
     path = session_row["path"]
     channels, target, meta = build_session_dataset(path, architecture=architecture, seed=seed)
-    hidden_size = min(meta["n_neurons"], max_hidden_size)
+    # hidden_size intentionally matches the real neuron count exactly (no cap) -- per the
+    # project's design intent, hidden-unit count is meant to match the real population SIZE
+    # (not a positional/identity mapping to specific neurons) so the decoder/encoder summary
+    # stats are computed on an in-silico population of the same size as the real one, for a
+    # fair comparison. max_hidden_size is kept as an OPT-IN override (None/0 disables it) for
+    # anyone who later needs a compute-budget cap on sessions with very large neuron counts
+    # (some sessions have 500-1800+ neurons), but it is not applied by default.
+    hidden_size = meta["n_neurons"] if not max_hidden_size else min(meta["n_neurons"], max_hidden_size)
     label = f"{normalize_group_label(meta['group'])}_{meta['mouse']}_day{meta['day']}_{architecture}_seed{seed}"
 
     t0 = time.time()
@@ -125,7 +133,11 @@ def cli_parser():
                          choices=["unmixed", "semi-mixed", "fully-mixed"])
     parser.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2])
     parser.add_argument("--epochs", type=int, default=400)
-    parser.add_argument("--max_hidden_size", type=int, default=128)
+    parser.add_argument("--max_hidden_size", type=int, default=None,
+                         help="Optional compute-budget cap on GRU hidden_size for sessions with "
+                              "very large neuron counts. Off by default (hidden_size = exact "
+                              "real neuron count, per the project's population-size-match "
+                              "design intent) -- pass a value (e.g. 128) to re-enable capping.")
     # window_len/stride tuned during the training-accuracy audit: shorter, denser windows
     # (100/20 vs the original 200/100) give ~5x more training windows per session, which
     # matters a lot given mini-batch training now takes many steps per epoch. epochs raised

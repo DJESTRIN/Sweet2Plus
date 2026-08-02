@@ -115,9 +115,14 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
                        window_len=200, stride=100, val_frac=0.2, device="cpu",
                        progress_label="session", cell_type="gru", batch_size=16,
                        weight_decay=1e-3, early_stop_patience=40, use_odor_kernel=False,
-                       kernel_length=60, grad_clip_norm=1.0):
+                       kernel_length=60, grad_clip_norm=1.0, progress_callback=None):
     """Trains one MPFCModelRNN on one session's data. Returns (model, history) where history
     is a list of dicts with per-epoch train/val loss.
+
+    progress_callback : optional callable(epoch, epochs, train_loss, val_loss), invoked once
+        per epoch in BOTH the rich-UI and plain-print branches -- lets an outer multi-session
+        driver (e.g. a rich Progress bar spanning many sessions) hook into per-epoch progress
+        without needing to change this function's own console output.
 
     NOTE on batch_size: training was originally full-batch (one optimizer step per epoch,
     across all ~36-45 windows of a session at once). Diagnostic testing showed this, combined
@@ -235,6 +240,8 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
                 history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss,
                                  "elapsed_s": t_elapsed})
                 live.update(render_table(epoch, train_loss, val_loss, t_elapsed, t_per_epoch))
+                if progress_callback is not None:
+                    progress_callback(epoch, epochs, train_loss, val_loss)
 
                 if val_loss < best_val_loss - 1e-5:
                     best_val_loss = val_loss
@@ -273,6 +280,8 @@ def train_one_session(channels, target, hidden_size=64, epochs=200, lr=1e-3, see
             t_elapsed = time.time() - t0
             history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss,
                              "elapsed_s": t_elapsed})
+            if progress_callback is not None:
+                progress_callback(epoch, epochs, train_loss, val_loss)
             if (epoch + 1) % print_every == 0 or epoch == epochs - 1:
                 t_per_epoch = t_elapsed / (epoch + 1)
                 eta = t_per_epoch * (epochs - epoch - 1)
